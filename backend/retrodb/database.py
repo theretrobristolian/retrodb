@@ -1,9 +1,11 @@
-"""PostgreSQL engine and health operations."""
+"""PostgreSQL engine, sessions and health operations."""
 
+from collections.abc import Generator
 from functools import lru_cache
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session, sessionmaker
 
 from retrodb.config import get_settings
 
@@ -16,6 +18,12 @@ def get_engine() -> Engine:
         pool_pre_ping=True,
         pool_recycle=1800,
     )
+
+
+def get_session() -> Generator[Session, None, None]:
+    session_factory = sessionmaker(bind=get_engine(), expire_on_commit=False)
+    with session_factory() as session:
+        yield session
 
 
 def check_database() -> None:
