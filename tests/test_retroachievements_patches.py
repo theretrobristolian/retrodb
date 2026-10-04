@@ -2,16 +2,19 @@ import csv
 import hashlib
 from io import BytesIO
 import json
+from pathlib import Path
 import zipfile
 
 import pytest
 
 from retrodb.retroachievements_patches import (
     PatchError,
+    _current_xdelta,
     _cue_data_file,
     _safe_extract_zip,
     _source_requirements,
     _validate_source,
+    apply_verified_patches,
     create_patch_plan,
     download_patch_archives,
 )
@@ -143,3 +146,43 @@ def test_cue_source_validation_uses_referenced_bin_md5(tmp_path):
     assert valid is True
     assert kind == "md5"
     assert actual == expected
+
+
+def test_current_xdelta_ignores_old_patch_directory(tmp_path):
+    extracted = tmp_path / "downloads/42-example/extracted"
+    extracted.joinpath("Old Patch").mkdir(parents=True)
+    current = extracted / "current.xdelta"
+    current.write_bytes(b"current")
+    extracted.joinpath("Old Patch/old.xdelta").write_bytes(b"old")
+
+    assert _current_xdelta(tmp_path, "42", "Example") == current
+
+
+def test_patch_apply_keeps_only_ra_verified_output(tmp_path, monkeypatch):
+    source = tmp_path / "source.iso"
+    source.write_bytes(b"clean image")
+    extracted = tmp_path / "downloads/42-example/extracted"
+    extracted.mkdir(parents=True)
+    (extracted / "current.xdelta").write_bytes(b"patch")
+    (tmp_path / "patch-plan.json").write_text(json.dumps([{
+        "ra_game_id": "42", "title": "Example", "platform": "Sony PlayStation 2",
+        "expected_ra_hash": "a" * 32,
+    }]))
+    (tmp_path / "patch-prepare.json").write_text(json.dumps([{
+        "title": "Example", "state": "clean-base-verified-ready-to-patch",
+        "candidate_path": str(source),
+    }]))
+
+    def fake_run(command, **kwargs):
+        from types import SimpleNamespace
+        Path(command[-1]).write_bytes(b"patched image")
+        return SimpleNamespace(returncode=0, stderr="")
+
+    monkeypatch.setattr("retrodb.retroachievements_patches.subprocess.run", fake_run)
+    monkeypatch.setattr("retrodb.retroachievements_patches.hash_file", lambda *_: "a" * 32)
+
+    result = apply_verified_patches(tmp_path, tmp_path / "RAHasher")
+
+    assert result.verified == 1
+    assert next((tmp_path / "verified/42-example").glob("*.iso")).read_bytes() == b"patched image"
+    assert source.read_bytes() == b"clean image"

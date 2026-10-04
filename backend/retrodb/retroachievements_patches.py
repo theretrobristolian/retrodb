@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import zlib
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -41,6 +42,13 @@ class PatchDownloadSummary:
     patches: int
     downloaded: int
     reused: int
+    failed: int
+
+
+@dataclass(frozen=True)
+class PatchApplySummary:
+    ready: int
+    verified: int
     failed: int
 
 
@@ -334,6 +342,99 @@ def _validate_source(
             actual = _raw_checksum(raw_source, algorithm)
             return actual == requirements[algorithm], algorithm, actual
     return False, "checksum", "no supported source checksum in patch README"
+
+
+def _current_xdelta(workspace: Path, game_id: str, title: str) -> Path:
+    extracted = workspace / "downloads" / f"{game_id}-{_safe_slug(title)}" / "extracted"
+    patches = [
+        path for path in extracted.rglob("*.xdelta")
+        if "old patch" not in {part.casefold() for part in path.relative_to(extracted).parts}
+    ]
+    if len(patches) != 1:
+        raise PatchError(f"Expected one current xdelta patch for {title}; found {len(patches)}")
+    return patches[0]
+
+
+def apply_verified_patches(workspace: Path, hasher: Path) -> PatchApplySummary:
+    prepare_path = workspace / "patch-prepare.json"
+    plan_path = workspace / "patch-plan.json"
+    try:
+        prepared = json.loads(prepare_path.read_text(encoding="utf-8"))
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PatchError("Cannot read patch plan/preparation; run patch-plan and patch-prepare first") from exc
+    plan_by_title = {entry.get("title", ""): entry for entry in plan}
+    ready = [entry for entry in prepared if entry.get("state") == "clean-base-verified-ready-to-patch"]
+    verified = failed = 0
+    results = []
+    console_ids = {"Sony PlayStation": 12, "Sony PlayStation 2": 21}
+
+    for source_entry in ready:
+        title = source_entry.get("title", "Unknown game")
+        plan_entry = plan_by_title.get(title, {})
+        game_id = str(plan_entry.get("ra_game_id", "unknown"))
+        source = Path(source_entry.get("candidate_path", ""))
+        result = {"ra_game_id": game_id, "title": title, "source": str(source)}
+        work_dir = workspace / "workspace" / f"{game_id}-{_safe_slug(title)}"
+        verified_dir = workspace / "verified" / f"{game_id}-{_safe_slug(title)}"
+        try:
+            patch = _current_xdelta(workspace, game_id, title)
+            source_data = _cue_data_file(source) if source.suffix.casefold() == ".cue" else source
+            if not source_data or not source_data.is_file():
+                raise PatchError("Source image or referenced BIN is missing")
+            required = source_data.stat().st_size + 1024 * 1024 * 1024
+            if shutil.disk_usage(workspace).free < required:
+                raise PatchError("Insufficient free space for patched image plus 1 GiB safety margin")
+            if work_dir.exists():
+                shutil.rmtree(work_dir)
+            work_dir.mkdir(parents=True)
+            output_name = f"{patch.stem}.bin" if source.suffix.casefold() == ".cue" else f"{patch.stem}.iso"
+            temporary_output = work_dir / output_name
+            completed = subprocess.run(
+                ["xdelta3", "-d", "-s", str(source_data), str(patch), str(temporary_output)],
+                capture_output=True, text=True, check=False,
+            )
+            if completed.returncode:
+                raise PatchError(f"xdelta3 failed: {completed.stderr.strip()}")
+            hash_target = temporary_output
+            companion_cue = ""
+            if source.suffix.casefold() == ".cue":
+                supplied_cues = list(patch.parent.glob("*.cue"))
+                if len(supplied_cues) != 1:
+                    raise PatchError(f"Expected one supplied CUE; found {len(supplied_cues)}")
+                companion = work_dir / supplied_cues[0].name
+                shutil.copy2(supplied_cues[0], companion)
+                hash_target = companion
+                companion_cue = companion.name
+            console_id = console_ids.get(plan_entry.get("platform", ""))
+            if not console_id:
+                raise PatchError("Unsupported platform")
+            actual_hash = hash_file(hasher, console_id, hash_target)
+            expected_hash = plan_entry.get("expected_ra_hash", "").casefold()
+            if actual_hash != expected_hash:
+                raise PatchError(f"Patched RAHash mismatch: expected {expected_hash}, got {actual_hash}")
+            verified_dir.parent.mkdir(parents=True, exist_ok=True)
+            if verified_dir.exists():
+                shutil.rmtree(verified_dir)
+            work_dir.replace(verified_dir)
+            verified += 1
+            result.update(
+                status="patched-and-verified",
+                output=str(verified_dir / output_name),
+                cue=str(verified_dir / companion_cue) if companion_cue else "",
+                ra_hash=actual_hash,
+            )
+        except (OSError, PatchError) as exc:
+            if work_dir.exists():
+                shutil.rmtree(work_dir)
+            failed += 1
+            result.update(status="failed", error=str(exc))
+        results.append(result)
+
+    (workspace / "patch-apply.json").write_text(
+        json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return PatchApplySummary(len(ready), verified, failed)
 
 
 def prepare_patch_sources(

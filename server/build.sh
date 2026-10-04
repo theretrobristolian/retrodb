@@ -80,7 +80,7 @@ command -v apt-get >/dev/null || die 'APT is required.'
 command -v systemctl >/dev/null || die 'systemd is required.'
 [[ -d /run/systemd/system ]] || die 'systemd is not running.'
 
-PACKAGES=(ca-certificates cifs-utils curl unzip git jq postgresql python3 python3-pip python3-venv rsync)
+PACKAGES=(ca-certificates cifs-utils curl unzip git jq postgresql python3 python3-pip python3-venv rsync xdelta3)
 
 if [[ $CHECK_ONLY == true ]]; then
     missing=()

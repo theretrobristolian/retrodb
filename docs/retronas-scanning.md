@@ -148,3 +148,15 @@ MD5 or CRC32 against both the corresponding file on the read-only RetroNAS
 mount and any image placed in `incoming`. For PlayStation CUE sheets, raw-file
 checksums are calculated against the referenced BIN. No collection file is
 copied or changed during preparation.
+
+Apply patches only to sources verified by `patch-prepare`:
+
+```bash
+sudo bash server/retronas.sh patch-apply
+```
+
+The command uses the current root-level XDelta patch, ignoring archived copies
+under `Old Patch`. It creates one temporary output at a time, verifies the
+result with RAHasher and retains only successful results under
+`/var/lib/retrodb/patches/verified`. Failed outputs are deleted and recorded in
+`patch-apply.json`. RetroNAS originals remain read-only and unchanged.

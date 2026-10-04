@@ -13,6 +13,7 @@ from retrodb.library import LibraryScanError, scan_retronas
 from retrodb.retroachievements_match import MatchError, match_collection
 from retrodb.retroachievements_patches import (
     PatchError,
+    apply_verified_patches,
     create_patch_plan,
     download_patch_archives,
     prepare_patch_sources,
@@ -77,6 +78,7 @@ def main() -> int:
         ("patch-plan", "create patch manifests and per-game guidance"),
         ("patch-download", "download and safely extract official patch archives"),
         ("patch-prepare", "inspect incoming patch source images"),
+        ("patch-apply", "patch verified clean images and validate the results"),
     ):
         patch_parser = subparsers.add_parser(command, help=help_text)
         patch_parser.add_argument("--root", type=Path, required=True)
@@ -114,6 +116,14 @@ def main() -> int:
             print(f"[+] Missing sources: {summary.missing}.")
             print(f"[+] Details: {args.workspace / 'patch-prepare.json'}")
             return 0
+        if args.command == "patch-apply":
+            summary = apply_verified_patches(args.workspace, args.hasher)
+            print(f"[OK] Processed {summary.ready} verified clean base images.")
+            print(f"[+] Patched and RA-verified: {summary.verified}; failed: {summary.failed}.")
+            print(f"[+] Verified output: {args.workspace / 'verified'}")
+            print(f"[+] Details: {args.workspace / 'patch-apply.json'}")
+            print("[+] RetroNAS remained read-only; originals were not modified.")
+            return 1 if summary.failed else 0
         if args.command == "library-scan":
             print(f"[+] RetroNAS mount: {args.root.resolve()}")
             print("[+] Scanning configured collection paths read-only...")
