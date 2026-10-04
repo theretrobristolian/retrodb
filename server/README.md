@@ -73,6 +73,46 @@ sudo bash server/build.sh --verbose
 
 `--check` remains read-only and can be combined with `--verbose`, although the check itself normally produces little underlying output.
 
+## Application deployment
+
+After the host bootstrap passes its check, deploy the application foundation:
+
+```bash
+git pull
+sudo bash server/build.sh
+sudo bash server/deploy.sh
+```
+
+The build step now includes `rsync`, which the deployment uses to copy the checked-out release into `/opt/retrodb`.
+
+The deployment:
+
+- generates a random PostgreSQL password when one does not already exist
+- stores the database URL only in `/etc/retrodb/retrodb.env`
+- creates the `retrodb` PostgreSQL role and database
+- synchronises application files into `/opt/retrodb`
+- creates an isolated Python virtual environment
+- installs the pinned production dependencies
+- applies Alembic migrations
+- installs and starts the hardened systemd service
+- calls the database-backed health endpoint
+
+Normal output is concise. Add `--verbose` to display all underlying commands:
+
+```bash
+sudo bash server/deploy.sh --verbose
+```
+
+Validate the running service locally:
+
+```bash
+curl http://127.0.0.1:8000/live
+curl http://127.0.0.1:8000/health
+sudo systemctl status retrodb
+```
+
+The service deliberately binds only to loopback. LAN or guest access will be added later through a separately hardened HTTPS reverse proxy.
+
 ## Security boundary
 
 The bootstrap creates a non-login service user, protects configuration and data paths, and keeps PostgreSQL on loopback. It deliberately does not configure a firewall, mount collection shares, publish a port or place the application on the Internet.
