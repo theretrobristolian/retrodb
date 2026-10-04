@@ -203,6 +203,18 @@ http://127.0.0.1:8000/health
 
 The application remains loopback-only until an HTTPS reverse proxy and explicit LAN access policy are added.
 
+## Configure RetroAchievements
+
+RetroAchievements credentials are stored only in the protected server file:
+
+```text
+/etc/retrodb/retrodb.env
+```
+
+The deployment creates a clearly labelled section for the username and **Web API key**. Follow the [RetroAchievements setup guide](docs/retroachievements-setup.md) to obtain the correct key and enter it safely.
+
+Do not put a real API key in Git, screenshots, issues or support messages.
+
 ## Planned repository layout
 
 ```text
