@@ -170,7 +170,13 @@ def comparable_title(value: str) -> str:
             expanded.append(ROMAN_NUMBERS[word])
         elif word not in {"a", "an", "the"}:
             expanded.append({"vs": "versus"}.get(word, word))
-    return " ".join(expanded)
+    comparable = " ".join(expanded)
+    comparable = re.sub(r"\bdual shock (?:ver|version)\b", "", comparable)
+    aliases = {
+        "harry potter and philosophers stone": "harry potter and sorcerers stone",
+    }
+    comparable = aliases.get(comparable.strip(), comparable)
+    return " ".join(comparable.split())
 
 
 def title_similarity(left: str, right: str) -> float:
@@ -222,7 +228,7 @@ def alternative_candidates(
     candidates = [
         f"{game.title} [RA {game.game_id}; {score:.3f}]"
         for score, game in rank_game_candidates(local_path, games)
-        if score >= 0.65
+        if score >= 0.72
     ]
     return " | ".join(candidates[:limit])
 
@@ -293,9 +299,21 @@ def preferred_release(
     )
 
 
-def release_guidance(local_region: str, preferred_region: str) -> str:
+def release_guidance(
+    local_region: str,
+    preferred_region: str,
+    preferred_name: str = "",
+    preferred_labels: str = "",
+) -> str:
     if not preferred_region:
         return ""
+    labels = {label.strip().casefold() for label in preferred_labels.split(";")}
+    if "rapatches" in labels:
+        return (
+            f"Apply the RA-supported patch for {preferred_name}"
+            if preferred_name
+            else "Apply the listed RA-supported patch"
+        )
     if local_region == preferred_region:
         return f"Use the listed {preferred_region} Redump-compatible release/revision"
     if preferred_region == "USA":
@@ -390,7 +408,8 @@ def match_collection(
             alternatives = ""
             if item.ra_match_status == "unmatched":
                 recommendation, confidence, score = suggest_game(item.relative_path, games)
-                alternatives = alternative_candidates(item.relative_path, games)
+                if confidence == "ambiguous":
+                    alternatives = alternative_candidates(item.relative_path, games)
                 if recommendation:
                     counts["recommended"] += 1
 
@@ -448,7 +467,9 @@ def match_collection(
                 "preferred_region": preferred_region,
                 "preferred_ra_hash": preferred_hash,
                 "preferred_ra_labels": preferred_labels,
-                "release_guidance": release_guidance(local_region, preferred_region),
+                "release_guidance": release_guidance(
+                    local_region, preferred_region, preferred_name, preferred_labels
+                ),
                 "accepted_regions": regions_from_names(accepted_names),
                 "accepted_file_names": " | ".join(accepted_names),
                 "accepted_ra_hashes": " | ".join(accepted_hashes),
