@@ -119,6 +119,18 @@ labelled `rapatches` by RetroAchievements. Patch URLs are accepted only from
 RetroAchievements or GitHub hosts. The command does not download ROMs, copy
 collection files or modify the read-only RetroNAS mount.
 
+Download and safely extract the official patch packages:
+
+```bash
+sudo bash server/retronas.sh patch-download
+```
+
+Downloads are limited to trusted RetroAchievements/GitHub hosts and 64 MiB per
+archive. ZIP traversal, excessive file counts and expanded archives over 256
+MiB are rejected. Results, SHA-256 checksums and discovered instruction files
+are recorded in `/var/lib/retrodb/patches/patch-download.json`. Existing
+downloads are reused, so the command is safe to repeat.
+
 Place clean source images you own in `/var/lib/retrodb/patches/incoming`, then
 inspect them with:
 

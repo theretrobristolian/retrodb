@@ -1,7 +1,16 @@
 import csv
+from io import BytesIO
 import json
+import zipfile
 
-from retrodb.retroachievements_patches import create_patch_plan
+import pytest
+
+from retrodb.retroachievements_patches import (
+    PatchError,
+    _safe_extract_zip,
+    create_patch_plan,
+    download_patch_archives,
+)
 
 
 def write_report(path, patch_url=""):
@@ -52,3 +61,50 @@ def test_patch_plan_rejects_untrusted_patch_url(tmp_path):
     result = create_patch_plan(report, tmp_path / "cache", tmp_path / "patches")
 
     assert result.official_links == 0
+
+
+def test_patch_download_extracts_archive_and_records_guidance(tmp_path, monkeypatch):
+    workspace = tmp_path / "patches"
+    write_report(tmp_path / "report.csv", "https://github.com/RetroAchievements/RAPatches/raw/main/test.zip")
+    create_patch_plan(tmp_path / "report.csv", tmp_path / "cache", workspace)
+    payload = BytesIO()
+    with zipfile.ZipFile(payload, "w") as bundle:
+        bundle.writestr("README.txt", "Use the clean USA image")
+        bundle.writestr("fix.xdelta", b"patch")
+
+    def fake_download(url, destination):
+        destination.write_bytes(payload.getvalue())
+
+    monkeypatch.setattr("retrodb.retroachievements_patches._download_patch", fake_download)
+    result = download_patch_archives(workspace)
+
+    assert result.downloaded == 1
+    assert result.failed == 0
+    details = json.loads((workspace / "patch-download.json").read_text())
+    assert details[0]["guidance_files"] == ["extracted/README.txt"]
+
+
+def test_patch_download_reuses_existing_archive(tmp_path, monkeypatch):
+    workspace = tmp_path / "patches"
+    write_report(tmp_path / "report.csv", "https://retroachievements.org/test.zip")
+    create_patch_plan(tmp_path / "report.csv", tmp_path / "cache", workspace)
+    game_dir = next((workspace / "downloads").iterdir())
+    game_dir.joinpath("official-patch.zip").write_bytes(b"existing")
+    game_dir.joinpath("extracted").mkdir()
+    monkeypatch.setattr(
+        "retrodb.retroachievements_patches._download_patch",
+        lambda *_: pytest.fail("existing download should be reused"),
+    )
+
+    result = download_patch_archives(workspace)
+
+    assert result.reused == 1
+
+
+def test_safe_extract_rejects_zip_traversal(tmp_path):
+    archive = tmp_path / "bad.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("../escape.txt", "bad")
+
+    with pytest.raises(PatchError, match="Unsafe path"):
+        _safe_extract_zip(archive, tmp_path / "out")

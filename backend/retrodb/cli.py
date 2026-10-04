@@ -14,6 +14,7 @@ from retrodb.retroachievements_match import MatchError, match_collection
 from retrodb.retroachievements_patches import (
     PatchError,
     create_patch_plan,
+    download_patch_archives,
     prepare_patch_sources,
 )
 from retrodb.providers.retroachievements import (
@@ -74,6 +75,7 @@ def main() -> int:
     match_parser.add_argument("--report", type=Path, default=Path("/var/lib/retrodb/reports/retroachievements-compatibility.csv"))
     for command, help_text in (
         ("patch-plan", "create patch manifests and per-game guidance"),
+        ("patch-download", "download and safely extract official patch archives"),
         ("patch-prepare", "inspect incoming patch source images"),
     ):
         patch_parser = subparsers.add_parser(command, help=help_text)
@@ -92,6 +94,14 @@ def main() -> int:
             print(f"[+] Patch workspace: {summary.workspace}")
             print("[+] RetroNAS remained read-only; no ROMs or patches were modified.")
             return 0
+
+        if args.command == "patch-download":
+            summary = download_patch_archives(args.workspace)
+            print(f"[OK] Processed {summary.patches} official patch packages.")
+            print(f"[+] Downloaded: {summary.downloaded}; reused: {summary.reused}; failed: {summary.failed}.")
+            print(f"[+] Details: {args.workspace / 'patch-download.json'}")
+            print("[+] RetroNAS remained read-only; no ROMs were copied or modified.")
+            return 1 if summary.failed else 0
 
         if args.command == "patch-prepare":
             summary = prepare_patch_sources(
