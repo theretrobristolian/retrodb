@@ -3,10 +3,13 @@ import pytest
 from retrodb.retroachievements_match import (
     CatalogueGame,
     MatchError,
+    alternative_candidates,
+    comparable_title,
     extract_hash,
     identify_local_release,
     load_hash_catalogue,
     normalise_title,
+    preferred_release,
     regions_from_names,
     suggest_game,
 )
@@ -69,3 +72,31 @@ def test_title_recommendation_preserves_numeric_title_suffix():
     games = (CatalogueGame(1, "NBA Street Vol. 2", ("a" * 32,)),)
     game, _, _ = suggest_game("NBA Street V3 [SLUS_211.26].iso", games)
     assert game is None
+
+
+def test_comparable_title_handles_articles_accents_and_versions():
+    assert comparable_title("The Ōkami.iso") == "okami"
+    assert comparable_title("Game V3.iso") == "game 3"
+
+
+def test_ambiguous_rows_include_ranked_alternatives():
+    games = (
+        CatalogueGame(1, "Alpha Racer", ("a" * 32,)),
+        CatalogueGame(2, "Alpha Racing", ("b" * 32,)),
+    )
+    result = alternative_candidates("Alpha Race.iso", games)
+    assert "RA 1" in result
+    assert "RA 2" in result
+
+
+def test_preferred_release_uses_clean_usa_final_revision():
+    details = [
+        {"MD5": "1" * 32, "Name": "Game (Europe)", "Labels": ["redump"], "PatchUrl": None},
+        {"MD5": "2" * 32, "Name": "Game (USA)", "Labels": ["redump"], "PatchUrl": None},
+        {"MD5": "3" * 32, "Name": "Game (USA) (Rev 1)", "Labels": ["redump"], "PatchUrl": None},
+    ]
+    name, region, digest, labels = preferred_release(details)
+    assert name == "Game (USA) (Rev 1)"
+    assert region == "USA"
+    assert digest == "3" * 32
+    assert labels == "redump"
