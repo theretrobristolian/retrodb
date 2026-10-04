@@ -72,7 +72,8 @@ def main() -> int:
             with Session(get_engine()) as session:
                 result = scan_retronas(session, args.root)
             for platform in result.platforms:
-                print(f"\\n[{platform.label}]")
+                print()
+                print(f"[{platform.label}]")
                 print(f"  Path     : {platform.path}")
                 if not platform.exists:
                     print("  Status   : path not found; not scanned")
@@ -100,7 +101,8 @@ def main() -> int:
                     f"{platform.missing} newly missing"
                 )
             total_gib = result.bytes_total / (1024 ** 3)
-            print(f"\\n[Total] {result.files} files ({total_gib:.2f} GiB)")
+            print()
+            print(f"[Total] {result.files} files ({total_gib:.2f} GiB)")
             print(
                 f"[+] Database changes: {result.added} new, {result.updated} changed, "
                 f"{result.missing} newly missing."
