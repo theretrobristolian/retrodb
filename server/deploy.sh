@@ -89,6 +89,8 @@ run_step 'Provisioning PostgreSQL database and role' provision_database
 run_step 'Synchronising application files' sync_application
 run_step 'Creating Python virtual environment' python3 -m venv "$APP_ROOT/.venv"
 run_step 'Installing Python dependencies' "$APP_ROOT/.venv/bin/pip" install --disable-pip-version-check --requirement "$APP_ROOT/requirements.txt"
+run_step 'Applying Python environment ownership' chown -R root:"$APP_GROUP" "$APP_ROOT/.venv"
+run_step 'Applying Python environment permissions' chmod -R g+rX "$APP_ROOT/.venv"
 run_step 'Applying database migrations' runuser -u "$APP_USER" -- env RETRODB_DATABASE_URL="$DATABASE_URL" "$APP_ROOT/.venv/bin/alembic" -c "$APP_ROOT/alembic.ini" upgrade head
 run_step 'Installing systemd service' install -o root -g root -m 0644 "$APP_ROOT/server/retrodb.service" "$SERVICE_FILE"
 run_step 'Reloading systemd' systemctl daemon-reload
