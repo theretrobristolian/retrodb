@@ -130,6 +130,15 @@ RETRODB_RA_API_KEY=
 
 See the [full credential setup guide](../docs/retroachievements-setup.md), including where to obtain the correct key and where redacted screenshots belong.
 
+After saving the credentials and restarting RetroDB, test the connection and cache the achievement-enabled PlayStation and PlayStation 2 catalogues:
+
+```bash
+sudo bash server/retroachievements.sh test
+sudo bash server/retroachievements.sh sync
+```
+
+The sync requests supported hashes and caches the response for 180 days. Use `sync --force` only for an intentional upstream refresh. Credentials are read from the protected file and are never placed on the command line or written to the cache.
+
 ## Security boundary
 
 The bootstrap creates a non-login service user, protects configuration and data paths, and keeps PostgreSQL on loopback. It deliberately does not configure a firewall, mount collection shares, publish a port or place the application on the Internet.

@@ -52,7 +52,29 @@ sudo systemctl restart retrodb
 sudo systemctl status retrodb --no-pager
 ```
 
-The future RetroAchievements connection test and importer will read these values automatically.
+Test the credentials without displaying them:
+
+```bash
+sudo bash server/retroachievements.sh test
+```
+
+A successful test reports only that the connection worked and the number of systems returned. Errors are sanitised so the key is never printed.
+
+## 4. Download the PS1 and PS2 compatibility catalogues
+
+```bash
+sudo bash server/retroachievements.sh sync
+```
+
+This downloads only games which have achievements, including their recognised hashes. Results are cached beneath `/var/cache/retrodb/providers/retroachievements/` for 180 days so normal runs do not repeatedly call the upstream API.
+
+Use a forced refresh only when you deliberately want current upstream data:
+
+```bash
+sudo bash server/retroachievements.sh sync --force
+```
+
+The cache contains public catalogue metadata and hashes, never the username or API key.
 
 ## Screenshots
 
