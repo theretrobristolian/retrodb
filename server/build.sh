@@ -79,7 +79,7 @@ command -v apt-get >/dev/null || die 'APT is required.'
 command -v systemctl >/dev/null || die 'systemd is required.'
 [[ -d /run/systemd/system ]] || die 'systemd is not running.'
 
-PACKAGES=(ca-certificates cifs-utils curl git jq postgresql python3 python3-pip python3-venv rsync)
+PACKAGES=(ca-certificates cifs-utils curl unzip git jq postgresql python3 python3-pip python3-venv rsync)
 
 if [[ $CHECK_ONLY == true ]]; then
     missing=()
@@ -90,6 +90,7 @@ if [[ $CHECK_ONLY == true ]]; then
     getent passwd "$APP_USER" >/dev/null || warn "Service account $APP_USER does not exist."
     [[ -d $CONFIG_DIR ]] || warn "Missing $CONFIG_DIR"
     [[ -d $DATA_DIR ]] || warn "Missing $DATA_DIR"
+    [[ -x /opt/retrodb-tools/RAHasher ]] || warn "RAHasher is not installed."
     if command -v systemctl >/dev/null && systemctl is-active --quiet postgresql; then
         log 'PostgreSQL is running.'
     elif dpkg-query -W postgresql >/dev/null 2>&1; then
@@ -117,6 +118,7 @@ fi
 
 run_step 'Creating application directories' install -d -o root -g "$APP_GROUP" -m 0750 "$APP_ROOT" "$CONFIG_DIR" "$BACKUP_DIR"
 run_step 'Creating writable data directories' install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$DATA_DIR" "$CACHE_DIR" "$LOG_DIR"
+run_step 'Installing verified RetroAchievements hash engine' bash "$SOURCE_ROOT/server/install-rahasher.sh"
 
 if [[ ! -f $CONFIG_DIR/retrodb.env ]]; then
     run_step 'Creating protected configuration file' install -o root -g "$APP_GROUP" -m 0640 /dev/null "$CONFIG_DIR/retrodb.env"

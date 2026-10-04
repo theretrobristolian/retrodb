@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from retrodb.database import get_engine
 from retrodb.library import LibraryScanError, scan_retronas
+from retrodb.retroachievements_match import MatchError, match_collection
 from retrodb.providers.retroachievements import (
     RetroAchievementsClient,
     RetroAchievementsError,
@@ -62,6 +63,10 @@ def main() -> int:
     sync_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
     scan_parser = subparsers.add_parser("library-scan", help="inventory a read-only collection mount")
     scan_parser.add_argument("--root", type=Path, required=True)
+    match_parser = subparsers.add_parser("ra-match", help="hash and match local disc images")
+    match_parser.add_argument("--root", type=Path, required=True)
+    match_parser.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
+    match_parser.add_argument("--report", type=Path, default=Path("/var/lib/retrodb/reports/retroachievements-compatibility.csv"))
     args = parser.parse_args()
 
     try:
@@ -110,6 +115,36 @@ def main() -> int:
             print("[+] Counts are files, not games; BIN/CUE pairs are reported separately.")
             return 0
 
+        if args.command == "ra-match":
+            print(f"[+] Collection mount: {args.root.resolve()}")
+            print(f"[+] Hash engine: {args.hasher}")
+            print("[+] Matching local disc images against cached RetroAchievements hashes...")
+            with Session(get_engine()) as session:
+                summaries = match_collection(
+                    session, args.root.resolve(), args.hasher,
+                    args.cache_dir, args.report,
+                )
+            total_candidates = total_matched = total_unmatched = total_failed = 0
+            for summary in summaries:
+                percentage = (summary.matched / summary.candidates * 100) if summary.candidates else 0
+                print()
+                print(f"[{summary.platform}]")
+                print(f"  Disc images : {summary.candidates}")
+                print(f"  Compatible  : {summary.matched} ({percentage:.1f}%)")
+                print(f"  Unmatched   : {summary.unmatched}")
+                print(f"  Failed      : {summary.failed}")
+                print(f"  Cached      : {summary.cached}")
+                total_candidates += summary.candidates
+                total_matched += summary.matched
+                total_unmatched += summary.unmatched
+                total_failed += summary.failed
+            percentage = (total_matched / total_candidates * 100) if total_candidates else 0
+            print()
+            print(f"[Total] {total_matched}/{total_candidates} compatible ({percentage:.1f}%)")
+            print(f"[+] Unmatched: {total_unmatched}; hash failures: {total_failed}.")
+            print(f"[+] Detailed CSV report: {args.report}")
+            return 0
+
         client = make_client(args.cache_dir)
         if args.command == "ra-test":
             systems = client.test_connection()
@@ -130,7 +165,7 @@ def main() -> int:
             )
         print("[+] RetroAchievements catalogue sync complete.")
         return 0
-    except (RetroAchievementsError, LibraryScanError) as exc:
+    except (RetroAchievementsError, LibraryScanError, MatchError) as exc:
         print(f"[ERROR] {exc}")
         return 1
 

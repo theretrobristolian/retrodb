@@ -236,10 +236,18 @@ class LibraryItem(TimestampMixin, Base):
     modified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     is_missing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ra_hash: Mapped[str | None] = mapped_column(String(32))
+    ra_game_id: Mapped[int | None] = mapped_column(BigInteger)
+    ra_game_title: Mapped[str | None] = mapped_column(String(500))
+    ra_match_status: Mapped[str | None] = mapped_column(String(32))
+    ra_hash_error: Mapped[str | None] = mapped_column(String(500))
+    ra_hashed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
         UniqueConstraint("source_id", "relative_path", name="uq_library_item_source_path"),
         Index("ix_library_item_platform", "platform_id"),
         Index("ix_library_item_missing", "is_missing"),
         Index("ix_library_item_filename", "filename"),
+        Index("ix_library_item_ra_hash", "ra_hash"),
+        Index("ix_library_item_ra_status", "ra_match_status"),
     )

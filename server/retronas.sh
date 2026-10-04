@@ -17,6 +17,15 @@ case ${1:-} in
         systemctl stop "$UNIT_NAME"
         printf '[OK] RetroNAS share unmounted.\n'
         ;;
+    match)
+        [[ -x "$APP_ROOT/.venv/bin/python" ]] || die 'RetroDB is not deployed.'
+        mountpoint -q "$MOUNT_POINT" || die 'RetroNAS is not mounted. Run configure-retronas.sh first.'
+        [[ -x /opt/retrodb-tools/RAHasher ]] || die 'RAHasher is missing. Run server/build.sh first.'
+        exec runuser -u "$APP_USER" -- \
+            env PYTHONPATH="$APP_ROOT/backend" \
+            "$APP_ROOT/.venv/bin/python" -m retrodb.cli \
+            --env-file "$CONFIG_FILE" ra-match --root "$MOUNT_POINT"
+        ;;
     scan)
         [[ -x "$APP_ROOT/.venv/bin/python" ]] || die 'RetroDB is not deployed.'
         mountpoint -q "$MOUNT_POINT" || die 'RetroNAS is not mounted. Run configure-retronas.sh first.'
@@ -25,5 +34,5 @@ case ${1:-} in
             "$APP_ROOT/.venv/bin/python" -m retrodb.cli \
             --env-file "$CONFIG_FILE" library-scan --root "$MOUNT_POINT"
         ;;
-    *) die 'Usage: sudo bash server/retronas.sh {status|mount|unmount|scan}' ;;
+    *) die 'Usage: sudo bash server/retronas.sh {status|mount|unmount|scan|match}' ;;
 esac

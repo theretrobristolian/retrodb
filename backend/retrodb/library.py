@@ -127,6 +127,12 @@ def scan_retronas(session: Session, root: Path) -> ScanSummary:
                 else:
                     if existing.size_bytes != stat.st_size or existing.modified_at != modified_at or existing.is_missing:
                         summary.updated += 1
+                        existing.ra_hash = None
+                        existing.ra_game_id = None
+                        existing.ra_game_title = None
+                        existing.ra_match_status = None
+                        existing.ra_hash_error = None
+                        existing.ra_hashed_at = None
                     for key, value in values.items():
                         setattr(existing, key, value)
                 summary.files += 1

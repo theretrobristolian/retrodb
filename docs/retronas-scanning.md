@@ -52,3 +52,21 @@ sudo bash server/retronas.sh mount
 ## Next identification stage
 
 A later scanner stage will calculate the platform-specific RetroAchievements hashes and compare them with the cached provider catalogue. Whole-file SHA/MD5 values are not a substitute for RetroAchievements disc hashing, so this inventory deliberately does not claim compatibility yet.
+
+## Check RetroAchievements compatibility
+
+RetroDB uses the rcheevos-compatible RAHasher engine, pinned to version 1.8.3 and verified against its published SHA-256 digest before installation. It hashes the PS1 CUE entry points and PS2 ISO images using the platform-specific RetroAchievements algorithm.
+
+```bash
+sudo bash server/retronas.sh match
+```
+
+Progress is checkpointed after every disc. Re-running the command reuses stored hashes, including after interruption, while still comparing them with the latest cached catalogue. A changed collection file has its stored result cleared automatically during the next inventory scan.
+
+The summary reports compatible, unmatched and failed images per platform. Full results are written to:
+
+```text
+/var/lib/retrodb/reports/retroachievements-compatibility.csv
+```
+
+View it with `sudo column -s, -t < /var/lib/retrodb/reports/retroachievements-compatibility.csv | less -S`, or copy it to an administrator-owned location for spreadsheet analysis.
