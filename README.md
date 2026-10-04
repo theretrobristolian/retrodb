@@ -136,6 +136,27 @@ The starter build script is at:
 server/build.sh
 ```
 
+### Debian host preparation
+
+A minimal Debian installation may not include `sudo`. Sign in with the normal account created during setup, become root, then install `sudo` and grant that account administrative access. Replace `david` if a different username was created:
+
+```bash
+su -
+apt update
+apt install -y sudo
+usermod -aG sudo david
+reboot
+```
+
+Reconnect after the reboot, then fully update the base operating system:
+
+```bash
+sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove --purge -y
+sudo reboot
+```
+
+Reconnect once more before installing RetroDB.
+
 On a fresh test VM:
 
 ```bash
