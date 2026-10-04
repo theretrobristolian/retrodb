@@ -47,3 +47,19 @@ def test_title_recommendation_is_conservative():
 def test_region_and_title_helpers():
     assert normalise_title("Game (Europe) (Disc 1).iso") == "game"
     assert regions_from_names(["Game (USA).iso", "Game (Europe, Australia).iso"]) == "USA; Europe; Australia"
+
+
+def test_title_recommendation_rejects_wrong_sequel():
+    games = (
+        CatalogueGame(1, "Cool Boarders", ("a" * 32,)),
+        CatalogueGame(2, "Cool Boarders 2", ("b" * 32,)),
+    )
+    game, confidence, _ = suggest_game("Cool Boarders 3 [SCUS_942.51].cue", games)
+    assert game is None
+    assert confidence == ""
+
+
+def test_title_recommendation_rejects_demo_for_retail_game():
+    games = (CatalogueGame(1, "~Demo~ Need for Speed: Most Wanted", ("a" * 32,)),)
+    game, _, _ = suggest_game("Need For Speed Most Wanted [SLES_535.57].iso", games)
+    assert game is None
