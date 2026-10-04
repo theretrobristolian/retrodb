@@ -39,7 +39,7 @@ The resulting systemd mount uses SMB 3.1.1 and is forced read-only with `nosuid`
 sudo bash server/retronas.sh scan
 ```
 
-The initial inventory stores relative path, filename, extension, size, modification time, platform, last-seen time and missing state. It recognises common PS1/PS2 image formats and does not alter or upload collection files.
+The inventory reports the exact mount and platform paths, then breaks results down by platform, top-level media folder (for example PS2 `cd` and `dvd`) and file format. Skipped extensions are itemised. Counts are explicitly files rather than games, because a PS1 BIN/CUE pair is two files representing one disc.\n\nIt stores relative path, filename, extension, size, modification time, platform, last-seen time and missing state. It recognises common PS1/PS2 image formats and does not alter or upload collection files.
 
 Other operations:
 

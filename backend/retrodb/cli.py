@@ -67,12 +67,45 @@ def main() -> int:
     try:
         load_environment_file(args.env_file)
         if args.command == "library-scan":
-            print("[+] Scanning RetroNAS collection read-only...")
+            print(f"[+] RetroNAS mount: {args.root.resolve()}")
+            print("[+] Scanning configured collection paths read-only...")
             with Session(get_engine()) as session:
                 result = scan_retronas(session, args.root)
-            gib = result.bytes_total / (1024 ** 3)
-            print(f"[OK] Found {result.discovered} candidate files ({gib:.2f} GiB).")
-            print(f"[+] Added: {result.added}; changed: {result.updated}; missing: {result.missing}; skipped: {result.skipped}.")
+            for platform in result.platforms:
+                print(f"\\n[{platform.label}]")
+                print(f"  Path     : {platform.path}")
+                if not platform.exists:
+                    print("  Status   : path not found; not scanned")
+                    continue
+                gib = platform.bytes_total / (1024 ** 3)
+                print(f"  Files    : {platform.files} ({gib:.2f} GiB)")
+                if platform.folders:
+                    print("  Folders  :")
+                    for folder, count in sorted(platform.folders.items()):
+                        folder_gib = platform.folder_bytes[folder] / (1024 ** 3)
+                        print(f"    {folder}: {count} files ({folder_gib:.2f} GiB)")
+                formats = ", ".join(
+                    f"{name.upper()}={count}"
+                    for name, count in sorted(platform.extensions.items())
+                )
+                print(f"  Formats  : {formats or 'none'}")
+                skipped = ", ".join(
+                    f"{name or '(none)'}={count}"
+                    for name, count in sorted(platform.skipped_extensions.items())
+                )
+                skipped_count = sum(platform.skipped_extensions.values()) + platform.skipped_other
+                print(f"  Skipped  : {skipped_count}" + (f" ({skipped})" if skipped else ""))
+                print(
+                    f"  Database : {platform.added} new, {platform.updated} changed, "
+                    f"{platform.missing} newly missing"
+                )
+            total_gib = result.bytes_total / (1024 ** 3)
+            print(f"\\n[Total] {result.files} files ({total_gib:.2f} GiB)")
+            print(
+                f"[+] Database changes: {result.added} new, {result.updated} changed, "
+                f"{result.missing} newly missing."
+            )
+            print("[+] Counts are files, not games; BIN/CUE pairs are reported separately.")
             return 0
 
         client = make_client(args.cache_dir)
