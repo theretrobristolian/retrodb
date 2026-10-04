@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-10-04
 """
 
+from datetime import date
 from typing import Sequence, Union
 
 from alembic import op
@@ -251,14 +252,14 @@ def upgrade() -> None:
                 "name": "Sony PlayStation",
                 "manufacturer": "Sony Computer Entertainment",
                 "generation": 5,
-                "release_date": sa.text("'1994-12-03'"),
+                "release_date": date(1994, 12, 3),
             },
             {
                 "slug": "playstation-2",
                 "name": "Sony PlayStation 2",
                 "manufacturer": "Sony Computer Entertainment",
                 "generation": 6,
-                "release_date": sa.text("'2000-03-04'"),
+                "release_date": date(2000, 3, 4),
             },
         ],
     )
