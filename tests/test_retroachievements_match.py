@@ -11,6 +11,7 @@ from retrodb.retroachievements_match import (
     normalise_title,
     preferred_release,
     regions_from_names,
+    release_guidance,
     suggest_game,
 )
 
@@ -100,3 +101,19 @@ def test_preferred_release_uses_clean_usa_final_revision():
     assert region == "USA"
     assert digest == "3" * 32
     assert labels == "redump"
+
+
+def test_regional_title_alias_matches_same_game():
+    games = (CatalogueGame(1, "Harry Potter and the Sorcerer's Stone", ("a" * 32,)),)
+    game, confidence, _ = suggest_game(
+        "Harry Potter and the Philosopher's Stone [SLES_036.62].cue", games
+    )
+    assert game and game.game_id == 1
+    assert confidence == "exact-title"
+
+
+def test_patch_guidance_is_explicit():
+    guidance = release_guidance(
+        "Europe", "USA", "Crash Bash (USA) (Menu Glitch Fix)", "rapatches; redump"
+    )
+    assert guidance.startswith("Apply the RA-supported patch")
