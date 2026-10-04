@@ -122,7 +122,7 @@ def main() -> int:
             with Session(get_engine()) as session:
                 summaries = match_collection(
                     session, args.root.resolve(), args.hasher,
-                    args.cache_dir, args.report,
+                    args.cache_dir, args.report, make_client(args.cache_dir),
                 )
             total_candidates = total_matched = total_unmatched = total_failed = 0
             for summary in summaries:
@@ -134,6 +134,7 @@ def main() -> int:
                 print(f"  Unmatched   : {summary.unmatched}")
                 print(f"  Failed      : {summary.failed}")
                 print(f"  Cached      : {summary.cached}")
+                print(f"  Suggestions : {summary.recommended}")
                 total_candidates += summary.candidates
                 total_matched += summary.matched
                 total_unmatched += summary.unmatched
