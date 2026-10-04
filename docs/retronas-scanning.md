@@ -91,3 +91,16 @@ The per-game metadata is cached for 180 days. Re-run the matcher to regenerate t
 ```bash
 sudo bash server/retronas.sh match
 ```
+
+## Release preference and ambiguous titles
+
+For TV-connected PlayStation systems, RetroDB ranks supported releases using RetroAchievements' documented policy:
+
+1. clean NTSC USA releases;
+2. clean NTSC Japan releases when no USA release is supported, commonly Japan-exclusive games;
+3. PAL Europe releases when they are the supported regional option, commonly Europe-exclusive games;
+4. the latest supported revision within the preferred region.
+
+The report's `preferred_release_name`, `preferred_region`, `preferred_ra_hash` and `release_guidance` columns turn the complete accepted-file list into one actionable recommendation. This selection only considers files explicitly returned by RetroAchievements; it does not invent an unsupported regional release.
+
+Title matching combines punctuation/diacritic normalization, article handling, word-order comparison and strict sequel/version safeguards. When the best result is not sufficiently distinct, RetroDB leaves the recommendation blank and lists up to three scored possibilities in `alternative_candidates` for manual review.
