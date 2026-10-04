@@ -120,6 +120,7 @@ def identify_local_release(path: str) -> tuple[str, str]:
 def normalise_title(value: str) -> str:
     title = Path(value).name
     title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
+    title = re.sub(r"'s\b", "s", title, flags=re.I)
     title = re.sub(r"\.(?:cue|iso|bin|chd|pbp|md|zip|7z)$", "", title, flags=re.I)
     title = SERIAL_PATTERN.sub(" ", title)
     title = re.sub(r"[\[(](?:disc|disk|cd|dvd)\s*\d+[^\])]?[\])]", " ", title, flags=re.I)
