@@ -39,7 +39,6 @@ run_step() {
 [[ ${1:-} == --verbose ]] && VERBOSE=true
 [[ $# -le 1 ]] || die 'Usage: sudo bash server/deploy.sh [--verbose]'
 [[ $EUID -eq 0 ]] || die 'Run this script with sudo or as root.'
-[[ -x $SOURCE_ROOT/server/build.sh ]] || true
 command -v rsync >/dev/null || die 'rsync is missing; run sudo bash server/build.sh first.'
 command -v psql >/dev/null || die 'PostgreSQL is missing; run sudo bash server/build.sh first.'
 getent passwd "$APP_USER" >/dev/null || die 'RetroDB service account is missing.'
@@ -76,11 +75,11 @@ SQL
 }
 
 sync_application() {
-    rsync -a --delete
-        --exclude='.git/'
-        --exclude='.venv/'
-        --exclude='__pycache__/'
-        --exclude='.pytest_cache/'
+    rsync -a --delete \
+        --exclude='.git/' \
+        --exclude='.venv/' \
+        --exclude='__pycache__/' \
+        --exclude='.pytest_cache/' \
         "$SOURCE_ROOT/" "$APP_ROOT/"
     chown -R root:"$APP_GROUP" "$APP_ROOT"
     chmod 0750 "$APP_ROOT"
