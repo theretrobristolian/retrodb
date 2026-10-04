@@ -215,6 +215,10 @@ The deployment creates a clearly labelled section for the username and **Web API
 
 Do not put a real API key in Git, screenshots, issues or support messages.
 
+## Connect a RetroNAS collection
+
+RetroDB can mount the standard RetroNAS SMB share read-only and inventory the canonical PS1 and PS2 folders. Follow the [RetroNAS scanning guide](docs/retronas-scanning.md). Credentials remain root-only and collection files are never modified.
+
 ## Planned repository layout
 
 ```text

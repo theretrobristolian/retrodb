@@ -6,6 +6,10 @@ import argparse
 import os
 from pathlib import Path
 
+from sqlalchemy.orm import Session
+
+from retrodb.database import get_engine
+from retrodb.library import LibraryScanError, scan_retronas
 from retrodb.providers.retroachievements import (
     RetroAchievementsClient,
     RetroAchievementsError,
@@ -56,10 +60,21 @@ def main() -> int:
         "ra-sync", help="cache achievement-enabled PS1 and PS2 games and hashes"
     )
     sync_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
+    scan_parser = subparsers.add_parser("library-scan", help="inventory a read-only collection mount")
+    scan_parser.add_argument("--root", type=Path, required=True)
     args = parser.parse_args()
 
     try:
         load_environment_file(args.env_file)
+        if args.command == "library-scan":
+            print("[+] Scanning RetroNAS collection read-only...")
+            with Session(get_engine()) as session:
+                result = scan_retronas(session, args.root)
+            gib = result.bytes_total / (1024 ** 3)
+            print(f"[OK] Found {result.discovered} candidate files ({gib:.2f} GiB).")
+            print(f"[+] Added: {result.added}; changed: {result.updated}; missing: {result.missing}; skipped: {result.skipped}.")
+            return 0
+
         client = make_client(args.cache_dir)
         if args.command == "ra-test":
             systems = client.test_connection()
@@ -80,7 +95,7 @@ def main() -> int:
             )
         print("[+] RetroAchievements catalogue sync complete.")
         return 0
-    except RetroAchievementsError as exc:
+    except (RetroAchievementsError, LibraryScanError) as exc:
         print(f"[ERROR] {exc}")
         return 1
 

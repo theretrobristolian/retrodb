@@ -4,6 +4,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -208,4 +209,37 @@ class ExternalReference(TimestampMixin, Base):
             unique=True,
             postgresql_where=text("media_id IS NOT NULL"),
         ),
+    )
+
+
+class CollectionSource(TimestampMixin, Base):
+    __tablename__ = "collection_source"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    root_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    read_only: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    last_scanned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class LibraryItem(TimestampMixin, Base):
+    __tablename__ = "library_item"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("collection_source.id", ondelete="CASCADE"), nullable=False)
+    platform_id: Mapped[int] = mapped_column(ForeignKey("platform.id", ondelete="RESTRICT"), nullable=False)
+    relative_path: Mapped[str] = mapped_column(String(2000), nullable=False)
+    filename: Mapped[str] = mapped_column(String(500), nullable=False)
+    extension: Mapped[str] = mapped_column(String(32), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    modified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    is_missing: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("source_id", "relative_path", name="uq_library_item_source_path"),
+        Index("ix_library_item_platform", "platform_id"),
+        Index("ix_library_item_missing", "is_missing"),
+        Index("ix_library_item_filename", "filename"),
     )

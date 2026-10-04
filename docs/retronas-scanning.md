@@ -1,39 +1,54 @@
 # RetroNAS collection scanning
 
-RetroDB will inventory an existing collection without requiring administrative access to RetroNAS.
+RetroDB connects to RetroNAS through a deliberately read-only SMB mount. It never needs RetroNAS root or administrator access.
 
-## Intended access model
+## Supported layout
 
-Use one of these restricted, read-only approaches:
+RetroNAS exposes its generic collection under the top-level `retronas` share. RetroDB initially inventories:
 
-1. mount a dedicated read-only SMB share on the RetroDB host
-2. mount a read-only NFS export restricted to the RetroDB host
-3. use a dedicated SFTP account confined to the collection path
+- `roms/sony/playstation1`
+- `roms/sony/playstation2`
 
-Do not store a RetroNAS administrator or root credential in RetroDB.
+These are RetroNAS's canonical generic paths. Symlinked alternative layouts are not traversed, avoiding duplicate inventory records.
 
-## Initial inventory
+## Configure the connection
 
-The scanner will collect:
+First install the CIFS client dependency and deploy the current application:
 
-- storage-relative path
-- filename and extension
-- file size
-- modification time
-- hashes required by the relevant platform/provider
-- disc serial or product code where it can be extracted safely
-- archive membership without modifying source files
+```bash
+git pull
+sudo bash server/build.sh
+sudo bash server/deploy.sh
+```
 
-It will not upload game images to RetroAchievements or another metadata provider.
+Then run the guided setup:
 
-## RetroAchievements matching
+```bash
+sudo bash server/configure-retronas.sh
+```
 
-The first PS1 and PS2 workflow will:
+It asks for the RetroNAS DNS name/IP, SMB share name, username and password. The defaults are share `retronas` and username `pi`; use the values configured on your RetroNAS system.
 
-1. obtain and cache supported RetroAchievements games and hashes
-2. scan local collection files from the read-only mount
-3. apply the correct platform-specific identification method
-4. classify each item as matched, ambiguous, unsupported or unreadable
-5. show which local files are compatible and which alternative dump/release is required
+The password is entered invisibly and stored only in `/etc/retrodb/retronas.credentials`, owned by root with mode `0600`. It never enters Git, the database, a command line or normal logs.
 
-Provider metadata will be refreshed infrequently and tests will use local fixtures.
+The resulting systemd mount uses SMB 3.1.1 and is forced read-only with `nosuid`, `nodev` and `noexec`. It mounts at `/mnt/retrodb-retronas` and reconnects after reboot.
+
+## Run the inventory
+
+```bash
+sudo bash server/retronas.sh scan
+```
+
+The initial inventory stores relative path, filename, extension, size, modification time, platform, last-seen time and missing state. It recognises common PS1/PS2 image formats and does not alter or upload collection files.
+
+Other operations:
+
+```bash
+sudo bash server/retronas.sh status
+sudo bash server/retronas.sh unmount
+sudo bash server/retronas.sh mount
+```
+
+## Next identification stage
+
+A later scanner stage will calculate the platform-specific RetroAchievements hashes and compare them with the cached provider catalogue. Whole-file SHA/MD5 values are not a substitute for RetroAchievements disc hashing, so this inventory deliberately does not claim compatibility yet.
