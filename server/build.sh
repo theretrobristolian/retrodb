@@ -13,6 +13,7 @@ DATA_DIR=/var/lib/retrodb
 CACHE_DIR=/var/cache/retrodb
 LOG_DIR=/var/log/retrodb
 BACKUP_DIR=/var/backups/retrodb
+SOURCE_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 CHECK_ONLY=false
 VERBOSE=false
 
