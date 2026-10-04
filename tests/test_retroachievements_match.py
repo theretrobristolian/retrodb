@@ -63,3 +63,9 @@ def test_title_recommendation_rejects_demo_for_retail_game():
     games = (CatalogueGame(1, "~Demo~ Need for Speed: Most Wanted", ("a" * 32,)),)
     game, _, _ = suggest_game("Need For Speed Most Wanted [SLES_535.57].iso", games)
     assert game is None
+
+
+def test_title_recommendation_preserves_numeric_title_suffix():
+    games = (CatalogueGame(1, "NBA Street Vol. 2", ("a" * 32,)),)
+    game, _, _ = suggest_game("NBA Street V3 [SLUS_211.26].iso", games)
+    assert game is None
