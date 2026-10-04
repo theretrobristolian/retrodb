@@ -186,7 +186,22 @@ Normal output shows concise `[RUN]` and `[OK]` status lines. Underlying command 
 sudo bash server/build.sh --verbose
 ```
 
-This bootstrap only prepares the host. It does **not** yet deploy a RetroDB application, create the production database/schema, configure HTTPS or expose a website.
+The host bootstrap prepares the operating system but does not expose a website. Once its check passes, deploy the v0.1 application foundation:
+
+```bash
+git pull
+sudo bash server/build.sh
+sudo bash server/deploy.sh
+```
+
+The deployment creates the local PostgreSQL role/database, generates protected credentials outside Git, installs the Python environment, applies migrations, starts the hardened systemd service and validates:
+
+```text
+http://127.0.0.1:8000/live
+http://127.0.0.1:8000/health
+```
+
+The application remains loopback-only until an HTTPS reverse proxy and explicit LAN access policy are added.
 
 ## Planned repository layout
 
