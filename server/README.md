@@ -9,6 +9,27 @@ This directory contains standalone Linux host provisioning for RetroDB.
 
 The bootstrap requires systemd and APT. RetroNAS follows the same broad Debian-family, Bash and Ansible model, keeping a future integration path straightforward.
 
+## Prepare a minimal Debian installation
+
+A minimal Debian installation may not include `sudo`. Become root, install it and add the normal administrator account to the `sudo` group. Replace `david` with the account created during installation when necessary:
+
+```bash
+su -
+apt update
+apt install -y sudo
+usermod -aG sudo david
+reboot
+```
+
+Reconnect so the new group membership applies, update the complete base OS, remove obsolete packages and reboot:
+
+```bash
+sudo apt update && sudo apt full-upgrade -y && sudo apt autoremove --purge -y
+sudo reboot
+```
+
+Reconnect again before continuing.
+
 ## Usage
 
 ```bash
