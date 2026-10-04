@@ -157,10 +157,16 @@ Reconnect once more before installing RetroDB.
 On a fresh test VM:
 
 ```bash
+sudo apt install -y git
 git clone https://github.com/theretrobristolian/retrodb.git
 cd retrodb
+
+sudo bash server/build.sh --check
 sudo bash server/build.sh
+sudo bash server/build.sh --check
 ```
+
+The first check is read-only. Missing package, service-account and directory warnings are expected on an unprepared host. The build applies the configuration, and the final check verifies that the machine reached the intended state.
 
 The script is designed to be safely rerun. At this stage it:
 
@@ -171,13 +177,13 @@ The script is designed to be safely rerun. At this stage it:
 - creates application, configuration, data, cache, log and backup directories
 - applies restrictive ownership and permissions
 - configures PostgreSQL to listen only on loopback
-- enables PostgreSQL
+- enables and validates PostgreSQL
 - reports what it changed and what remains unimplemented
 
-Use `--check` to inspect prerequisites without changing the host:
+Normal output shows concise `[RUN]` and `[OK]` status lines. Underlying command output is captured and displayed automatically when a step fails. For live diagnostic output, run:
 
 ```bash
-sudo bash server/build.sh --check
+sudo bash server/build.sh --verbose
 ```
 
 This bootstrap only prepares the host. It does **not** yet deploy a RetroDB application, create the production database/schema, configure HTTPS or expose a website.
