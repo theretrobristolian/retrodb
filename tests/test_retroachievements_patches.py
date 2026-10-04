@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from io import BytesIO
 import json
 import zipfile
@@ -7,7 +8,10 @@ import pytest
 
 from retrodb.retroachievements_patches import (
     PatchError,
+    _cue_data_file,
     _safe_extract_zip,
+    _source_requirements,
+    _validate_source,
     create_patch_plan,
     download_patch_archives,
 )
@@ -108,3 +112,34 @@ def test_safe_extract_rejects_zip_traversal(tmp_path):
 
     with pytest.raises(PatchError, match="Unsafe path"):
         _safe_extract_zip(archive, tmp_path / "out")
+
+
+def test_source_requirements_parse_rahash_md5_crc_and_patch(tmp_path):
+    extracted = tmp_path / "downloads/42-example/extracted"
+    extracted.mkdir(parents=True)
+    (extracted / "ReadMe.txt").write_text(
+        "RA Hash: 11111111111111111111111111111111\n"
+        "MD5: 22222222222222222222222222222222\nCRC32: AABBCCDD\n"
+    )
+    (extracted / "fix.xdelta").write_bytes(b"patch")
+
+    result = _source_requirements(tmp_path, "42", "Example")
+
+    assert result["ra_hash"] == "1" * 32
+    assert result["md5"] == "2" * 32
+    assert result["crc32"] == "aabbccdd"
+    assert result["patch_files"] == "fix.xdelta"
+
+
+def test_cue_source_validation_uses_referenced_bin_md5(tmp_path):
+    cue = tmp_path / "game.cue"
+    image = tmp_path / "game.bin"
+    cue.write_text('FILE "game.bin" BINARY\n  TRACK 01 MODE2/2352\n')
+    image.write_bytes(b"disc data")
+    expected = hashlib.md5(b"disc data", usedforsecurity=False).hexdigest()
+
+    assert _cue_data_file(cue) == image
+    valid, kind, actual = _validate_source(cue, {"md5": expected}, tmp_path / "hasher", 12)
+    assert valid is True
+    assert kind == "md5"
+    assert actual == expected

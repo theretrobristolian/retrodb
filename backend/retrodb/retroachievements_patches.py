@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import zlib
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 import zipfile
@@ -31,6 +32,7 @@ class PatchPrepareSummary:
     patches: int
     already_verified: int
     candidates: int
+    mismatched: int
     missing: int
 
 
@@ -270,6 +272,70 @@ def download_patch_archives(workspace: Path) -> PatchDownloadSummary:
     return PatchDownloadSummary(len(plan), downloaded, reused, failed)
 
 
+def _source_requirements(workspace: Path, game_id: str, title: str) -> dict[str, str]:
+    game_dir = workspace / "downloads" / f"{game_id}-{_safe_slug(title)}" / "extracted"
+    text = "\n".join(
+        path.read_text(encoding="utf-8", errors="replace")
+        for path in game_dir.rglob("*")
+        if path.is_file() and path.suffix.casefold() in {".md", ".txt", ".nfo"}
+    )
+    requirements = {}
+    for key, pattern in (
+        ("ra_hash", r"\bRA\s*Hash\s*:\s*([0-9a-f]{32})"),
+        ("md5", r"\bMD5\s*:\s*([0-9a-f]{32})"),
+        ("crc32", r"\bCRC(?:32)?\s*:\s*([0-9a-f]{8})"),
+    ):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            requirements[key] = match.group(1).casefold()
+    patch_files = sorted(
+        str(path.relative_to(game_dir)) for path in game_dir.rglob("*")
+        if path.is_file() and path.suffix.casefold() in {".xdelta", ".vcdiff", ".bps", ".ips", ".ppf"}
+    )
+    if patch_files:
+        requirements["patch_files"] = "; ".join(patch_files)
+    return requirements
+
+
+def _cue_data_file(cue_path: Path) -> Path | None:
+    try:
+        text = cue_path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        return None
+    match = re.search(r'^\s*FILE\s+(?:"([^"]+)"|(\S+))', text, re.IGNORECASE | re.MULTILINE)
+    return cue_path.parent / (match.group(1) or match.group(2)) if match else None
+
+
+def _raw_checksum(path: Path, algorithm: str) -> str:
+    if algorithm == "md5":
+        digest = hashlib.md5(usedforsecurity=False)
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(4 * 1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    value = 0
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(4 * 1024 * 1024), b""):
+            value = zlib.crc32(chunk, value)
+    return f"{value & 0xffffffff:08x}"
+
+
+def _validate_source(
+    source: Path, requirements: dict[str, str], hasher: Path, console_id: int
+) -> tuple[bool, str, str]:
+    if "ra_hash" in requirements:
+        actual = hash_file(hasher, console_id, source)
+        return actual == requirements["ra_hash"], "ra_hash", actual
+    raw_source = _cue_data_file(source) if source.suffix.casefold() == ".cue" else source
+    if not raw_source or not raw_source.is_file():
+        return False, "source", "missing referenced disc data file"
+    for algorithm in ("md5", "crc32"):
+        if algorithm in requirements:
+            actual = _raw_checksum(raw_source, algorithm)
+            return actual == requirements[algorithm], algorithm, actual
+    return False, "checksum", "no supported source checksum in patch README"
+
+
 def prepare_patch_sources(
     report_path: Path,
     cache_dir: Path,
@@ -281,41 +347,60 @@ def prepare_patch_sources(
     incoming = workspace / "incoming"
     incoming.mkdir(parents=True, exist_ok=True)
     candidates = [path for path in incoming.rglob("*") if path.is_file() and path.suffix.casefold() in {".cue", ".iso"}]
-    already_verified = candidate_count = missing = 0
+    already_verified = candidate_count = mismatched = missing = 0
     results = []
     console_ids = {"Sony PlayStation": 12, "Sony PlayStation 2": 21}
 
     for row in rows:
+        title = row.get("recommended_ra_title", "")
+        game_id = row.get("recommended_ra_game_id", "unknown")
+        requirements = _source_requirements(workspace, game_id, title)
         title_key = normalise_title(row.get("recommended_ra_title", ""))
         matching = [path for path in candidates if title_key and title_key in normalise_title(path.name)]
+        collection_source = collection_root / row.get("path", "")
+        if collection_source.is_file():
+            matching.append(collection_source)
         state = "missing-source"
         found = ""
         actual_hash = ""
+        checksum_type = ""
         for path in matching:
             console_id = console_ids.get(row.get("platform", ""))
             if not console_id:
                 continue
-            actual_hash = hash_file(hasher, console_id, path)
             found = str(path)
-            if actual_hash == row.get("preferred_ra_hash", "").casefold():
-                state = "already-patched-and-verified"
-                already_verified += 1
-            else:
-                state = "candidate-source-needs-patch-readme-validation"
+            valid, checksum_type, actual_hash = _validate_source(
+                path, requirements, hasher, console_id
+            )
+            if valid:
+                state = "clean-base-verified-ready-to-patch"
                 candidate_count += 1
+            else:
+                patched_hash = (
+                    actual_hash if checksum_type == "ra_hash"
+                    else hash_file(hasher, console_id, path)
+                )
+                if patched_hash == row.get("preferred_ra_hash", "").casefold():
+                    state = "already-patched-and-verified"
+                    already_verified += 1
+                else:
+                    state = "source-found-but-checksum-mismatch"
+                    mismatched += 1
             break
         else:
             missing += 1
         results.append({
-            "title": row.get("recommended_ra_title", ""),
+            "title": title,
             "state": state,
             "candidate_path": found,
-            "candidate_ra_hash": actual_hash,
+            "source_checksum_type": checksum_type,
+            "source_checksum": actual_hash,
+            "required_source_checksums": requirements,
             "expected_patched_ra_hash": row.get("preferred_ra_hash", ""),
-            "collection_source": str(collection_root / row.get("path", "")),
+            "collection_source": str(collection_source),
         })
 
     (workspace / "patch-prepare.json").write_text(
         json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
-    return PatchPrepareSummary(len(rows), already_verified, candidate_count, missing)
+    return PatchPrepareSummary(len(rows), already_verified, candidate_count, mismatched, missing)

@@ -142,3 +142,9 @@ Candidate images are checked using RAHasher. Detailed results are written to
 `/var/lib/retrodb/patches/patch-prepare.json`. A candidate still requires the
 source checksum from the patch's supplied README before patching; it is only
 reported as already verified when its RA hash equals the expected patched hash.
+
+`patch-prepare` parses the supplied README and verifies its required RAHash,
+MD5 or CRC32 against both the corresponding file on the read-only RetroNAS
+mount and any image placed in `incoming`. For PlayStation CUE sheets, raw-file
+checksums are calculated against the referenced BIN. No collection file is
+copied or changed during preparation.

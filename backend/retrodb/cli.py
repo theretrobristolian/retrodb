@@ -109,7 +109,8 @@ def main() -> int:
             )
             print(f"[OK] Checked sources for {summary.patches} RA-supported patches.")
             print(f"[+] Already patched and verified: {summary.already_verified}.")
-            print(f"[+] Candidate sources needing patch README validation: {summary.candidates}.")
+            print(f"[+] Clean base images verified and ready to patch: {summary.candidates}.")
+            print(f"[+] Sources found with the wrong checksum: {summary.mismatched}.")
             print(f"[+] Missing sources: {summary.missing}.")
             print(f"[+] Details: {args.workspace / 'patch-prepare.json'}")
             return 0
