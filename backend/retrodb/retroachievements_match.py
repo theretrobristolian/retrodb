@@ -252,10 +252,10 @@ def release_region(name: str) -> str:
 
 def preferred_release(
     details: list[dict[str, object]],
-) -> tuple[str, str, str, str]:
+) -> tuple[str, str, str, str, str]:
     """Choose RA's cleanest preferred TV-console release and final revision."""
     if not details:
-        return "", "", "", ""
+        return "", "", "", "", ""
 
     def sort_key(entry: dict[str, object]) -> tuple[int, int, int, int, str]:
         name = str(entry.get("Name", ""))
@@ -297,6 +297,7 @@ def preferred_release(
         release_region(str(chosen.get("Name", ""))),
         str(chosen.get("MD5", "")).casefold(),
         labels,
+        str(chosen.get("PatchUrl", "") or "").strip(),
     )
 
 
@@ -418,6 +419,7 @@ def match_collection(
             accepted_names: list[str] = []
             labels: list[str] = []
             preferred_name = preferred_region = preferred_hash = preferred_labels = ""
+            preferred_patch_url = ""
             if recommendation:
                 accepted_hashes = list(recommendation.hashes)
                 if client:
@@ -446,6 +448,7 @@ def match_collection(
                             preferred_region,
                             preferred_hash,
                             preferred_labels,
+                            preferred_patch_url,
                         ) = preferred_release(details)
                     except RetroAchievementsError:
                         confidence += "-metadata-unavailable"
@@ -468,6 +471,7 @@ def match_collection(
                 "preferred_region": preferred_region,
                 "preferred_ra_hash": preferred_hash,
                 "preferred_ra_labels": preferred_labels,
+                "preferred_patch_url": preferred_patch_url,
                 "release_guidance": release_guidance(
                     local_region, preferred_region, preferred_name, preferred_labels
                 ),
@@ -494,6 +498,7 @@ def match_collection(
         "recommended_ra_game_id", "recommended_ra_title",
         "alternative_candidates", "preferred_release_name", "preferred_region",
         "preferred_ra_hash", "preferred_ra_labels", "release_guidance",
+        "preferred_patch_url",
         "accepted_regions", "accepted_file_names", "accepted_ra_hashes",
         "ra_labels", "error",
     ]

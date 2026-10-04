@@ -104,3 +104,29 @@ For TV-connected PlayStation systems, RetroDB ranks supported releases using Ret
 The report's `preferred_release_name`, `preferred_region`, `preferred_ra_hash` and `release_guidance` columns turn the complete accepted-file list into one actionable recommendation. This selection only considers files explicitly returned by RetroAchievements; it does not invent an unsupported regional release.
 
 Title matching combines punctuation/diacritic normalization, article handling, word-order comparison and strict sequel/version safeguards. When the best result is not sufficiently distinct, RetroDB leaves the recommendation blank and lists up to three scored possibilities in `alternative_candidates` for manual review.
+
+## Prepare RetroAchievements patches
+
+After generating the compatibility report, create the patch workspace and
+per-game instructions:
+
+```bash
+sudo bash server/retronas.sh patch-plan
+```
+
+This creates `/var/lib/retrodb/patches` with manifests and READMEs for releases
+labelled `rapatches` by RetroAchievements. Patch URLs are accepted only from
+RetroAchievements or GitHub hosts. The command does not download ROMs, copy
+collection files or modify the read-only RetroNAS mount.
+
+Place clean source images you own in `/var/lib/retrodb/patches/incoming`, then
+inspect them with:
+
+```bash
+sudo bash server/retronas.sh patch-prepare
+```
+
+Candidate images are checked using RAHasher. Detailed results are written to
+`/var/lib/retrodb/patches/patch-prepare.json`. A candidate still requires the
+source checksum from the patch's supplied README before patching; it is only
+reported as already verified when its RA hash equals the expected patched hash.

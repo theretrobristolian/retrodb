@@ -96,11 +96,23 @@ def test_preferred_release_uses_clean_usa_final_revision():
         {"MD5": "2" * 32, "Name": "Game (USA)", "Labels": ["redump"], "PatchUrl": None},
         {"MD5": "3" * 32, "Name": "Game (USA) (Rev 1)", "Labels": ["redump"], "PatchUrl": None},
     ]
-    name, region, digest, labels = preferred_release(details)
+    name, region, digest, labels, patch_url = preferred_release(details)
     assert name == "Game (USA) (Rev 1)"
     assert region == "USA"
     assert digest == "3" * 32
     assert labels == "redump"
+    assert patch_url == ""
+
+
+def test_preferred_release_returns_patch_url():
+    details = [{
+        "MD5": "3" * 32,
+        "Name": "Game (USA) (Anti-Cheat)",
+        "Labels": ["rapatches"],
+        "PatchUrl": "https://retroachievements.org/patch.zip",
+    }]
+    *_, patch_url = preferred_release(details)
+    assert patch_url == "https://retroachievements.org/patch.zip"
 
 
 def test_regional_title_alias_matches_same_game():

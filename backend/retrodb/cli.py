@@ -11,6 +11,11 @@ from sqlalchemy.orm import Session
 from retrodb.database import get_engine
 from retrodb.library import LibraryScanError, scan_retronas
 from retrodb.retroachievements_match import MatchError, match_collection
+from retrodb.retroachievements_patches import (
+    PatchError,
+    create_patch_plan,
+    prepare_patch_sources,
+)
 from retrodb.providers.retroachievements import (
     RetroAchievementsClient,
     RetroAchievementsError,
@@ -67,10 +72,37 @@ def main() -> int:
     match_parser.add_argument("--root", type=Path, required=True)
     match_parser.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
     match_parser.add_argument("--report", type=Path, default=Path("/var/lib/retrodb/reports/retroachievements-compatibility.csv"))
+    for command, help_text in (
+        ("patch-plan", "create patch manifests and per-game guidance"),
+        ("patch-prepare", "inspect incoming patch source images"),
+    ):
+        patch_parser = subparsers.add_parser(command, help=help_text)
+        patch_parser.add_argument("--root", type=Path, required=True)
+        patch_parser.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
+        patch_parser.add_argument("--report", type=Path, default=Path("/var/lib/retrodb/reports/retroachievements-compatibility.csv"))
+        patch_parser.add_argument("--workspace", type=Path, default=Path("/var/lib/retrodb/patches"))
     args = parser.parse_args()
 
     try:
         load_environment_file(args.env_file)
+        if args.command == "patch-plan":
+            summary = create_patch_plan(args.report, args.cache_dir, args.workspace)
+            print(f"[OK] Planned {summary.patches} RA-supported patches.")
+            print(f"[+] Official patch links found: {summary.official_links}/{summary.patches}.")
+            print(f"[+] Patch workspace: {summary.workspace}")
+            print("[+] RetroNAS remained read-only; no ROMs or patches were modified.")
+            return 0
+
+        if args.command == "patch-prepare":
+            summary = prepare_patch_sources(
+                args.report, args.cache_dir, args.workspace, args.root, args.hasher
+            )
+            print(f"[OK] Checked sources for {summary.patches} RA-supported patches.")
+            print(f"[+] Already patched and verified: {summary.already_verified}.")
+            print(f"[+] Candidate sources needing patch README validation: {summary.candidates}.")
+            print(f"[+] Missing sources: {summary.missing}.")
+            print(f"[+] Details: {args.workspace / 'patch-prepare.json'}")
+            return 0
         if args.command == "library-scan":
             print(f"[+] RetroNAS mount: {args.root.resolve()}")
             print("[+] Scanning configured collection paths read-only...")
@@ -166,7 +198,7 @@ def main() -> int:
             )
         print("[+] RetroAchievements catalogue sync complete.")
         return 0
-    except (RetroAchievementsError, LibraryScanError, MatchError) as exc:
+    except (RetroAchievementsError, LibraryScanError, MatchError, PatchError) as exc:
         print(f"[ERROR] {exc}")
         return 1
 
