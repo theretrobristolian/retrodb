@@ -126,16 +126,43 @@ def normalise_title(value: str) -> str:
     return " ".join(re.findall(r"[a-z0-9]+", title.casefold()))
 
 
+def release_markers(value: str) -> tuple[frozenset[str], frozenset[str]]:
+    """Return sequel/version markers which must agree for a fuzzy match."""
+    words = normalise_title(value).split()
+    numbers = frozenset(word for word in words if word.isdigit())
+    roman_numerals = frozenset(
+        word for word in words
+        if word in {"ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "xi", "xii"}
+    )
+    return numbers, roman_numerals
+
+
+def is_compatible_title_candidate(local_path: str, candidate_title: str) -> bool:
+    local_numbers, local_roman = release_markers(local_path)
+    candidate_numbers, candidate_roman = release_markers(candidate_title)
+    if local_numbers != candidate_numbers or local_roman != candidate_roman:
+        return False
+    local_words = set(normalise_title(local_path).split())
+    candidate_words = set(normalise_title(candidate_title).split())
+    special = {"demo", "prototype", "hack", "bonus"}
+    return (local_words & special) == (candidate_words & special)
+
+
 def suggest_game(local_path: str, games: tuple[CatalogueGame, ...]) -> tuple[CatalogueGame | None, str, float]:
     wanted = normalise_title(local_path)
     if not wanted:
         return None, "", 0.0
     scored = sorted(
-        ((SequenceMatcher(None, wanted, normalise_title(game.title)).ratio(), game)
-         for game in games),
+        (
+            (SequenceMatcher(None, wanted, normalise_title(game.title)).ratio(), game)
+            for game in games
+            if is_compatible_title_candidate(local_path, game.title)
+        ),
         key=lambda pair: pair[0],
         reverse=True,
     )
+    if not scored:
+        return None, "", 0.0
     best_score, best = scored[0]
     second_score = scored[1][0] if len(scored) > 1 else 0.0
     if best_score == 1.0:
