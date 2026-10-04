@@ -134,6 +134,29 @@ class RetroAchievementsClient:
         self._write_cache(cache_path, payload)
         return payload, False
 
+    def get_game_hashes(
+        self, game_id: int, *, force: bool = False
+    ) -> list[dict[str, Any]]:
+        """Return hash metadata for one game, cached to avoid repeated API calls."""
+        cache_path = self.cache_dir / "games" / f"{game_id}.json"
+        if not force and self._cache_is_fresh(cache_path):
+            try:
+                payload = json.loads(cache_path.read_text(encoding="utf-8"))
+                if isinstance(payload, list):
+                    return payload
+            except (OSError, ValueError):
+                pass
+
+        payload = self._request("API_GetGameHashes.php", {"i": game_id})
+        results = payload.get("Results") if isinstance(payload, dict) else None
+        if not isinstance(results, list):
+            raise RetroAchievementsError(
+                "RetroAchievements returned an unexpected game-hashes response."
+            )
+        clean = [entry for entry in results if isinstance(entry, dict)]
+        self._write_cache(cache_path, clean)
+        return clean
+
     @staticmethod
     def _cache_is_fresh(path: Path) -> bool:
         try:
