@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import unicodedata
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -149,28 +150,80 @@ def is_compatible_title_candidate(local_path: str, candidate_title: str) -> bool
     return (local_words & special) == (candidate_words & special)
 
 
-def suggest_game(local_path: str, games: tuple[CatalogueGame, ...]) -> tuple[CatalogueGame | None, str, float]:
-    wanted = normalise_title(local_path)
-    if not wanted:
-        return None, "", 0.0
-    scored = sorted(
+ROMAN_NUMBERS = {
+    "ii": "2", "iii": "3", "iv": "4", "v": "5", "vi": "6",
+    "vii": "7", "viii": "8", "ix": "9", "xi": "11", "xii": "12",
+}
+
+
+def comparable_title(value: str) -> str:
+    """Canonical title used only for ranking, never to relax release safeguards."""
+    ascii_title = unicodedata.normalize("NFKD", normalise_title(value))
+    words = ascii_title.encode("ascii", "ignore").decode("ascii").split()
+    expanded: list[str] = []
+    for word in words:
+        match = re.fullmatch(r"v(\d+)", word)
+        if match:
+            expanded.append(match.group(1))
+        elif word in ROMAN_NUMBERS:
+            expanded.append(ROMAN_NUMBERS[word])
+        elif word not in {"a", "an", "the"}:
+            expanded.append({"vs": "versus"}.get(word, word))
+    return " ".join(expanded)
+
+
+def title_similarity(left: str, right: str) -> float:
+    left_normal = comparable_title(left)
+    right_normal = comparable_title(right)
+    if not left_normal or not right_normal:
+        return 0.0
+    direct = SequenceMatcher(None, left_normal, right_normal).ratio()
+    token_order = SequenceMatcher(
+        None,
+        " ".join(sorted(left_normal.split())),
+        " ".join(sorted(right_normal.split())),
+    ).ratio()
+    left_tokens, right_tokens = set(left_normal.split()), set(right_normal.split())
+    overlap = len(left_tokens & right_tokens) / max(len(left_tokens | right_tokens), 1)
+    return max(direct, token_order * 0.98, (direct * 0.75) + (overlap * 0.25))
+
+
+def rank_game_candidates(
+    local_path: str, games: tuple[CatalogueGame, ...]
+) -> list[tuple[float, CatalogueGame]]:
+    return sorted(
         (
-            (SequenceMatcher(None, wanted, normalise_title(game.title)).ratio(), game)
+            (title_similarity(local_path, game.title), game)
             for game in games
             if is_compatible_title_candidate(local_path, game.title)
         ),
         key=lambda pair: pair[0],
         reverse=True,
     )
+
+
+def suggest_game(local_path: str, games: tuple[CatalogueGame, ...]) -> tuple[CatalogueGame | None, str, float]:
+    scored = rank_game_candidates(local_path, games)
     if not scored:
         return None, "", 0.0
     best_score, best = scored[0]
     second_score = scored[1][0] if len(scored) > 1 else 0.0
-    if best_score == 1.0:
-        return best, "exact-title", best_score
+    if comparable_title(local_path) == comparable_title(best.title):
+        return best, "exact-title", 1.0
     if best_score >= 0.88 and best_score - second_score >= 0.05:
         return best, "high", best_score
     return None, "ambiguous" if best_score >= 0.72 else "", best_score
+
+
+def alternative_candidates(
+    local_path: str, games: tuple[CatalogueGame, ...], limit: int = 3
+) -> str:
+    candidates = [
+        f"{game.title} [RA {game.game_id}; {score:.3f}]"
+        for score, game in rank_game_candidates(local_path, games)
+        if score >= 0.65
+    ]
+    return " | ".join(candidates[:limit])
 
 
 def regions_from_names(names: list[str]) -> str:
@@ -180,6 +233,77 @@ def regions_from_names(names: list[str]) -> str:
             if re.search(rf"\b{re.escape(region)}\b", name, re.I) and region not in found:
                 found.append(region)
     return "; ".join(found)
+
+
+def release_region(name: str) -> str:
+    for region in REGION_WORDS:
+        if re.search(rf"\b{re.escape(region)}\b", name, re.I):
+            return region
+    return ""
+
+
+def preferred_release(
+    details: list[dict[str, object]],
+) -> tuple[str, str, str, str]:
+    """Choose RA's cleanest preferred TV-console release and final revision."""
+    if not details:
+        return "", "", "", ""
+
+    def sort_key(entry: dict[str, object]) -> tuple[int, int, int, int, str]:
+        name = str(entry.get("Name", ""))
+        region = release_region(name)
+        region_rank = {
+            "USA": 0, "World": 0, "Japan": 1, "Europe": 2,
+        }.get(region, 3)
+        labels = {
+            str(label).casefold()
+            for label in entry.get("Labels", [])
+            if isinstance(label, str)
+        }
+        patch_rank = int(bool(entry.get("PatchUrl")) or bool(
+            labels & {"rapatches", "hack", "translation"}
+        ))
+        preservation_rank = 0 if labels & {"redump", "nointro", "no-intro"} else 1
+        revision = 0
+        revision_match = re.search(r"\bRev(?:ision)?\s*([0-9]+)\b", name, re.I)
+        if revision_match:
+            revision = int(revision_match.group(1))
+        version_match = re.search(r"\bv(\d+)(?:\.(\d+))?\b", name, re.I)
+        if version_match:
+            revision = max(
+                revision,
+                int(version_match.group(1)) * 100 + int(version_match.group(2) or 0),
+            )
+        return region_rank, patch_rank, preservation_rank, -revision, name.casefold()
+
+    chosen = min(details, key=sort_key)
+    labels = "; ".join(
+        sorted(
+            str(label)
+            for label in chosen.get("Labels", [])
+            if isinstance(label, str)
+        )
+    )
+    return (
+        str(chosen.get("Name", "")).strip(),
+        release_region(str(chosen.get("Name", ""))),
+        str(chosen.get("MD5", "")).casefold(),
+        labels,
+    )
+
+
+def release_guidance(local_region: str, preferred_region: str) -> str:
+    if not preferred_region:
+        return ""
+    if local_region == preferred_region:
+        return f"Use the listed {preferred_region} Redump-compatible release/revision"
+    if preferred_region == "USA":
+        return "Use the listed NTSC USA Redump-compatible release"
+    if preferred_region == "Japan":
+        return "Use the listed NTSC Japan release (no supported USA release)"
+    if preferred_region == "Europe":
+        return "Use the listed PAL Europe release (no preferred USA/Japan release)"
+    return f"Use the listed {preferred_region} release"
 
 
 def hash_file(hasher: Path, console_id: int, path: Path) -> str:
@@ -262,14 +386,17 @@ def match_collection(
             recommendation = None
             confidence = ""
             score = 0.0
+            alternatives = ""
             if item.ra_match_status == "unmatched":
                 recommendation, confidence, score = suggest_game(item.relative_path, games)
+                alternatives = alternative_candidates(item.relative_path, games)
                 if recommendation:
                     counts["recommended"] += 1
 
             accepted_hashes: list[str] = []
             accepted_names: list[str] = []
             labels: list[str] = []
+            preferred_name = preferred_region = preferred_hash = preferred_labels = ""
             if recommendation:
                 accepted_hashes = list(recommendation.hashes)
                 if client:
@@ -293,6 +420,12 @@ def match_collection(
                             for label in entry.get("Labels", [])
                             if isinstance(label, str)
                         })
+                        (
+                            preferred_name,
+                            preferred_region,
+                            preferred_hash,
+                            preferred_labels,
+                        ) = preferred_release(details)
                     except RetroAchievementsError:
                         confidence += "-metadata-unavailable"
 
@@ -309,6 +442,12 @@ def match_collection(
                 "recommendation_score": f"{score:.3f}" if recommendation else "",
                 "recommended_ra_game_id": recommendation.game_id if recommendation else "",
                 "recommended_ra_title": recommendation.title if recommendation else "",
+                "alternative_candidates": alternatives,
+                "preferred_release_name": preferred_name,
+                "preferred_region": preferred_region,
+                "preferred_ra_hash": preferred_hash,
+                "preferred_ra_labels": preferred_labels,
+                "release_guidance": release_guidance(local_region, preferred_region),
                 "accepted_regions": regions_from_names(accepted_names),
                 "accepted_file_names": " | ".join(accepted_names),
                 "accepted_ra_hashes": " | ".join(accepted_hashes),
@@ -329,8 +468,11 @@ def match_collection(
         "platform", "status", "path", "local_serial", "local_region",
         "local_ra_hash", "ra_game_id", "ra_game_title",
         "recommendation_confidence", "recommendation_score",
-        "recommended_ra_game_id", "recommended_ra_title", "accepted_regions",
-        "accepted_file_names", "accepted_ra_hashes", "ra_labels", "error",
+        "recommended_ra_game_id", "recommended_ra_title",
+        "alternative_candidates", "preferred_release_name", "preferred_region",
+        "preferred_ra_hash", "preferred_ra_labels", "release_guidance",
+        "accepted_regions", "accepted_file_names", "accepted_ra_hashes",
+        "ra_labels", "error",
     ]
     with temporary.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields)
