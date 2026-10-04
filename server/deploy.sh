@@ -56,6 +56,25 @@ else
     NEW_DATABASE_PASSWORD=false
 fi
 
+ensure_retroachievements_config() {
+    if ! grep -q '^RETRODB_RA_USERNAME=' "$CONFIG_FILE"; then
+        cat >> "$CONFIG_FILE" <<'EOF'
+
+# RetroAchievements Web API
+# Guide: https://github.com/theretrobristolian/retrodb/blob/main/docs/retroachievements-setup.md
+# Use the Web API key from the Keys section of your RetroAchievements control panel.
+# Do not enter your account password or Connect API token.
+RETRODB_RA_USERNAME=
+RETRODB_RA_API_KEY=
+EOF
+    elif ! grep -q '^RETRODB_RA_API_KEY=' "$CONFIG_FILE"; then
+        printf 'RETRODB_RA_API_KEY=\n' >> "$CONFIG_FILE"
+    fi
+
+    chown root:"$APP_GROUP" "$CONFIG_FILE"
+    chmod 0640 "$CONFIG_FILE"
+}
+
 provision_database() {
     if [[ $NEW_DATABASE_PASSWORD == true ]]; then
         runuser -u postgres -- psql --set=ON_ERROR_STOP=1 --set=role_password="$DB_PASSWORD" postgres <<'SQL'
@@ -103,6 +122,7 @@ wait_for_health() {
     return 1
 }
 
+run_step 'Preparing integration configuration' ensure_retroachievements_config
 run_step 'Provisioning PostgreSQL database and role' provision_database
 run_step 'Synchronising application files' sync_application
 run_step 'Creating Python virtual environment' python3 -m venv "$APP_ROOT/.venv"
