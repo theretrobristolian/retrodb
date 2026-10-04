@@ -14,20 +14,50 @@ CACHE_DIR=/var/cache/retrodb
 LOG_DIR=/var/log/retrodb
 BACKUP_DIR=/var/backups/retrodb
 CHECK_ONLY=false
+VERBOSE=false
 
 log()  { printf '[+] %s\n' "$*"; }
 warn() { printf '[!] %s\n' "$*" >&2; }
 die()  { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
-trap 'die "Bootstrap failed at line $LINENO."' ERR
+trap 'die "Unexpected failure at line $LINENO."' ERR
 
 usage() {
-    printf '%s\n' 'Usage: sudo bash server/build.sh [--check] [--help]'
-    printf '%s\n' '  --check  Validate the host without changing it.'
+    printf '%s\n' 'Usage: sudo bash server/build.sh [--check] [--verbose] [--help]'
+    printf '%s\n' '  --check    Validate the host without changing it.'
+    printf '%s\n' '  --verbose  Stream the underlying command output.'
+}
+
+run_step() {
+    local description=$1
+    shift
+    printf '[RUN] %s...\n' "$description"
+
+    if [[ $VERBOSE == true ]]; then
+        if "$@"; then
+            printf '[OK]  %s\n' "$description"
+            return 0
+        fi
+    else
+        local output_file
+        output_file=$(mktemp /tmp/retrodb-build.XXXXXX)
+        if "$@" >"$output_file" 2>&1; then
+            rm -f "$output_file"
+            printf '[OK]  %s\n' "$description"
+            return 0
+        fi
+        printf '[FAILED] %s\n\n' "$description" >&2
+        cat "$output_file" >&2
+        rm -f "$output_file"
+    fi
+
+    trap - ERR
+    exit 1
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --check) CHECK_ONLY=true ;;
+        --verbose) VERBOSE=true ;;
         --help|-h) usage; exit 0 ;;
         *) die "Unknown option: $1" ;;
     esac
@@ -60,51 +90,60 @@ if [[ $CHECK_ONLY == true ]]; then
     getent passwd "$APP_USER" >/dev/null || warn "Service account $APP_USER does not exist."
     [[ -d $CONFIG_DIR ]] || warn "Missing $CONFIG_DIR"
     [[ -d $DATA_DIR ]] || warn "Missing $DATA_DIR"
+    if command -v systemctl >/dev/null && systemctl is-active --quiet postgresql; then
+        log 'PostgreSQL is running.'
+    elif dpkg-query -W postgresql >/dev/null 2>&1; then
+        warn 'PostgreSQL is installed but not running.'
+    fi
     log 'Check complete; no changes were made.'
     exit 0
 fi
 
 export DEBIAN_FRONTEND=noninteractive
-log 'Refreshing APT package metadata...'
-apt-get update
-log 'Installing base dependencies...'
-apt-get install -y --no-install-recommends "${PACKAGES[@]}"
+run_step 'Refreshing APT package metadata' apt-get update
+run_step 'Installing base dependencies' apt-get install -y --no-install-recommends "${PACKAGES[@]}"
 
 if ! getent group "$APP_GROUP" >/dev/null; then
-    log "Creating service group $APP_GROUP..."
-    groupadd --system "$APP_GROUP"
+    run_step "Creating service group $APP_GROUP" groupadd --system "$APP_GROUP"
+else
+    log "Service group $APP_GROUP already exists."
 fi
 
 if ! getent passwd "$APP_USER" >/dev/null; then
-    log "Creating unprivileged service account $APP_USER..."
-    useradd --system --gid "$APP_GROUP" --home-dir "$APP_ROOT" --shell /usr/sbin/nologin --comment 'RetroDB service account' "$APP_USER"
+    run_step "Creating service account $APP_USER" useradd --system --gid "$APP_GROUP" --home-dir "$APP_ROOT" --shell /usr/sbin/nologin --comment 'RetroDB service account' "$APP_USER"
+else
+    log "Service account $APP_USER already exists."
 fi
 
-log 'Creating and repairing application directories...'
-install -d -o root -g "$APP_GROUP" -m 0750 "$APP_ROOT" "$CONFIG_DIR" "$BACKUP_DIR"
-install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$DATA_DIR" "$CACHE_DIR" "$LOG_DIR"
+run_step 'Creating application directories' install -d -o root -g "$APP_GROUP" -m 0750 "$APP_ROOT" "$CONFIG_DIR" "$BACKUP_DIR"
+run_step 'Creating writable data directories' install -d -o "$APP_USER" -g "$APP_GROUP" -m 0750 "$DATA_DIR" "$CACHE_DIR" "$LOG_DIR"
 
 if [[ ! -f $CONFIG_DIR/retrodb.env ]]; then
-    log 'Creating protected environment-file placeholder...'
-    install -o root -g "$APP_GROUP" -m 0640 /dev/null "$CONFIG_DIR/retrodb.env"
+    run_step 'Creating protected configuration file' install -o root -g "$APP_GROUP" -m 0640 /dev/null "$CONFIG_DIR/retrodb.env"
     printf '%s\n' '# RetroDB local configuration' 'RETRODB_ENV=production' > "$CONFIG_DIR/retrodb.env"
-fi
-
-log 'Restricting PostgreSQL to loopback interfaces...'
-if command -v pg_lsclusters >/dev/null && command -v pg_conftool >/dev/null; then
-    while read -r version cluster rest; do
-        [[ -n $version && -n $cluster ]] || continue
-        pg_conftool "$version" "$cluster" set listen_addresses localhost
-    done < <(pg_lsclusters --no-header 2>/dev/null || true)
 else
-    warn 'PostgreSQL cluster tools not found; inspect listen_addresses manually.'
+    log 'Protected configuration file already exists.'
 fi
 
-systemctl enable postgresql
-systemctl restart postgresql
+configure_postgresql() {
+    if command -v pg_lsclusters >/dev/null && command -v pg_conftool >/dev/null; then
+        while read -r version cluster rest; do
+            [[ -n $version && -n $cluster ]] || continue
+            pg_conftool "$version" "$cluster" set listen_addresses localhost
+        done < <(pg_lsclusters --no-header 2>/dev/null || true)
+    else
+        return 1
+    fi
+}
+
+run_step 'Restricting PostgreSQL to loopback' configure_postgresql
+run_step 'Enabling PostgreSQL at boot' systemctl enable postgresql
+run_step 'Restarting PostgreSQL' systemctl restart postgresql
 systemctl is-active --quiet postgresql || die 'PostgreSQL did not start.'
 
+printf '\n'
 log 'RetroDB base host preparation is complete.'
 printf '  Application root : %s\n  Configuration    : %s\n  Data             : %s\n' "$APP_ROOT" "$CONFIG_DIR" "$DATA_DIR"
+printf '\n'
 warn 'The application, schema, HTTPS and web service are not implemented yet.'
 warn 'No network-facing service has been enabled.'
