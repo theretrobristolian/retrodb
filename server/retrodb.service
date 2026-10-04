@@ -1,0 +1,30 @@
+[Unit]
+Description=RetroDB web application
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=retrodb
+Group=retrodb
+WorkingDirectory=/opt/retrodb
+EnvironmentFile=/etc/retrodb/retrodb.env
+ExecStart=/opt/retrodb/.venv/bin/uvicorn retrodb.main:app --app-dir /opt/retrodb/backend --host 127.0.0.1 --port 8000 --workers 1
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/retrodb /var/cache/retrodb /var/log/retrodb
+
+[Install]
+WantedBy=multi-user.target
