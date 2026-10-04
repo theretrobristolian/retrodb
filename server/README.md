@@ -113,6 +113,23 @@ sudo systemctl status retrodb
 
 The service deliberately binds only to loopback. LAN or guest access will be added later through a separately hardened HTTPS reverse proxy.
 
+## RetroAchievements credentials
+
+The deployment adds a labelled RetroAchievements section to the protected configuration file:
+
+```bash
+sudo nano /etc/retrodb/retrodb.env
+```
+
+Enter only the account username and Web API key:
+
+```text
+RETRODB_RA_USERNAME=
+RETRODB_RA_API_KEY=
+```
+
+See the [full credential setup guide](../docs/retroachievements-setup.md), including where to obtain the correct key and where redacted screenshots belong.
+
 ## Security boundary
 
 The bootstrap creates a non-login service user, protects configuration and data paths, and keeps PostgreSQL on loopback. It deliberately does not configure a firewall, mount collection shares, publish a port or place the application on the Internet.
