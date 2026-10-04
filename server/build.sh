@@ -145,5 +145,6 @@ printf '\n'
 log 'RetroDB base host preparation is complete.'
 printf '  Application root : %s\n  Configuration    : %s\n  Data             : %s\n' "$APP_ROOT" "$CONFIG_DIR" "$DATA_DIR"
 printf '\n'
-warn 'The application, schema, HTTPS and web service are not implemented yet.'
-warn 'No network-facing service has been enabled.'
+log 'Host prerequisites are ready.'
+log 'Run server/deploy.sh to install or update the application.'
+warn 'No network-facing service is enabled by the host bootstrap.'
