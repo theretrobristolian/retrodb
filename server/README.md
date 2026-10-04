@@ -14,11 +14,8 @@ The bootstrap requires systemd and APT. RetroNAS follows the same broad Debian-f
 A minimal Debian installation may not include `sudo`. Become root, install it and add the normal administrator account to the `sudo` group. Replace `david` with the account created during installation when necessary:
 
 ```bash
-su -
-apt update
-apt install -y sudo
-usermod -aG sudo david
-reboot
+su -c 'apt update && apt install -y sudo && /usr/sbin/usermod -aG sudo david'
+su -c '/usr/sbin/reboot'
 ```
 
 Reconnect so the new group membership applies, update the complete base OS, remove obsolete packages and reboot:
