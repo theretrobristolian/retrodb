@@ -39,7 +39,9 @@ The resulting systemd mount uses SMB 3.1.1 and is forced read-only with `nosuid`
 sudo bash server/retronas.sh scan
 ```
 
-The inventory reports the exact mount and platform paths, then breaks results down by platform, top-level media folder (for example PS2 `cd` and `dvd`) and file format. Skipped extensions are itemised. Counts are explicitly files rather than games, because a PS1 BIN/CUE pair is two files representing one disc.\n\nIt stores relative path, filename, extension, size, modification time, platform, last-seen time and missing state. It recognises common PS1/PS2 image formats and does not alter or upload collection files.
+The inventory reports the exact mount and platform paths, then breaks results down by platform, top-level media folder (for example PS2 `cd` and `dvd`) and file format. Skipped extensions are itemised. Counts are explicitly files rather than games, because a PS1 BIN/CUE pair is two files representing one disc.
+
+It stores relative path, filename, extension, size, modification time, platform, last-seen time and missing state. It recognises common PS1/PS2 image formats and does not alter or upload collection files.
 
 Other operations:
 
@@ -70,3 +72,22 @@ The summary reports compatible, unmatched and failed images per platform. Full r
 ```
 
 View it with `sudo column -s, -t < /var/lib/retrodb/reports/retroachievements-compatibility.csv | less -S`, or copy it to an administrator-owned location for spreadsheet analysis.
+
+## Understanding release recommendations
+
+The CSV includes the local disc serial and inferred region where the filename contains a standard PlayStation product code. For example, `SLUS`/ `SCUS` indicates USA and `SLES`/ `SCES` indicates Europe.
+
+For an unmatched hash, RetroDB conservatively compares the cleaned local filename with the achievement-enabled RA catalogue. Exact and unambiguous high-confidence title matches receive:
+
+- the suggested RA game ID and title;
+- RA's accepted file names, including region/revision/disc text;
+- every accepted RA hash for that game;
+- labels supplied by RA, such as `nointro`.
+
+Ambiguous names are not guessed. The recommendation is a research aid, not proof that an unrelated download is correct. Only obtain images from media you are legally entitled to use, and verify a candidate with RAHasher rather than relying on a conventional whole-file checksum.
+
+The per-game metadata is cached for 180 days. Re-run the matcher to regenerate the enriched report:
+
+```bash
+sudo bash server/retronas.sh match
+```
