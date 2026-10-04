@@ -141,11 +141,8 @@ server/build.sh
 A minimal Debian installation may not include `sudo`. Sign in with the normal account created during setup, become root, then install `sudo` and grant that account administrative access. Replace `david` if a different username was created:
 
 ```bash
-su -
-apt update
-apt install -y sudo
-usermod -aG sudo david
-reboot
+su -c 'apt update && apt install -y sudo && /usr/sbin/usermod -aG sudo david'
+su -c '/usr/sbin/reboot'
 ```
 
 Reconnect after the reboot, then fully update the base operating system:
