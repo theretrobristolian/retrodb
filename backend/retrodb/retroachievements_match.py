@@ -119,6 +119,7 @@ def identify_local_release(path: str) -> tuple[str, str]:
 
 def normalise_title(value: str) -> str:
     title = Path(value).name
+    title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
     title = re.sub(r"\.(?:cue|iso|bin|chd|pbp|md|zip|7z)$", "", title, flags=re.I)
     title = SERIAL_PATTERN.sub(" ", title)
     title = re.sub(r"[\[(](?:disc|disk|cd|dvd)\s*\d+[^\])]?[\])]", " ", title, flags=re.I)
@@ -274,7 +275,7 @@ def preferred_release(
                 revision,
                 int(version_match.group(1)) * 100 + int(version_match.group(2) or 0),
             )
-        return region_rank, patch_rank, preservation_rank, -revision, name.casefold()
+        return patch_rank, region_rank, preservation_rank, -revision, name.casefold()
 
     chosen = min(details, key=sort_key)
     labels = "; ".join(
