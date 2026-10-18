@@ -12,6 +12,44 @@ xr_version() {
 xr_service_status() {
   systemctl is-active xerabora.service 2>/dev/null || true
 }
+xr_config_dir() {
+  local active
+  active="$(cat "$HOME/.config/xerabora-profiles/active" 2>/dev/null || true)"
+  if [[ "$active" =~ ^[A-Za-z0-9_-]{1,48}$ && -d "$HOME/.config/xerabora-profiles/$active/xerabora" ]]; then
+    printf '%s' "$HOME/.config/xerabora-profiles/$active/xerabora"
+  else
+    printf '%s' "$HOME/.config/xerabora"
+  fi
+}
+xr_server_ip() {
+  local ip
+  ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") {print $(i+1);exit}}')"
+  [[ -n "$ip" ]] || ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  printf '%s' "$ip"
+}
+xr_web_enabled() {
+  [[ -f /etc/systemd/system/xerabora.service ]] &&
+    ! grep -Eq '^ExecStart=.*--no-ui([[:space:]]|$)' /etc/systemd/system/xerabora.service
+}
+xr_web_lan_enabled() {
+  [[ "$(cat "$(xr_config_dir)/lan" 2>/dev/null || true)" == 1 ]]
+}
+xr_web_urls() {
+  local ip host
+  if ! xr_web_enabled; then
+    printf ' Web UI: disabled (enable from manager)\n'
+    return
+  fi
+  printf ' Web UI (local): http://127.0.0.1:18280/\n'
+  if xr_web_lan_enabled; then
+    ip="$(xr_server_ip)"
+    host="$(hostname -f 2>/dev/null || hostname)"
+    [[ -n "$ip" ]] && printf ' Web UI (LAN):   http://%s:18280/\n' "$ip"
+    [[ "$host" == *.* ]] && printf ' Web UI (DNS):   http://%s:18280/ (if DNS resolves)\n' "$host"
+  else
+    printf ' Web UI: localhost only; LAN access disabled\n'
+  fi
+}
 xr_draw_header() {
   local title="${1:-Main menu}"
   if [[ -t 1 ]]; then printf '\033[2J\033[H'; fi
@@ -27,6 +65,7 @@ ART
   printf '%s\n' '--------------------------------------------------------------------'
   printf ' Service: %-15s Version: %s\n' "$(xr_service_status)" "$(xr_version)"
   printf ' Active RetroAchievements profile: %s\n' "$(xr_active_profile)"
+  xr_web_urls
   printf '%s\n' '--------------------------------------------------------------------'
   printf ' %s\n' "$title"
   printf '%s\n' '--------------------------------------------------------------------'
