@@ -159,7 +159,7 @@ User=$USER_NAME
 Group=$(id -gn "$USER_NAME")
 WorkingDirectory=/opt/xerabora
 Environment=HOME=$HOME_PATH
-ExecStart=/opt/xerabora/xerabora-linux-x86_64 --no-ui --no-sound
+ExecStart=/opt/xerabora/xerabora-linux-x86_64 --no-sound --ui-port 18280
 Restart=on-failure
 RestartSec=10
 
@@ -233,6 +233,53 @@ test_api() {
     "$DIR/$BIN" --recent
   fi
 }
+web_ui_settings() {
+  local choice cfg unit=/etc/systemd/system/xerabora.service tmp
+  cfg="$(active_config_dir)"
+  [[ -f "$unit" ]] || { echo "Install xeRAbora first."; return 1; }
+  xr_draw_header "Web interface settings"
+  echo "  1) Enable Web UI on this server (localhost only)"
+  echo "  2) Allow Web UI from your local network (LAN)"
+  echo "  3) Disable LAN access (localhost only)"
+  echo "  4) Disable Web UI entirely"
+  echo "  0) Return to main menu"
+  xr_draw_footer
+  read -rp "Choose an option: " choice || return 0
+  case "$choice" in
+    1|2|3|4) ;;
+    0) return 0 ;;
+    *) echo "Invalid selection"; return 1 ;;
+  esac
+  if [[ "$choice" == 2 ]]; then
+    echo "WARNING: LAN access exposes your RetroAchievements profile and Web UI"
+    echo "to anyone who can reach TCP port 18280 on your network."
+    echo "Use only on a trusted private network; this is HTTP, not HTTPS."
+    local confirmation
+    read -rp "Type ENABLE LAN to continue: " confirmation
+    [[ "$confirmation" == "ENABLE LAN" ]] || { echo "Cancelled."; return 0; }
+  fi
+  sudo -v || return 1
+  if [[ "$choice" == 1 || "$choice" == 2 || "$choice" == 3 ]]; then
+    sudo sed -i 's/ --no-ui//g' "$unit"
+    if ! grep -q '^ExecStart=.*--ui-port' "$unit"; then
+      sudo sed -i '/^ExecStart=/s/$/ --ui-port 18280/' "$unit"
+    fi
+  else
+    if ! grep -q '^ExecStart=.*--no-ui' "$unit"; then
+      sudo sed -i '/^ExecStart=/s/$/ --no-ui/' "$unit"
+    fi
+  fi
+  mkdir -p "$cfg"
+  chmod 700 "$cfg"
+  if [[ "$choice" == 2 ]]; then printf '1\n' > "$cfg/lan"; else printf '0\n' > "$cfg/lan"; fi
+  chmod 600 "$cfg/lan"
+  sudo systemctl daemon-reload
+  sudo systemctl restart xerabora.service
+  echo "Web UI setting saved; xeRAbora service restarted."
+  xr_web_urls
+  echo "Exit and relaunch OPL-RA if a PS2 session was interrupted."
+}
+
 uninstall_client() {
   local answer unit="/etc/systemd/system/xerabora.service"
   xr_draw_header "Full uninstall — irreversible"
@@ -283,6 +330,7 @@ menu() {
     echo "  9) Sign in to RetroAchievements (legacy login)"
     echo " 10) Manage player profiles"
     echo " 11) Uninstall xeRAbora and delete all local data"
+    echo " 12) Configure Web UI / LAN access"
     echo "  0) Exit"
     xr_draw_footer
     read -rp "Choose an option: " choice || break
@@ -298,6 +346,7 @@ menu() {
       9) login; xr_pause ;;
       10) bash "$SCRIPT_DIR/profiles.sh" ;;
       11) uninstall_client; xr_pause ;;
+      12) web_ui_settings; xr_pause ;;
       0|q|Q) break ;;
       *) echo "Invalid selection."; xr_pause ;;
     esac
@@ -317,6 +366,7 @@ case "${1:-menu}" in
   logs) journalctl -u xerabora.service -n 60 --no-pager ;;
   follow-log) xr_follow_log ;;
   uninstall) uninstall_client ;;
+  web-ui) web_ui_settings ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
   *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|start|stop|restart]"; exit 2 ;;
 esac
