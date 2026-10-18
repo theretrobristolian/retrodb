@@ -68,7 +68,7 @@ Recommended first use:
 1. **Import existing RetroDB login** to profile `theretrobristolian`. This **copies**, never removes, the existing known-good login and Web API key.
 2. **Create another account profile** for your partner. A separate RetroAchievements login and API key is required; the login process temporarily uses UDP 18196 so the running main service can continue serving 18194.
 3. **Add / replace profile API key** for the second profile.
-4. **Switch active profile** before starting a game. The manager stops the existing xeRAbora service, writes a systemd drop-in specifying the chosen `XDG_CONFIG_HOME`, then starts the service with that profile.
+4. **Switch active profile** using a numbered list (1, 2, 3, etc.; 0 returns to the previous menu). The manager asks for confirmation, stops the existing xeRAbora service, writes a systemd drop-in specifying the chosen `XDG_CONFIG_HOME`, then starts the service with that profile. If the chosen profile is already active, it does nothing.
 5. Run `sudo journalctl -u xerabora.service -n 25 --no-pager` to confirm the active account.
 
 **Important:** This switches RetroAchievements identity only. The **MemCard Pro 2 virtual memory-card image/game saves must be selected separately on the PS2** for the intended player. The script does not control your MMCE device or manage/synchronise game saves. Always close the game and switch the virtual card/profile together to avoid mixing saves and achievements.
@@ -77,3 +77,5 @@ Recommended first use:
 
 **Security limitation:** XeRAbora stores an authentication token locally; these profiles isolate it from the other profile at the filesystem-path level, but both are accessible to the Linux user `david` and anyone with that account's permissions. This is convenient household account switching, not isolation between untrusted Linux users.
 
+
+After a successful account switch, the manager confirms the service was restarted and reminds you to **exit your current PS2 game and fully reboot/relaunch OPL-RA to reconnect**, then check the correct MemCard Pro 2 virtual card/game save is selected. Do not switch profiles mid-game; save and exit first.
