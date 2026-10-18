@@ -115,7 +115,6 @@ check_version() {
   fi
 }
 install_client() {
-  for cmd in curl sha256sum sudo mktemp python3; do command -v "$cmd" >/dev/null || { echo "Missing: $cmd" >&2; exit 1; }; done
   prerequisites || return 1
   local version old base tmp file confirm
   old="$(installed_version)"
