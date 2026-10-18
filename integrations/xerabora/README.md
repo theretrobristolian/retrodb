@@ -52,3 +52,28 @@ Web API key entry is hidden in the terminal, saved to `/home/david/.config/xerab
 ## PS2 / MemCard Pro reminder
 
 **Fully power-cycle/reboot the PS2 before copying the ELF** so that MemCard Pro restores the default memory-card-slot-1 image you intend to edit. In wLaunchELF, copy the USB `mass:/APPS/OPL-RA.ELF` to the chosen card location (for example `mc0:/APPS/OPL-RA.ELF`), then add that exact executable path in the Free McBoot Configurator and save the FMCB configuration. You may test the ELF directly from USB first. Check that the destination card image has enough free space and is the correct MemCard Pro virtual card before copying.
+
+## Multiple RetroAchievements accounts (PS2 shared by two players)
+
+The companion `profiles.sh` manager handles one **active profile at a time**; xeRAbora and UDP 18194 are intentionally single-client. Each profile has separate saved **login token, Web API key, game caches and logs** under `~/.config/xerabora-profiles/<profile>/xerabora/`. No RetroAchievements password is permanently saved by these scripts. The profiles are protected by per-user filesystem permissions, not encrypted at rest; protect access to your Linux account and backups. Tokens are sensitive and should never go into Git. 
+
+From the main installer menu choose **9) Manage RetroAchievements profiles**, or:
+
+```bash
+bash integrations/xerabora/profiles.sh
+```
+
+Recommended first use:
+
+1. **Import existing RetroDB login** to profile `theretrobristolian`. This **copies**, never removes, the existing known-good login and Web API key.
+2. **Create another account profile** for your partner. A separate RetroAchievements login and API key is required; the login process temporarily uses UDP 18196 so the running main service can continue serving 18194.
+3. **Add / replace profile API key** for the second profile.
+4. **Switch active profile** before starting a game. The manager stops the existing xeRAbora service, writes a systemd drop-in specifying the chosen `XDG_CONFIG_HOME`, then starts the service with that profile.
+5. Run `sudo journalctl -u xerabora.service -n 25 --no-pager` to confirm the active account.
+
+**Important:** This switches RetroAchievements identity only. The **MemCard Pro 2 virtual memory-card image/game saves must be selected separately on the PS2** for the intended player. The script does not control your MMCE device or manage/synchronise game saves. Always close the game and switch the virtual card/profile together to avoid mixing saves and achievements.
+
+**Service updates:** `install.sh update` continues to update the shared xeRAbora executable and matching PS2 ELF; account profiles survive upgrades because they reside in each user's home directory. Verify the username in the service logs after every version update.
+
+**Security limitation:** XeRAbora stores an authentication token locally; these profiles isolate it from the other profile at the filesystem-path level, but both are accessible to the Linux user `david` and anyone with that account's permissions. This is convenient household account switching, not isolation between untrusted Linux users.
+
