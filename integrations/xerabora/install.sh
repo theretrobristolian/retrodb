@@ -81,6 +81,7 @@ install_client() {
   echo "Installed: $old | Newest: $version"
   if [[ "$old" == "$version" && -x /opt/xerabora/xerabora-linux-x86_64 ]]; then
     echo "Already current; no changes needed."
+    prompt_api_key
     return
   fi
   read -rp "Download, verify, install $version and restart service? [y/N] " confirm
@@ -139,15 +140,96 @@ EOF
     return 1
   fi
   echo "Matching PS2 ELF: /opt/xerabora/OPL-RA.ELF (copy to your PS2 when upgrading)"
+  prompt_api_key
 }
 
-case "${1:-install}" in
+
+api_key_present() { [[ -s "$HOME_PATH/.config/xerabora/apikey" ]]; }
+set_api_key() {
+  local key answer keytmp
+  if api_key_present; then
+    read -rp "Web API key exists. Replace? [y/N] " answer
+    [[ "$answer" =~ ^[Yy]$ ]] || return 0
+  fi
+  echo "Get your key from https://retroachievements.org/settings (Keys)"
+  read -rsp "Paste Web API key (hidden, blank cancels): " key
+  echo
+  [[ -n "$key" ]] || { echo "Cancelled"; return 0; }
+  umask 077
+  install -d -m 700 "$HOME_PATH/.config/xerabora"
+  keytmp="$(mktemp "$HOME_PATH/.config/xerabora/.apikey.XXXXXX")"
+  printf '%s\n' "$key" > "$keytmp"
+  unset key
+  chmod 600 "$keytmp"
+  mv -f "$keytmp" "$HOME_PATH/.config/xerabora/apikey"
+  echo "API key saved."
+  if systemctl is-active --quiet xerabora.service; then
+    sudo systemctl restart xerabora.service
+    echo "Service restarted."
+  fi
+}
+prompt_api_key() {
+  local answer
+  if api_key_present; then
+    echo "Web API key: configured"
+  else
+    echo "Web API key: missing"
+    read -rp "Add Web API key? [y/N] " answer
+    if [[ "$answer" =~ ^[Yy]$ ]]; then set_api_key; fi
+  fi
+}
+test_api() {
+  [[ -x "$DIR/$BIN" ]] || { echo "Not installed" >&2; return 1; }
+  api_key_present || { echo "Missing Web API key" >&2; return 1; }
+  "$DIR/$BIN" --recent
+}
+menu() {
+  local choice installed latest state api
+  while true; do
+    installed="$(installed_version)"
+    latest="$(latest_release 2>/dev/null || true)"
+    [[ -n "$latest" ]] || latest="unavailable"
+    state="$(systemctl is-active xerabora.service 2>/dev/null || true)"
+    if api_key_present; then api="configured"; else api="missing"; fi
+    echo
+    echo "========= xeRAbora manager ========="
+    echo "Installed: $installed | Latest: $latest"
+    echo "Service: $state | Web API key: $api"
+    echo " 1) Install / update"
+    echo " 2) Add / update Web API key"
+    echo " 3) Test Web API"
+    echo " 4) Service status"
+    echo " 5) Restart service"
+    echo " 6) Network / port diagnostics"
+    echo " 7) Logs"
+    echo " 8) RetroAchievements login"
+    echo " 0) Exit"
+    read -rp "Select [Enter=install/update]: " choice || break
+    case "$choice" in
+      ""|1) install_client ;;
+      2) set_api_key ;;
+      3) test_api ;;
+      4) systemctl --no-pager status xerabora.service || true ;;
+      5) sudo systemctl restart xerabora.service ;;
+      6) doctor ;;
+      7) journalctl -u xerabora.service -n 60 --no-pager ;;
+      8) login ;;
+      0|q|Q) break ;;
+      *) echo "Invalid choice" ;;
+    esac
+  done
+}
+
+case "${1:-menu}" in
+  menu) menu ;;
   install|update) install_client ;;
   version|versions|check) check_version ;;
+  api-key) set_api_key ;;
+  test-api) test_api ;;
   login) login ;;
   doctor) doctor ;;
   status) systemctl --no-pager status xerabora.service || true ;;
   logs) journalctl -u xerabora.service -n 60 --no-pager ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
-  *) echo "Usage: bash install.sh [install|check|update|login|doctor|status|logs|start|stop|restart]"; exit 2 ;;
+  *) echo "Usage: bash install.sh [menu|install|check|update|api-key|test-api|login|doctor|status|logs|start|stop|restart]"; exit 2 ;;
 esac
