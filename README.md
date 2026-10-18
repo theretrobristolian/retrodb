@@ -219,6 +219,45 @@ Do not put a real API key in Git, screenshots, issues or support messages.
 
 RetroDB can mount the standard RetroNAS SMB share read-only and inventory the canonical PS1 and PS2 folders. Follow the [RetroNAS scanning guide](docs/retronas-scanning.md). Credentials remain root-only and collection files are never modified.
 
+## PS2 RetroAchievements and xeRAbora
+
+RetroDB's longer-term goal is not just to catalogue a ROM library, but also to **audit PS1 and PS2 game images against recognised release identifiers and RetroAchievements-supported hashes**. A title being present on RetroNAS does not necessarily mean that its particular region, revision, dump or patched image is compatible with RetroAchievements. RetroDB can help identify those differences, maintain a verified inventory, and eventually prepare a curated collection of compatible images for use on original hardware. This work is separate from the live achievements client.
+
+For actual PS2 gameplay, the intended workflow is:
+
+```text
+RetroNAS game collection (canonical/read-only source)
+      |
+      v
+RetroDB inventory, metadata and compatibility/hash checks
+      |
+      v
+Select verified RetroAchievements-compatible game images
+      |
+      v
+Copy to PS2-accessible storage (internal HDD or MMCE)
+      |
+      v
+Real PS2 running a compatible OPL-RA build
+      |
+      v
+Headless xeRAbora on Debian <--> RetroAchievements
+```
+
+**Important storage distinction:** In this setup, RetroNAS is the **source library and auditing target**, not the game-loading source for these OPL-RA/MMCE tests. Compatible images need to be **copied to the appropriate PS2-accessible HDD/MMCE storage** before running them. Do not assume that a game catalogued on RetroNAS can be launched directly from that NAS through this workflow. RetroDB's collection management does not itself install games onto the console.
+
+### Standalone xeRAbora installer
+
+The repository also contains a community installer/updater for [xeRAbora by hacan359](https://hacan359.github.io/xerabora/#top):
+
+**[xeRAbora Debian installer, multi-player profile manager and setup guide](integrations/xerabora/README.md)**
+
+It installs the xeRAbora headless client, matching `OPL-RA.ELF`, systemd service and RetroAchievements account configuration on a Debian x86-64 server or VM. The installer includes checks for prerequisites, release checksum validation, active-player log monitoring, account switching and a confirmed uninstall option.
+
+**This integration is intentionally standalone:** anyone can use it with a fresh Debian host and compatible PS2 **without installing or configuring the RetroDB database, backend, RetroNAS integration or ROM auditing tools**. Likewise, RetroDB can audit and catalogue a collection without xeRAbora. They complement each other rather than requiring one another.
+
+The xeRAbora/OPL-RA integration has been tested on a real PS2 Slim with MemCard Pro 2 in MMCE mode, with game identification and successful achievement unlocks in *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. The independent fresh-server setup remains under active testing. PS2 ELF installation and copying game images to console storage are manual steps.
+
 ## Planned repository layout
 
 ```text
