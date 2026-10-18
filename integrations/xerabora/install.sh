@@ -203,6 +203,7 @@ menu() {
     echo " 6) Network / port diagnostics"
     echo " 7) Logs"
     echo " 8) RetroAchievements login"
+    echo " 9) Manage RetroAchievements profiles"
     echo " 0) Exit"
     read -rp "Select [Enter=install/update]: " choice || break
     case "$choice" in
@@ -214,6 +215,7 @@ menu() {
       6) doctor ;;
       7) journalctl -u xerabora.service -n 60 --no-pager ;;
       8) login ;;
+      9) bash "$(dirname "$0")/profiles.sh" ;;
       0|q|Q) break ;;
       *) echo "Invalid choice" ;;
     esac
