@@ -59,6 +59,30 @@ bash integrations/xerabora/install.sh test-api
 
 No reboot of Linux is required for an installer update, account switch or service restart. Save and exit a PS2 game before restarting the xeRAbora service, then relaunch/re-pair OPL-RA. An upstream update might require copying its **matching PS2 ELF** to the console.
 
+## Built-in Web UI and dashboard URL
+
+The xeRAbora client includes a browser dashboard on **TCP port 18280**. The installer now enables it by default on **localhost only**, without opening the LAN. The main installer has **12) Configure Web UI / LAN access** for existing installations, where you can enable or disable the interface and separately opt into LAN access. The terminal header shows the appropriate local URL and, only when LAN access is enabled, the detected server IPv4 URL and its FQDN (if one exists). A hostname link works only when your DNS resolves that name to the server.
+
+For a new or already-running server:
+
+```bash
+cd ~/retrodb
+git pull --ff-only origin main
+bash integrations/xerabora/install.sh
+# Choose 12 → 2 to enable LAN dashboard (after confirming trusted LAN access)
+```
+
+Then open `http://YOUR_SERVER_IP:18280/` or your resolvable server name on that local network.
+
+**Security:** The dashboard uses **unencrypted HTTP** and shows account/library information; upstream xeRAbora normally binds to `127.0.0.1`. Do not expose this TCP port to the internet or untrusted VLANs. Keep your firewall rules restricted to trusted clients. If you prefer to keep it local, select option 12 → 1 and access it using SSH forwarding:
+
+```bash
+ssh -L 18280:127.0.0.1:18280 USER@YOUR_SERVER_IP
+# Open http://127.0.0.1:18280/ on your computer
+```
+
+The settings restart only the xeRAbora service, **not the Debian host**. Save and close any running PS2 game first; relaunch OPL-RA to reconnect afterwards. The page follows the account currently selected by the profile manager.
+
 ## Multiple RetroAchievements profiles
 
 Use **10) Manage player profiles** from the main installer menu (or execute `bash integrations/xerabora/profiles.sh`). Each household account has its own login token, API key, cache and logs under `~/.config/xerabora-profiles/<profile>/xerabora/`. Profile switching uses a **numbered selection** with 0 to return, requests confirmation, stops the running service, points it at the selected configuration, then starts it again. It prints a reminder to reboot/relaunch OPL-RA and select that player's memory-card image and save. **Only one account is active at a time.**
