@@ -39,6 +39,40 @@ Example from a second computer:
 scp YOUR_LINUX_USERNAME@YOUR_VM_IP:/opt/xerabora/OPL-RA.ELF .
 ```
 
+### Copy the matching OPL-RA.ELF from a headless server
+
+The Linux installer stores the **matching OPL-RA build for its installed xeRAbora release** at `/opt/xerabora/OPL-RA.ELF`. Because this is a headless server, download the ELF **to your own computer**, then copy it onto a USB stick or other PS2-accessible device.
+
+Replace `YOUR_LINUX_USER` and `YOUR_SERVER` with your Debian account and its IP address or resolvable DNS name.
+
+**macOS (Terminal):**
+
+```bash
+scp YOUR_LINUX_USER@YOUR_SERVER:/opt/xerabora/OPL-RA.ELF ~/Downloads/OPL-RA.ELF
+```
+
+**Linux (terminal):**
+
+```bash
+scp YOUR_LINUX_USER@YOUR_SERVER:/opt/xerabora/OPL-RA.ELF ~/Downloads/OPL-RA.ELF
+```
+
+**Windows 10/11 (PowerShell with OpenSSH Client installed):**
+
+```powershell
+scp YOUR_LINUX_USER@YOUR_SERVER:/opt/xerabora/OPL-RA.ELF "$env:USERPROFILE\\Downloads\\OPL-RA.ELF"
+```
+
+Windows users can also connect with WinSCP over SFTP and download `/opt/xerabora/OPL-RA.ELF` to their Downloads folder.
+
+Once downloaded:
+
+1. Insert a USB stick readable by your PS2 file manager (commonly FAT32) into your computer and copy `OPL-RA.ELF` onto it, e.g. under `APPS/`.
+2. On the PS2, use wLaunchELF/uLaunchELF to run the ELF directly from USB or copy it to the appropriate PS2 app location, then configure your FMCB or other launcher.
+3. If updating xeRAbora, replace the **older PS2 ELF with the matching new one** as needed. Save your game, exit, and relaunch OPL-RA.
+
+**Important:** `scp` runs on your **Mac/Windows/Linux computer**, not in the SSH shell on the Debian server. It is a *download from the server to your local computer*. The server's ELF is not automatically deployed to the console. You only need to re-copy it when the installed OPL-RA ELF needs updating; you do not need to copy it on every game launch.
+
 If using MemCard Pro 2, power-cycle the PS2 and check the selected virtual card before copying the ELF or editing Free McBoot's menu; these details are specific to your chosen PS2 setup, **not a requirement** of xeRAbora. MMCE or RetroNAS are not prerequisites of the Linux installer.
 
 The PS2 and headless Linux machine should share a **broadcast domain / subnet** for discovery (the server listens on **UDP 18194**). Give the host a stable reachable address or DHCP reservation. Ensure any host firewall permits the traffic; this script does not open ports or modify routing/firewall policies. In OPL-RA use **Triangle → RA: test PC connection**, then **RA: check game support**. Confirm the logged-in account and an identified supported game in the server log.
