@@ -33,7 +33,7 @@ ART
 }
 xr_draw_footer() {
   printf '%s\n' '--------------------------------------------------------------------'
-  printf ' Community installer by The Retro Bristolian (David Little)\n'
+  printf ' Community installer by The Retro Bristolian\n'
   printf ' Source: %s\n' "$XR_REPO_URL"
   printf ' Update scripts: cd ~/retrodb && git pull --ff-only origin main\n'
   printf '%s\n' '--------------------------------------------------------------------'
