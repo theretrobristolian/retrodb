@@ -1,17 +1,56 @@
 #!/usr/bin/env bash
-# RetroDB companion: xeRAbora install / status / diagnostics.
+# Standalone Debian xeRAbora headless installer / updater / manager.
 set -Eeuo pipefail
-VERSION=v0.1.0-alpha.18
-SHA=aefaf770612c17b4ae03121638122b4c5cc085ba63dd9b1fc075f5d9786aaa29
-OPL_SHA=774f00c5d09c8d2963c2d3e07c02664b1ccb143f01ce30fbaa37d9455d83d87b
-BASE=https://github.com/hacan359/xerabora/releases/download/$VERSION
 DIR=/opt/xerabora
 BIN=xerabora-linux-x86_64
-USER_NAME="$USER"
+USER_NAME="$(id -un)"
 [[ -n "$USER_NAME" && "$USER_NAME" != root ]] || { echo "Run as a normal user (without sudo bash)." >&2; exit 1; }
 HOME_PATH="$(getent passwd "$USER_NAME" | cut -d: -f6)"
+[[ -n "$HOME_PATH" && -d "$HOME_PATH" ]] || { echo "Could not resolve user home" >&2; exit 1; }
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 [[ "$(uname -m)" == x86_64 ]] || { echo "x86_64 required" >&2; exit 1; }
 command -v systemctl >/dev/null || { echo "systemd required" >&2; exit 1; }
+
+prerequisites() {
+  [[ -f /etc/os-release ]] || { echo "Linux distribution unknown" >&2; return 1; }
+  . /etc/os-release
+  [[ "${ID:-}" == debian || " ${ID_LIKE:-} " == *" debian "* || "${ID:-}" == ubuntu ]] || {
+    echo "This installer supports Debian-family Linux only." >&2; return 1;
+  }
+  for cmd in sudo curl python3 sha256sum getent ip ss mktemp install systemctl; do
+    command -v "$cmd" >/dev/null && continue
+    echo "Missing prerequisite: $cmd"
+    if ! command -v sudo >/dev/null; then
+      echo "Ask an administrator to install sudo, configure your user for sudo, then retry." >&2
+      return 1
+    fi
+    if ! command -v apt-get >/dev/null; then
+      echo "apt-get not found; install Debian prerequisites manually." >&2
+      return 1
+    fi
+    read -rp "Install required packages with apt-get now? [y/N] " reply
+    [[ "$reply" =~ ^[Yy]$ ]] || return 1
+    sudo -v || return 1
+    sudo apt-get update || return 1
+    sudo apt-get install -y sudo curl python3 coreutils passwd iproute2 ca-certificates util-linux || return 1
+    break
+  done
+  for cmd in sudo curl python3 sha256sum getent ip ss mktemp install systemctl; do
+    command -v "$cmd" >/dev/null || { echo "Still missing $cmd" >&2; return 1; }
+  done
+  sudo -v || { echo "This user needs sudo privileges." >&2; return 1; }
+  echo "Debian prerequisites and sudo access: OK"
+}
+
+active_config_dir() {
+  local current
+  current="$(cat "$HOME_PATH/.config/xerabora-profiles/active" 2>/dev/null || true)"
+  if [[ "$current" =~ ^[a-zA-Z0-9_-]{1,48}$ && -d "$HOME_PATH/.config/xerabora-profiles/$current/xerabora" ]]; then
+    printf '%s' "$HOME_PATH/.config/xerabora-profiles/$current/xerabora"
+  else
+    printf '%s' "$HOME_PATH/.config/xerabora"
+  fi
+}
 
 login() {
   [[ -x "$DIR/$BIN" ]] || { echo "Install first" >&2; exit 1; }
@@ -42,8 +81,8 @@ doctor() {
   echo "=== UFW (read-only) ==="
   if command -v ufw >/dev/null; then sudo ufw status || true; fi
   echo "=== Logs ==="
-  if [[ -f "$HOME_PATH/.config/xerabora/xerabora.log" ]]; then
-    tail -n 30 "$HOME_PATH/.config/xerabora/xerabora.log"
+  if [[ -f "$(active_config_dir)/xerabora.log" ]]; then
+    tail -n 30 "$(active_config_dir)/xerabora.log"
   else
     echo "No xeRAbora log found yet."
   fi
@@ -74,6 +113,7 @@ check_version() {
 }
 install_client() {
   for cmd in curl sha256sum sudo mktemp python3; do command -v "$cmd" >/dev/null || { echo "Missing: $cmd" >&2; exit 1; }; done
+  prerequisites || return 1
   local version old base tmp file confirm
   old="$(installed_version)"
   version="$(latest_release)"
@@ -128,7 +168,7 @@ EOF
   rm -f "$unit"
   sudo systemctl daemon-reload
   sudo systemctl enable xerabora.service
-  if [[ "$old" == unknown && ! -d "$HOME_PATH/.config/xerabora" ]]; then
+  if [[ "$old" == unknown && ! -s "$HOME_PATH/.config/xerabora/credentials" ]]; then
     read -rp "Authenticate now? [Y/n] " confirm
     if [[ ! "$confirm" =~ ^[Nn]$ ]]; then login; else echo "Run login and then start when ready"; return; fi
   fi
@@ -144,7 +184,7 @@ EOF
 }
 
 
-api_key_present() { [[ -s "$HOME_PATH/.config/xerabora/apikey" ]]; }
+api_key_present() { [[ -s "$(active_config_dir)/apikey" ]]; }
 set_api_key() {
   local key answer keytmp
   if api_key_present; then
@@ -156,12 +196,14 @@ set_api_key() {
   echo
   [[ -n "$key" ]] || { echo "Cancelled"; return 0; }
   umask 077
-  install -d -m 700 "$HOME_PATH/.config/xerabora"
-  keytmp="$(mktemp "$HOME_PATH/.config/xerabora/.apikey.XXXXXX")"
+  local cfg
+  cfg="$(active_config_dir)"
+  install -d -m 700 "$cfg"
+  keytmp="$(mktemp "$cfg/.apikey.XXXXXX")"
   printf '%s\n' "$key" > "$keytmp"
   unset key
   chmod 600 "$keytmp"
-  mv -f "$keytmp" "$HOME_PATH/.config/xerabora/apikey"
+  mv -f "$keytmp" "$cfg/apikey"
   echo "API key saved."
   if systemctl is-active --quiet xerabora.service; then
     sudo systemctl restart xerabora.service
@@ -181,7 +223,13 @@ prompt_api_key() {
 test_api() {
   [[ -x "$DIR/$BIN" ]] || { echo "Not installed" >&2; return 1; }
   api_key_present || { echo "Missing Web API key" >&2; return 1; }
-  "$DIR/$BIN" --recent
+  local current
+  current="$(cat "$HOME_PATH/.config/xerabora-profiles/active" 2>/dev/null || true)"
+  if [[ "$current" =~ ^[a-zA-Z0-9_-]{1,48}$ ]]; then
+    XDG_CONFIG_HOME="$HOME_PATH/.config/xerabora-profiles/$current" "$DIR/$BIN" --recent
+  else
+    "$DIR/$BIN" --recent
+  fi
 }
 menu() {
   local choice installed latest state api
@@ -215,7 +263,7 @@ menu() {
       6) doctor ;;
       7) journalctl -u xerabora.service -n 60 --no-pager ;;
       8) login ;;
-      9) bash "$(dirname "$0")/profiles.sh" ;;
+      9) if [[ -f "$SCRIPT_DIR/profiles.sh" ]]; then bash "$SCRIPT_DIR/profiles.sh"; else echo "profiles.sh missing. Download the full integrations/xerabora directory."; fi ;;
       0|q|Q) break ;;
       *) echo "Invalid choice" ;;
     esac
@@ -230,8 +278,9 @@ case "${1:-menu}" in
   test-api) test_api ;;
   login) login ;;
   doctor) doctor ;;
+  prerequisites|prereqs) prerequisites ;;
   status) systemctl --no-pager status xerabora.service || true ;;
   logs) journalctl -u xerabora.service -n 60 --no-pager ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
-  *) echo "Usage: bash install.sh [menu|install|check|update|api-key|test-api|login|doctor|status|logs|start|stop|restart]"; exit 2 ;;
+  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|start|stop|restart]"; exit 2 ;;
 esac
