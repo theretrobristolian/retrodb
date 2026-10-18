@@ -33,3 +33,22 @@ The updater queries GitHub's **releases list**, not `/releases/latest`, because 
 The VM and PS2 should share a subnet/broadcast domain. xeRAbora receives console discovery on **UDP 18194**. The doctor command checks the local listener, addresses, routes, firewall status and log, but a listening UDP port alone does not prove the PS2 can communicate. From OPL-RA use **Triangle > RA: test PC connection**, followed by **RA: check game support** for each game before playing. The installer does **not** change firewall rules.
 
 The upstream application remains experimental alpha software. These scripts have not yet been exercised on your actual Debian VM. Check the systemd journal if the service cannot start. The installer does not perform automatic rollback on failure.
+
+
+## Interactive manager (default)
+
+Run `bash integrations/xerabora/install.sh` without arguments for a menu that shows the installed and newest upstream versions, service status and whether the Web API key exists. Press Enter to install/update, or select API-key setup, API test, service status/restart, network/port diagnostics, logs, login or exit.
+
+From the CLI you can also use:
+
+```bash
+bash integrations/xerabora/install.sh api-key
+bash integrations/xerabora/install.sh test-api
+bash integrations/xerabora/install.sh menu
+```
+
+Web API key entry is hidden in the terminal, saved to `/home/david/.config/xerabora/apikey` with file permissions 0600, and the service is restarted to load it. A pre-existing key is preserved unless replacement is confirmed. The presence check is not a validity check: `test-api` uses the upstream `--recent` command to test the key. Never paste API keys into GitHub or chat.
+
+## PS2 / MemCard Pro reminder
+
+**Fully power-cycle/reboot the PS2 before copying the ELF** so that MemCard Pro restores the default memory-card-slot-1 image you intend to edit. In wLaunchELF, copy the USB `mass:/APPS/OPL-RA.ELF` to the chosen card location (for example `mc0:/APPS/OPL-RA.ELF`), then add that exact executable path in the Free McBoot Configurator and save the FMCB configuration. You may test the ELF directly from USB first. Check that the destination card image has enough free space and is the correct MemCard Pro virtual card before copying.
