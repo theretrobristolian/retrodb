@@ -8,6 +8,9 @@ USER_NAME="$(id -un)"
 HOME_PATH="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 [[ -n "$HOME_PATH" && -d "$HOME_PATH" ]] || { echo "Could not resolve user home" >&2; exit 1; }
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "$SCRIPT_DIR/ui.sh" ]] || { echo "Missing ui.sh; download the complete xerabora directory." >&2; exit 1; }
+# shellcheck source=ui.sh
+source "$SCRIPT_DIR/ui.sh"
 [[ "$(uname -m)" == x86_64 ]] || { echo "x86_64 required" >&2; exit 1; }
 command -v systemctl >/dev/null || { echo "systemd required" >&2; exit 1; }
 
@@ -231,41 +234,73 @@ test_api() {
     "$DIR/$BIN" --recent
   fi
 }
+uninstall_client() {
+  local answer unit="/etc/systemd/system/xerabora.service"
+  xr_draw_header "Full uninstall — irreversible"
+  echo "This will permanently remove:"
+  echo "  /opt/xerabora (binary, previous versions and OPL-RA.ELF)"
+  echo "  $HOME_PATH/.config/xerabora (original login, API key, logs)"
+  echo "  $HOME_PATH/.config/xerabora-profiles (ALL accounts and logs)"
+  echo "  $unit and its xerabora.service.d/profile.conf override"
+  echo
+  echo "Your RetroDB repository and unrelated applications will remain."
+  echo "systemd's shared journal is not purged (doing so affects other services)."
+  echo "You may want to back up credentials or logs before continuing."
+  echo
+  if [[ -f "$unit" ]] && ! grep -Fq '/opt/xerabora/xerabora-linux-x86_64' "$unit"; then
+    echo "Refusing removal: existing service unit does not look like ours." >&2
+    return 1
+  fi
+  read -rp "Type UNINSTALL XERABORA to confirm permanent removal: " answer
+  [[ "$answer" == "UNINSTALL XERABORA" ]] || { echo "Cancelled; nothing removed."; return 0; }
+  sudo -v || return 1
+  if [[ -f "$unit" ]]; then
+    sudo systemctl disable --now xerabora.service || return 1
+    sudo rm -f -- "$unit"
+  fi
+  sudo rm -f -- /etc/systemd/system/xerabora.service.d/profile.conf
+  if [[ -d /etc/systemd/system/xerabora.service.d ]]; then
+    sudo rmdir /etc/systemd/system/xerabora.service.d 2>/dev/null || true
+  fi
+  sudo systemctl daemon-reload
+  if [[ -d /opt/xerabora ]]; then sudo rm -rf -- /opt/xerabora; fi
+  rm -rf -- "$HOME_PATH/.config/xerabora" "$HOME_PATH/.config/xerabora-profiles"
+  echo "Full xeRAbora uninstall completed."
+  echo "The source checkout and PS2 ELF copies on the console were not removed."
+}
+
 menu() {
-  local choice installed latest state api
+  local choice latest
   while true; do
-    installed="$(installed_version)"
-    latest="$(latest_release 2>/dev/null || true)"
-    [[ -n "$latest" ]] || latest="unavailable"
-    state="$(systemctl is-active xerabora.service 2>/dev/null || true)"
-    if api_key_present; then api="configured"; else api="missing"; fi
-    echo
-    echo "========= xeRAbora manager ========="
-    echo "Installed: $installed | Latest: $latest"
-    echo "Service: $state | Web API key: $api"
-    echo " 1) Install / update"
-    echo " 2) Add / update Web API key"
-    echo " 3) Test Web API"
-    echo " 4) Service status"
-    echo " 5) Restart service"
-    echo " 6) Network / port diagnostics"
-    echo " 7) Logs"
-    echo " 8) RetroAchievements login"
-    echo " 9) Manage RetroAchievements profiles"
-    echo " 0) Exit"
-    read -rp "Select [Enter=install/update]: " choice || break
+    xr_draw_header "Installation and management"
+    echo "  1) Install or update xeRAbora"
+    echo "  2) Configure Web API key for the active account"
+    echo "  3) Test RetroAchievements API access"
+    echo "  4) Check for new releases"
+    echo "  5) View service status"
+    echo "  6) Restart xeRAbora service"
+    echo "  7) Network and connection diagnostics"
+    echo "  8) Follow active player's log (Ctrl+C to return)"
+    echo "  9) Sign in to RetroAchievements (legacy login)"
+    echo " 10) Manage player profiles"
+    echo " 11) Uninstall xeRAbora and delete all local data"
+    echo "  0) Exit"
+    xr_draw_footer
+    read -rp "Choose an option: " choice || break
     case "$choice" in
-      ""|1) install_client ;;
-      2) set_api_key ;;
-      3) test_api ;;
-      4) systemctl --no-pager status xerabora.service || true ;;
-      5) sudo systemctl restart xerabora.service ;;
-      6) doctor ;;
-      7) journalctl -u xerabora.service -n 60 --no-pager ;;
-      8) login ;;
-      9) if [[ -f "$SCRIPT_DIR/profiles.sh" ]]; then bash "$SCRIPT_DIR/profiles.sh"; else echo "profiles.sh missing. Download the full integrations/xerabora directory."; fi ;;
+      1) install_client; xr_pause ;;
+      2) set_api_key; xr_pause ;;
+      3) test_api; xr_pause ;;
+      4) check_version || true; xr_pause ;;
+      5) systemctl --no-pager status xerabora.service || true; xr_pause ;;
+      6) sudo systemctl restart xerabora.service; xr_pause ;;
+      7) doctor; xr_pause ;;
+      8) xr_follow_log; xr_pause ;;
+      9) login; xr_pause ;;
+      10) bash "$SCRIPT_DIR/profiles.sh" ;;
+      11) uninstall_client; xr_pause ;;
       0|q|Q) break ;;
-      *) echo "Invalid choice" ;;
+      *) echo "Invalid selection."; xr_pause ;;
     esac
   done
 }
@@ -281,6 +316,8 @@ case "${1:-menu}" in
   prerequisites|prereqs) prerequisites ;;
   status) systemctl --no-pager status xerabora.service || true ;;
   logs) journalctl -u xerabora.service -n 60 --no-pager ;;
+  follow-log) xr_follow_log ;;
+  uninstall) uninstall_client ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
-  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|start|stop|restart]"; exit 2 ;;
+  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|start|stop|restart]"; exit 2 ;;
 esac
