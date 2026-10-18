@@ -7,6 +7,10 @@ CURRENT="${ROOT}/active"
 BIN=/opt/xerabora/xerabora-linux-x86_64
 SERVICE=xerabora.service
 ORIGINAL="${HOME}/.config/xerabora"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+[[ -f "$SCRIPT_DIR/ui.sh" ]] || { echo "Missing ui.sh; download the complete xerabora directory." >&2; exit 1; }
+# shellcheck source=ui.sh
+source "$SCRIPT_DIR/ui.sh"
 [[ "$(id -u)" -ne 0 ]] || { echo "Run as normal service user, not root" >&2; exit 1; }
 [[ -x "$BIN" ]] || { echo "Install xeRAbora first" >&2; exit 1; }
 mkdir -p "$ROOT"
@@ -14,7 +18,7 @@ chmod 700 "$ROOT"
 valid() { [[ "${1:-}" =~ ^[a-zA-Z0-9_-]{1,48}$ ]]; }
 profile_dir() { printf '%s/%s' "$ROOT" "$1"; }
 list_profiles() {
-  echo "Profiles:"
+  echo "Available player profiles:"
   local d name active
   active="$(cat "$CURRENT" 2>/dev/null || true)"
   for d in "$ROOT"/*; do
@@ -72,8 +76,7 @@ activate() {
   local -a names=()
   local d
   active="$(cat "$CURRENT" 2>/dev/null || true)"
-  echo
-  echo "=== Choose RetroAchievements profile ==="
+  xr_draw_header "Switch active RetroAchievements player"
   for d in "$ROOT"/*; do
     [[ -d "$d" && -s "$d/xerabora/credentials" ]] || continue
     names+=("${d##*/}")
@@ -87,7 +90,8 @@ activate() {
     echo "No authenticated profiles. Import or create one first."
     return 0
   fi
-  echo " 0) Return to account menu"
+  echo " 0) Return to player profiles menu"
+  xr_draw_footer
   read -rp "Select profile number: " choice || return 0
   [[ "$choice" != 0 ]] || return 0
   [[ "$choice" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid selection."; return 0; }
@@ -148,29 +152,31 @@ import_existing() {
 menu() {
   local answer
   while :; do
-    echo
-    echo "=== xeRAbora account profiles ==="
-    echo "Active: $(cat "$CURRENT" 2>/dev/null || echo original-default)"
-    echo "1) List profiles"
-    echo "2) Import existing RetroDB login"
-    echo "3) Create another account profile"
-    echo "4) Add / replace a profile API key"
-    echo "5) Switch active profile"
-    echo "6) Show active service account/log"
-    echo "0) Exit"
-    read -rp "Choose: " answer || return
+    xr_draw_header "RetroAchievements player profiles"
+    echo "  1) List configured players"
+    echo "  2) Import an existing xeRAbora login"
+    echo "  3) Add a new player"
+    echo "  4) Set or change a player's Web API key"
+    echo "  5) Switch active player (numbered selection)"
+    echo "  6) View xeRAbora service status"
+    echo "  7) Follow active player's log (Ctrl+C to return)"
+    echo "  0) Return to main menu"
+    xr_draw_footer
+    read -rp "Choose an option: " answer || return
     case "$answer" in
-      1) list_profiles ;;
-      2) import_existing ;;
-      3) create_profile ;;
-      4) set_key ;;
-      5) activate ;;
-      6) systemctl --no-pager status "$SERVICE" || true ;;
-      0) return ;;
-      *) echo "Invalid selection" ;;
+      1) list_profiles; xr_pause ;;
+      2) import_existing; xr_pause ;;
+      3) create_profile; xr_pause ;;
+      4) set_key; xr_pause ;;
+      5) activate; xr_pause ;;
+      6) systemctl --no-pager status "$SERVICE" || true; xr_pause ;;
+      7) xr_follow_log; xr_pause ;;
+      0|q|Q) return ;;
+      *) echo "Invalid selection."; xr_pause ;;
     esac
   done
 }
+
 case "${1:-menu}" in
   menu) menu ;;
   list) list_profiles ;;
@@ -178,5 +184,6 @@ case "${1:-menu}" in
   add) create_profile ;;
   key) set_key ;;
   switch) activate ;;
+  follow-log) xr_follow_log ;;
   *) echo "Usage: bash profiles.sh [menu|list|import|add|key|switch]" >&2; exit 2 ;;
 esac
