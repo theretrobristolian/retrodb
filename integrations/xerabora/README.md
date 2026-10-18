@@ -1,33 +1,35 @@
-# xeRAbora for RetroDB
+# xeRAbora headless client for RetroDB
 
-Standalone headless [xeRAbora](https://github.com/hacan359/xerabora) client for RetroAchievements on a real PS2. This installer **does not change RetroDB services, PostgreSQL, Python or ROMs**.
+Standalone install and manual updater for [xeRAbora](https://github.com/hacan359/xerabora), which connects PS2 OPL-RA to RetroAchievements. RetroDB's existing services, Python environment, PostgreSQL and ROM collection are unchanged.
 
-## One-command setup
-
-On your Debian 13 x86_64 RetroDB host, from the cloned repo:
+## On Debian 13 RetroDB
 
 ```bash
-cd ~/retrodb/integrations/xerabora
-bash install.sh
+cd ~/retrodb
+git pull --ff-only origin main
+bash integrations/xerabora/install.sh check
+bash integrations/xerabora/install.sh
 ```
 
-Run as the normal `david` user, **not** with `sudo bash`. Requires sudo, curl, sha256sum, systemd, ss/iproute2. It installs the pinned, checksum-verified upstream **v0.1.0-alpha.18** executable into `/opt/xerabora`, downloads the matching `OPL-RA.ELF`, creates an auto-start systemd service, and offers a one-time RetroAchievements password prompt. After the initial login saves a token, press Ctrl+C to return to the installer. Password is not written to disk by this script.
+Run as the normal `david` account, **not** `sudo bash`. Requires sudo, curl, Python 3, sha256sum and systemd. Installation prompts before making changes. On first installation it offers a one-time interactive RetroAchievements login. After login is complete, press Ctrl+C if the program stays running. Password is only provided to that child process for login and is not written to a configuration file by the installer.
 
-## Useful commands
+## Version checking and updates
 
 ```bash
-bash install.sh doctor   # IP, route, UDP 18194 listener, firewall hints, service and log
-bash install.sh login    # authenticate again
-bash install.sh status
-bash install.sh logs
-bash install.sh restart
-bash install.sh update   # reinstall same pinned version
+bash integrations/xerabora/install.sh check     # installed versus newest upstream release
+bash integrations/xerabora/install.sh update    # ask to download, verify, install and restart
+bash integrations/xerabora/install.sh doctor    # addresses, routes, UDP listener, service and logs
+bash integrations/xerabora/install.sh status
+bash integrations/xerabora/install.sh logs
+bash integrations/xerabora/install.sh restart
 ```
 
-The service runs as the installing user; config and logs live at `~/.config/xerabora/`. Note a directory alone is not proof of successful login; review logs if authentication failed.
+The updater queries GitHub's **releases list**, not `/releases/latest`, because xeRAbora publishes *pre-releases*. It chooses the newest published non-draft release containing Linux, PS2 ELF and SHA256SUMS assets. For both files it checks the SHA256 against the matching release's manifest **before changing the installed files**. The managed version is recorded at `/opt/xerabora/VERSION`. Existing executable, ELF and VERSION are backed up with `.previous` suffix for manual rollback. The authentication data at `~/.config/xerabora` is preserved. Updates are manual, never automatic.
 
-## PS2 connection
+**Important:** A new xeRAbora release may require the matching `OPL-RA.ELF` on your PS2. The script downloads it to `/opt/xerabora/OPL-RA.ELF`; you must copy it to your console boot medium yourself. Updating the VM does not update the console.
 
-Move the downloaded `/opt/xerabora/OPL-RA.ELF` onto the PS2 launch device; use this matching release. Host and console must share the same broadcast network (not merely IP-routable between VLANs). In OPL-RA select a game, press Triangle, run **RA: test PC connection**, then **RA: check game support** before playing. Inbound **UDP 18194** must be allowed from PS2 to RetroDB. The doctor command is read-only: it doesn't open firewall rules. `ss` detects a listening socket but cannot guarantee UDP broadcasts work; the PS2 connection-test option is authoritative. If your VLAN40 subnet is confirmed to be 10.1.4.0/24 and UFW is enabled, you may allow only this subnet with `sudo ufw allow from 10.1.4.0/24 to any port 18194 proto udp`.
+## Network
 
-Upstream is experimental alpha software. **Not tested on your live VM or PS2.** Review shell scripts before executing, and never commit credentials.
+The VM and PS2 should share a subnet/broadcast domain. xeRAbora receives console discovery on **UDP 18194**. The doctor command checks the local listener, addresses, routes, firewall status and log, but a listening UDP port alone does not prove the PS2 can communicate. From OPL-RA use **Triangle > RA: test PC connection**, followed by **RA: check game support** for each game before playing. The installer does **not** change firewall rules.
+
+The upstream application remains experimental alpha software. These scripts have not yet been exercised on your actual Debian VM. Check the systemd journal if the service cannot start. The installer does not perform automatic rollback on failure.
