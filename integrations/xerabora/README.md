@@ -1,81 +1,82 @@
-# xeRAbora headless client for RetroDB
+# xeRAbora — standalone Debian headless installation
 
-Standalone install and manual updater for [xeRAbora](https://github.com/hacan359/xerabora), which connects PS2 OPL-RA to RetroAchievements. RetroDB's existing services, Python environment, PostgreSQL and ROM collection are unchanged.
+Community installer, updater and multi-account manager for [xeRAbora](https://github.com/hacan359/xerabora) and its matching PS2 `OPL-RA.ELF`. Maintained in the [RetroDB](https://github.com/theretrobristolian/retrodb) repository, but **RetroDB is not required**: no PostgreSQL, Python RetroDB application, RetroNAS, database, ROM scanner or existing VM image is involved.
 
-## On Debian 13 RetroDB
+**Status:** The xeRAbora client has been exercised successfully on a Debian 13 VM connected to a real UK PAL PS2 Slim, including game identification and achievement notifications for *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Fresh-machine provisioning and the new multi-account switching features are not yet end-to-end tested. Upstream xeRAbora remains alpha software.
+
+## Fresh Debian 13 VM / server
+
+Use a Debian **x86-64** installation with systemd, internet access and a normal (non-root) Linux user able to run `sudo`. For minimal installations, an administrator must first install sudo and grant your account sudo rights (log out and back in after joining the group). For example, as root:
 
 ```bash
-cd ~/retrodb
-git pull --ff-only origin main
-bash integrations/xerabora/install.sh check
+apt-get update
+apt-get install -y sudo git ca-certificates curl python3
+usermod -aG sudo YOUR_LINUX_USERNAME
+```
+
+**Do not run the installer as root**. Re-login to the normal account, then:
+
+```bash
+git clone https://github.com/theretrobristolian/retrodb.git
+cd retrodb
+bash integrations/xerabora/install.sh prerequisites
 bash integrations/xerabora/install.sh
 ```
 
-Run as the normal `david` account, **not** `sudo bash`. Requires sudo, curl, Python 3, sha256sum and systemd. Installation prompts before making changes. On first installation it offers a one-time interactive RetroAchievements login. After login is complete, press Ctrl+C if the program stays running. Password is only provided to that child process for login and is not written to a configuration file by the installer.
+The repository is used only to distribute two shell scripts and documentation; **no other RetroDB installation step is required**. If prerequisites are missing, the script can offer to install required Debian packages through apt, using sudo; it never silently grants sudo access. If you prefer to copy only the `integrations/xerabora/` directory to another machine, both `install.sh` and `profiles.sh` must remain together. You can also download those two files manually; `git` is not required after the download.
 
-## Version checking and updates
+The manager (default with no arguments) offers installation/update, version check, Web API key setup, API test, service status/restart, network diagnostics, logs, login and numbered multi-account switching. Choose **1) Install / update**. The installer queries the xeRAbora GitHub *releases list*, including pre-releases, downloads `xerabora-linux-x86_64`, `OPL-RA.ELF` and `SHA256SUMS`, and validates both assets against the release checksums before installation. It installs to `/opt/xerabora`, configures and enables `xerabora.service`, then offers initial RetroAchievements login. Type your password only at the hidden prompt. The client stores an account **token**, not your password.
+
+Configure a **RetroAchievements Web API key** from https://retroachievements.org/settings (Keys) via menu option **2**. The key is saved as a permission-protected file. Accounts require independent keys. The manager can test API access with option **3**.
+
+## PS2 setup (manual)
+
+The downloaded matching PS2 executable is **`/opt/xerabora/OPL-RA.ELF`**. Copy it to a USB drive or other console-accessible medium, then configure your PS2 to launch it (e.g., wLaunchELF / Free McBoot). Replace this ELF when updating to a release that changes the OPL-RA build; the installer does not update the PS2 remotely.
+
+Example from a second computer:
 
 ```bash
-bash integrations/xerabora/install.sh check     # installed versus newest upstream release
-bash integrations/xerabora/install.sh update    # ask to download, verify, install and restart
-bash integrations/xerabora/install.sh doctor    # addresses, routes, UDP listener, service and logs
+scp YOUR_LINUX_USERNAME@YOUR_VM_IP:/opt/xerabora/OPL-RA.ELF .
+```
+
+If using MemCard Pro 2, power-cycle the PS2 and check the selected virtual card before copying the ELF or editing Free McBoot's menu; these details are specific to your chosen PS2 setup, **not a requirement** of xeRAbora. MMCE or RetroNAS are not prerequisites of the Linux installer.
+
+The PS2 and headless Linux machine should share a **broadcast domain / subnet** for discovery (the server listens on **UDP 18194**). Give the host a stable reachable address or DHCP reservation. Ensure any host firewall permits the traffic; this script does not open ports or modify routing/firewall policies. In OPL-RA use **Triangle → RA: test PC connection**, then **RA: check game support**. Confirm the logged-in account and an identified supported game in the server log.
+
+## Commands and maintenance
+
+```bash
+bash integrations/xerabora/install.sh                # manager
+bash integrations/xerabora/install.sh check          # upstream vs installed
+bash integrations/xerabora/install.sh update         # manual checked update
+bash integrations/xerabora/install.sh doctor         # IP, service, UDP, logs
 bash integrations/xerabora/install.sh status
 bash integrations/xerabora/install.sh logs
 bash integrations/xerabora/install.sh restart
-```
-
-The updater queries GitHub's **releases list**, not `/releases/latest`, because xeRAbora publishes *pre-releases*. It chooses the newest published non-draft release containing Linux, PS2 ELF and SHA256SUMS assets. For both files it checks the SHA256 against the matching release's manifest **before changing the installed files**. The managed version is recorded at `/opt/xerabora/VERSION`. Existing executable, ELF and VERSION are backed up with `.previous` suffix for manual rollback. The authentication data at `~/.config/xerabora` is preserved. Updates are manual, never automatic.
-
-**Important:** A new xeRAbora release may require the matching `OPL-RA.ELF` on your PS2. The script downloads it to `/opt/xerabora/OPL-RA.ELF`; you must copy it to your console boot medium yourself. Updating the VM does not update the console.
-
-## Network
-
-The VM and PS2 should share a subnet/broadcast domain. xeRAbora receives console discovery on **UDP 18194**. The doctor command checks the local listener, addresses, routes, firewall status and log, but a listening UDP port alone does not prove the PS2 can communicate. From OPL-RA use **Triangle > RA: test PC connection**, followed by **RA: check game support** for each game before playing. The installer does **not** change firewall rules.
-
-The upstream application remains experimental alpha software. These scripts have not yet been exercised on your actual Debian VM. Check the systemd journal if the service cannot start. The installer does not perform automatic rollback on failure.
-
-
-## Interactive manager (default)
-
-Run `bash integrations/xerabora/install.sh` without arguments for a menu that shows the installed and newest upstream versions, service status and whether the Web API key exists. Press Enter to install/update, or select API-key setup, API test, service status/restart, network/port diagnostics, logs, login or exit.
-
-From the CLI you can also use:
-
-```bash
 bash integrations/xerabora/install.sh api-key
 bash integrations/xerabora/install.sh test-api
-bash integrations/xerabora/install.sh menu
 ```
 
-Web API key entry is hidden in the terminal, saved to `/home/david/.config/xerabora/apikey` with file permissions 0600, and the service is restarted to load it. A pre-existing key is preserved unless replacement is confirmed. The presence check is not a validity check: `test-api` uses the upstream `--recent` command to test the key. Never paste API keys into GitHub or chat.
+No reboot of Linux is required for an installer update, account switch or service restart. Save and exit a PS2 game before restarting the xeRAbora service, then relaunch/re-pair OPL-RA. An upstream update might require copying its **matching PS2 ELF** to the console.
 
-## PS2 / MemCard Pro reminder
+## Multiple RetroAchievements profiles
 
-**Fully power-cycle/reboot the PS2 before copying the ELF** so that MemCard Pro restores the default memory-card-slot-1 image you intend to edit. In wLaunchELF, copy the USB `mass:/APPS/OPL-RA.ELF` to the chosen card location (for example `mc0:/APPS/OPL-RA.ELF`), then add that exact executable path in the Free McBoot Configurator and save the FMCB configuration. You may test the ELF directly from USB first. Check that the destination card image has enough free space and is the correct MemCard Pro virtual card before copying.
+Use **9) Manage RetroAchievements profiles** from the main installer menu (or execute `bash integrations/xerabora/profiles.sh`). Each household account has its own login token, API key, cache and logs under `~/.config/xerabora-profiles/<profile>/xerabora/`. Profile switching uses a **numbered selection** with 0 to return, requests confirmation, stops the running service, points it at the selected configuration, then starts it again. It prints a reminder to reboot/relaunch OPL-RA and select that player's memory-card image and save. **Only one account is active at a time.**
 
-## Multiple RetroAchievements accounts (PS2 shared by two players)
+On an existing installation, menu option **2) Import existing RetroDB login** copies the original `~/.config/xerabora` credentials and key without removing them. Fresh users can choose **3) Create another account profile**, then add a profile API key and activate it. You do not have to use RetroDB to use the profile manager; the import menu is specifically for legacy installations.
 
-The companion `profiles.sh` manager handles one **active profile at a time**; xeRAbora and UDP 18194 are intentionally single-client. Each profile has separate saved **login token, Web API key, game caches and logs** under `~/.config/xerabora-profiles/<profile>/xerabora/`. No RetroAchievements password is permanently saved by these scripts. The profiles are protected by per-user filesystem permissions, not encrypted at rest; protect access to your Linux account and backups. Tokens are sensitive and should never go into Git. 
+**Security:** Profiles are filesystem permission-protected, **not encrypted at rest**. Anyone with control of the Linux service account can read its saved tokens. Keep the VM and its backups private and do not commit credentials or API keys to Git.
 
-From the main installer menu choose **9) Manage RetroAchievements profiles**, or:
+Game saves are held by the PS2's actual/virtual memory cards, *not* by xeRAbora's Linux profiles; choose each player's correct save/card separately.
+
+## Troubleshooting
 
 ```bash
-bash integrations/xerabora/profiles.sh
+sudo systemctl status xerabora.service
+sudo journalctl -u xerabora.service -n 80 --no-pager
+bash integrations/xerabora/install.sh doctor
 ```
 
-Recommended first use:
+The logs live in `~/.config/xerabora/xerabora.log` for the original default account or in the active profile's `xerabora` directory. Being able to see UDP 18194 listening does not by itself prove that PS2 discovery works. Check that both devices share a broadcast domain and that no firewall is blocking traffic.
 
-1. **Import existing RetroDB login** to profile `theretrobristolian`. This **copies**, never removes, the existing known-good login and Web API key.
-2. **Create another account profile** for your partner. A separate RetroAchievements login and API key is required; the login process temporarily uses UDP 18196 so the running main service can continue serving 18194.
-3. **Add / replace profile API key** for the second profile.
-4. **Switch active profile** using a numbered list (1, 2, 3, etc.; 0 returns to the previous menu). The manager asks for confirmation, stops the existing xeRAbora service, writes a systemd drop-in specifying the chosen `XDG_CONFIG_HOME`, then starts the service with that profile. If the chosen profile is already active, it does nothing.
-5. Run `sudo journalctl -u xerabora.service -n 25 --no-pager` to confirm the active account.
-
-**Important:** This switches RetroAchievements identity only. The **MemCard Pro 2 virtual memory-card image/game saves must be selected separately on the PS2** for the intended player. The script does not control your MMCE device or manage/synchronise game saves. Always close the game and switch the virtual card/profile together to avoid mixing saves and achievements.
-
-**Service updates:** `install.sh update` continues to update the shared xeRAbora executable and matching PS2 ELF; account profiles survive upgrades because they reside in each user's home directory. Verify the username in the service logs after every version update.
-
-**Security limitation:** XeRAbora stores an authentication token locally; these profiles isolate it from the other profile at the filesystem-path level, but both are accessible to the Linux user `david` and anyone with that account's permissions. This is convenient household account switching, not isolation between untrusted Linux users.
-
-
-After a successful account switch, the manager confirms the service was restarted and reminds you to **exit your current PS2 game and fully reboot/relaunch OPL-RA to reconnect**, then check the correct MemCard Pro 2 virtual card/game save is selected. Do not switch profiles mid-game; save and exit first.
+The updater retains prior executable, OPL ELF and version files with `.previous` suffix for **manual** rollback. It does not implement automatic rollback. Releases are selected dynamically from upstream; nothing here guarantees compatibility with future xeRAbora releases.
