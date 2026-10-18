@@ -68,13 +68,41 @@ set_key() {
   [[ "$(cat "$CURRENT" 2>/dev/null || true)" == "$name" ]] && sudo systemctl restart "$SERVICE" || true
 }
 activate() {
-  local name cfg temp
-  list_profiles
-  read -rp "Activate profile: " name
-  valid "$name" || { echo "Invalid profile name" >&2; return 1; }
+  local choice name cfg temp active previous_cfg
+  local -a names=()
+  local d
+  active="$(cat "$CURRENT" 2>/dev/null || true)"
+  echo
+  echo "=== Choose RetroAchievements profile ==="
+  for d in "$ROOT"/*; do
+    [[ -d "$d" && -s "$d/xerabora/credentials" ]] || continue
+    names+=("${d##*/}")
+    if [[ "${d##*/}" == "$active" ]]; then
+      printf ' %d) %s (active)\n' "${#names[@]}" "${d##*/}"
+    else
+      printf ' %d) %s\n' "${#names[@]}" "${d##*/}"
+    fi
+  done
+  if [[ "${#names[@]}" -eq 0 ]]; then
+    echo "No authenticated profiles. Import or create one first."
+    return 0
+  fi
+  echo " 0) Return to account menu"
+  read -rp "Select profile number: " choice || return 0
+  [[ "$choice" != 0 ]] || return 0
+  [[ "$choice" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid selection."; return 0; }
+  (( choice <= ${#names[@]} )) || { echo "Invalid selection."; return 0; }
+  name="${names[choice-1]}"
   cfg="$(profile_dir "$name")"
-  [[ -s "$cfg/xerabora/credentials" ]] || { echo "Profile has no login token" >&2; return 1; }
-  # Stop the only client; a new process must load the new profile.
+  if [[ "$active" == "$name" ]]; then
+    echo "$name is already active; service unchanged."
+    return 0
+  fi
+  echo "Switching from ${active:-original-default} to $name."
+  echo "Finish and save your PS2 game before switching accounts."
+  local answer
+  read -rp "Continue? [y/N] " answer
+  [[ "$answer" =~ ^[Yy]$ ]] || { echo "Cancelled."; return 0; }
   sudo systemctl stop "$SERVICE"
   temp="$(mktemp)"
   cat > "$temp" <<EOF
@@ -85,15 +113,22 @@ EOF
   sudo install -m 644 "$temp" /etc/systemd/system/xerabora.service.d/profile.conf
   rm -f "$temp"
   sudo systemctl daemon-reload
-  sudo systemctl start "$SERVICE"
-  if systemctl is-active --quiet "$SERVICE"; then
+  if sudo systemctl start "$SERVICE" && systemctl is-active --quiet "$SERVICE"; then
     printf '%s\n' "$name" > "$CURRENT"
-    echo "Active account profile: $name"
+    echo "Active RetroAchievements profile: $name"
+    echo "xeRAbora service restarted successfully."
+    echo
+    echo "PS2 ACTION REQUIRED:"
+    echo "Exit the current game, then reboot the PS2 / relaunch OPL-RA"
+    echo "to establish a fresh session with the newly selected account."
+    echo "Run 'RA: test PC connection' and 'RA: check game support' if needed."
+    echo "Also select the correct MemCard Pro 2 save/card image for this player."
   else
-    echo "xeRAbora failed to start. Check journalctl -u xerabora -n 50" >&2
+    echo "xeRAbora failed to start. Check journalctl -u xerabora.service -n 50" >&2
     return 1
   fi
 }
+
 import_existing() {
   local name cfg
   [[ -s "$ORIGINAL/credentials" ]] || { echo "No existing default credential token found" >&2; return 1; }
