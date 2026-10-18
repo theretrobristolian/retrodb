@@ -23,11 +23,11 @@ bash integrations/xerabora/install.sh prerequisites
 bash integrations/xerabora/install.sh
 ```
 
-The repository is used only to distribute two shell scripts and documentation; **no other RetroDB installation step is required**. If prerequisites are missing, the script can offer to install required Debian packages through apt, using sudo; it never silently grants sudo access. If you prefer to copy only the `integrations/xerabora/` directory to another machine, both `install.sh` and `profiles.sh` must remain together. You can also download those two files manually; `git` is not required after the download.
+The repository is used only to distribute three shell scripts and documentation; **no other RetroDB installation step is required**. If prerequisites are missing, the script can offer to install required Debian packages through apt, using sudo; it never silently grants sudo access. If you prefer to copy only the `integrations/xerabora/` directory to another machine, `install.sh`, `profiles.sh` and `ui.sh` must remain together. You can also download those three files manually; `git` is not required after the download.
 
-The manager (default with no arguments) offers installation/update, version check, Web API key setup, API test, service status/restart, network diagnostics, logs, login and numbered multi-account switching. Choose **1) Install / update**. The installer queries the xeRAbora GitHub *releases list*, including pre-releases, downloads `xerabora-linux-x86_64`, `OPL-RA.ELF` and `SHA256SUMS`, and validates both assets against the release checksums before installation. It installs to `/opt/xerabora`, configures and enables `xerabora.service`, then offers initial RetroAchievements login. Type your password only at the hidden prompt. The client stores an account **token**, not your password.
+The manager clears the terminal and displays a consistent ASCII xeRAbora banner, upstream project link, xeRAbora version, service state and active player, with the installer credit and Git update command in the footer. Both the installer and player-profile menus use the same header and footer. It offers installation/update, version checking, Web API key setup, API testing, service management, network diagnostics, live logs, login, numbered profile switching and uninstall. Choose **1) Install or update xeRAbora**. The installer queries the xeRAbora GitHub *releases list*, including pre-releases, downloads `xerabora-linux-x86_64`, `OPL-RA.ELF` and `SHA256SUMS`, and validates both assets against the release checksums before installation. It installs to `/opt/xerabora`, configures and enables `xerabora.service`, then offers initial RetroAchievements login. Type your password only at the hidden prompt. The client stores an account **token**, not your password.
 
-Configure a **RetroAchievements Web API key** from https://retroachievements.org/settings (Keys) via menu option **2**. The key is saved as a permission-protected file. Accounts require independent keys. The manager can test API access with option **3**.
+Configure a **RetroAchievements Web API key** from https://retroachievements.org/settings (Keys) via main-menu option **2**. The key is saved as a permission-protected file. Accounts require independent keys. The main manager can test API access with option **3**.
 
 ## PS2 setup (manual)
 
@@ -61,9 +61,9 @@ No reboot of Linux is required for an installer update, account switch or servic
 
 ## Multiple RetroAchievements profiles
 
-Use **9) Manage RetroAchievements profiles** from the main installer menu (or execute `bash integrations/xerabora/profiles.sh`). Each household account has its own login token, API key, cache and logs under `~/.config/xerabora-profiles/<profile>/xerabora/`. Profile switching uses a **numbered selection** with 0 to return, requests confirmation, stops the running service, points it at the selected configuration, then starts it again. It prints a reminder to reboot/relaunch OPL-RA and select that player's memory-card image and save. **Only one account is active at a time.**
+Use **10) Manage player profiles** from the main installer menu (or execute `bash integrations/xerabora/profiles.sh`). Each household account has its own login token, API key, cache and logs under `~/.config/xerabora-profiles/<profile>/xerabora/`. Profile switching uses a **numbered selection** with 0 to return, requests confirmation, stops the running service, points it at the selected configuration, then starts it again. It prints a reminder to reboot/relaunch OPL-RA and select that player's memory-card image and save. **Only one account is active at a time.**
 
-On an existing installation, menu option **2) Import existing RetroDB login** copies the original `~/.config/xerabora` credentials and key without removing them. Fresh users can choose **3) Create another account profile**, then add a profile API key and activate it. You do not have to use RetroDB to use the profile manager; the import menu is specifically for legacy installations.
+On an existing installation, player-menu option **2) Import an existing xeRAbora login** copies the original `~/.config/xerabora` credentials and key without removing them. Fresh users can choose **3) Add a new player**, then add a profile API key and activate it. You do not have to use RetroDB to use the profile manager; the import menu is specifically for legacy installations.
 
 **Security:** Profiles are filesystem permission-protected, **not encrypted at rest**. Anyone with control of the Linux service account can read its saved tokens. Keep the VM and its backups private and do not commit credentials or API keys to Git.
 
@@ -89,5 +89,31 @@ bash integrations/xerabora/install.sh doctor
 ```
 
 The logs live in `~/.config/xerabora/xerabora.log` for the original default account or in the active profile's `xerabora` directory. Being able to see UDP 18194 listening does not by itself prove that PS2 discovery works. Check that both devices share a broadcast domain and that no firewall is blocking traffic.
+
+## Terminal menu and live log
+
+Run `bash integrations/xerabora/install.sh` to open the main menu or `bash integrations/xerabora/profiles.sh` for player management. Both show the same ASCII banner, project link, service state, installed version, active profile and author/footer. The **main menu option 8** and **player menu option 7** follow the active player's log in real time; press **Ctrl+C** to stop viewing and return to the menu.
+
+## Uninstalling
+
+Choose **11) Uninstall xeRAbora and delete all local data** from the main menu, or run:
+
+```bash
+bash integrations/xerabora/install.sh uninstall
+```
+
+The command previews what will be deleted and requires typing the exact phrase `UNINSTALL XERABORA`. It then stops/disables the xeRAbora service, deletes its managed service unit and profile override, removes `/opt/xerabora`, deletes `~/.config/xerabora` and **all** profiles, credentials, keys, caches and logs under `~/.config/xerabora-profiles`. This deletion is irreversible. It does **not** remove Debian dependencies, change firewall rules, delete your RetroDB checkout, remove the ELF copied to the PS2 or clear the shared systemd journal (which would also affect other services). It refuses to remove a service unit that does not match this installer's xeRAbora executable path.
+
+## Updating the community installer
+
+If you cloned the full RetroDB repository:
+
+```bash
+cd ~/retrodb
+git pull --ff-only origin main
+bash integrations/xerabora/install.sh
+```
+
+If you copied the scripts to another directory, update those files using your original download method; the menu footer's `~/retrodb` command assumes a clone there.
 
 The updater retains prior executable, OPL ELF and version files with `.previous` suffix for **manual** rollback. It does not implement automatic rollback. Releases are selected dynamically from upstream; nothing here guarantees compatibility with future xeRAbora releases.
