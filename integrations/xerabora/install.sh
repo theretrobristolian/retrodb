@@ -87,7 +87,7 @@ install_client() {
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "No changes made."; return; }
   base="https://github.com/hacan359/xerabora/releases/download/$version"
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  trap 'rm -rf "${tmp:-}"' EXIT
   for file in SHA256SUMS xerabora-linux-x86_64 OPL-RA.ELF; do
     curl -fL --retry 3 --connect-timeout 15 -o "$tmp/$file" "$base/$file"
   done
