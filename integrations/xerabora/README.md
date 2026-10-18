@@ -69,6 +69,17 @@ On an existing installation, menu option **2) Import existing RetroDB login** co
 
 Game saves are held by the PS2's actual/virtual memory cards, *not* by xeRAbora's Linux profiles; choose each player's correct save/card separately.
 
+## Follow the active player's log live
+
+When using multiple RetroAchievements profiles, logs move with the active account. To follow whichever player is currently selected (for example, `PoodingPower`), run:
+
+```bash
+PROFILE=$(cat ~/.config/xerabora-profiles/active)
+tail -f ~/.config/xerabora-profiles/"$PROFILE"/xerabora/xerabora.log
+```
+
+This shows game identification, console connectivity, achievements, leaderboard events and snapshot statistics in real time. Press **Ctrl+C** to stop watching. If you switch players, rerun these commands so `PROFILE` reflects the new active account. For installations that have not yet activated a named profile, the original log is at `~/.config/xerabora/xerabora.log`.
+
 ## Troubleshooting
 
 ```bash
