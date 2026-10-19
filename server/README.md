@@ -128,7 +128,7 @@ Its header shows RetroDB/PostgreSQL status, the RetroNAS mount, RAHasher, report
 
 The simplified menu focuses on three workflows:
 
-- **1 — FULL AUDIT:** Seven clearly labelled stages: verify the RetroNAS mount and RAHasher, synchronise the RA catalogue (cache-aware), scan games, hash and match discs, generate a patch plan, download/reuse official patches and verify source checksums, then export the Excel workbook and raw CSV. The workflow stops on failed stages and **never modifies ROMs on RetroNAS**. The patch download stage may access the internet to fetch official patch packages.
+- **1 — FULL AUDIT:** Eight labelled stages: check the read-only RetroNAS mount and RAHasher; sync the RA catalogue; fetch/cache GameDB's PS2 serial/title catalogue; inventory PS1/PS2; hash and match against RA; prepare patch manifest; download official patches and verify candidate sources; export Excel and raw CSV. The workflow stops on an error and never modifies ROMs on RetroNAS. Downloaded GameDB data is cached for 180 days. The GameDB lookup uses the **filename serial**; disc internal ID inspection is future work.
 - **2 — Download official patch packages:** Create/update the patch manifest and download/reuse official patch packages locally. No ROM patching occurs.
 - **3 — Apply verified patches locally:** Requires typing `APPLY`, refreshes source checksum verification, and only applies patches to eligible clean images. Patched outputs are placed in `/var/lib/retrodb/patches/verified/` and validated using RAHasher. Review those outputs and copy them back to RetroNAS yourself; the original share remains read-only.
 - **4 — Export latest Excel:** Rebuild Excel and copy raw CSV from the existing audit without scanning or downloading patches.
@@ -140,6 +140,32 @@ The manager exports `~/retrodb-exports/RetroDB-Compatibility.xlsx` alongside the
 
 Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`, `bash server/manager.sh patches`, `bash server/manager.sh patch-apply`.
 
+
+### GameDB identification (PS2 initial integration)
+
+The `backend/retrodb/providers/gamedb.py` provider fetches the official
+[GameDB-PS2 titles release](https://github.com/niemasd/GameDB-PS2/releases/latest/download/PS2.titles.json)
+and caches serial/title pairs in `/var/cache/retrodb/providers/gamedb/`.
+A shared provider also declares a PS1/PSX source, ready for future rollout;
+the default full audit currently **only synchronises PS2**.
+
+When GameDB identifies a filename disc serial, the raw compatibility CSV records
+`gamedb_title` and `gamedb_identified`. A GameDB title is compared against RA
+titles conservatively: only exact canonical title identity promotes a supported
+RA game recommendation. Otherwise the Excel report uses that title to improve
+identification, but retains an **UNKNOWN** RA status. Its summary includes
+`GameDB identified unknown` so recognised discs without a confirmed RA match
+are distinguishable from completely unidentified ones.
+
+GameDB metadata is **not proof of disc hash compatibility or the availability
+of an achievement set**. Only an RAHasher match is marked RA-compatible. In
+particular, a GameDB title lookup by filename depends on the filename's serial
+being accurate; validating the ISO's internal disc serial is future work.
+
+Credit: [GameDB](https://github.com/niemasd/GameDB), especially
+[GameDB-PS2](https://github.com/niemasd/GameDB-PS2), and its source projects:
+GameFAQs, MiSTer Addons, PlayStation Datacenter, Redump and VGCollect.
+Review upstream licence and attribution terms before redistributing catalogue data.
 
 ### Disc serial identification (conservative first pass)
 
