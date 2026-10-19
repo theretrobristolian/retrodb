@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from retrodb.models import LibraryItem, Platform
+from retrodb.providers.gamedb import load as load_gamedb
 from retrodb.providers.retroachievements import (
     RetroAchievementsClient,
     RetroAchievementsError,
@@ -403,12 +404,19 @@ def match_collection(
     summaries: list[MatchSummary] = []
     detail_cache: dict[int, list[dict[str, object]]] = {}
     serial_aliases = load_serial_aliases()
+    gamedb_cache = Path('/var/cache/retrodb/providers/gamedb')
 
     for slug, extensions in HASH_TARGET_EXTENSIONS.items():
         platform = session.scalar(select(Platform).where(Platform.slug == slug))
         if platform is None:
             raise MatchError(f"Platform is missing from the database: {slug}")
         console_id, catalogue, games = load_catalogue(cache_dir / f"{slug}.json")
+        try:
+            gamedb_titles = load_gamedb(gamedb_cache, slug)
+        except (OSError, ValueError) as exc:
+            print(f'[WARN] GameDB {slug} cache unavailable: {exc}')
+            gamedb_titles = {}
+        print(f'[+] GameDB {slug}: {len(gamedb_titles)} cached serial titles.')
         items = list(session.scalars(select(LibraryItem).where(
             LibraryItem.platform_id == platform.id,
             LibraryItem.extension.in_(extensions),
@@ -447,6 +455,7 @@ def match_collection(
             counts[item.ra_match_status or "failed"] += 1
 
             serial, local_region = identify_local_release(item.relative_path)
+            gamedb_title = gamedb_titles.get(serial, '')
             recommendation = None
             confidence = ""
             score = 0.0
@@ -456,7 +465,12 @@ def match_collection(
                     recommendation, confidence, score = suggest_by_serial(
                         serial, games, serial_aliases
                     )
-                if recommendation is None and confidence != "serial-alias-no-unique-ra-title":
+                if recommendation is None and gamedb_title:
+                    game, method, value = suggest_game(gamedb_title, games)
+                    # Use only exact identity, not a fuzzy guess from provider metadata.
+                    if game and method == 'exact-title':
+                        recommendation, confidence, score = game, 'gamedb-exact-title', value
+                if recommendation is None and confidence not in ('serial-alias-no-unique-ra-title',):
                     recommendation, confidence, score = suggest_game(item.relative_path, games)
                 if confidence == "ambiguous":
                     alternatives = alternative_candidates(item.relative_path, games)
@@ -507,6 +521,8 @@ def match_collection(
                 "path": item.relative_path,
                 "local_serial": serial,
                 "local_friendly_title": friendly_local_title(item.relative_path),
+                "gamedb_title": gamedb_title,
+                "gamedb_identified": "YES" if gamedb_title else "NO",
                 "local_region": local_region,
                 "local_ra_hash": item.ra_hash or "",
                 "ra_game_id": item.ra_game_id or "",
@@ -542,7 +558,7 @@ def match_collection(
     temporary = report_path.with_suffix(".tmp")
     fields = [
         "platform", "status", "path", "local_serial", "local_region",
-        "local_friendly_title",
+        "local_friendly_title", "gamedb_title", "gamedb_identified",
         "local_ra_hash", "ra_game_id", "ra_game_title",
         "recommendation_confidence", "recommendation_score",
         "recommended_ra_game_id", "recommended_ra_title",
