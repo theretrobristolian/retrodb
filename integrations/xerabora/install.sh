@@ -160,7 +160,8 @@ Group=$(id -gn "$USER_NAME")
 WorkingDirectory=/opt/xerabora
 Environment=HOME=$HOME_PATH
 ExecStart=/opt/xerabora/xerabora-linux-x86_64 --no-sound --ui-port 18280
-Restart=on-failure
+ExecStartPre=/bin/sleep 20
+Restart=always
 RestartSec=10
 
 [Install]
@@ -169,17 +170,25 @@ EOF
   sudo install -m 0644 "$unit" /etc/systemd/system/xerabora.service
   rm -f "$unit"
   sudo systemctl daemon-reload
-  sudo systemctl enable xerabora.service
+  local mode
+  mode="$(service_startup_mode)"
+  if [[ "$mode" == auto ]]; then sudo systemctl enable xerabora.service; fi
   if [[ "$old" == unknown && ! -s "$HOME_PATH/.config/xerabora/credentials" ]]; then
     read -rp "Authenticate now? [Y/n] " confirm
     if [[ ! "$confirm" =~ ^[Nn]$ ]]; then login; else echo "Run login and then start when ready"; return; fi
   fi
-  sudo systemctl restart xerabora.service
-  if systemctl is-active --quiet xerabora.service; then
-    echo "Service active: $version"
+  if [[ "$mode" == disabled ]]; then
+    echo "Service installed but remains disabled/masked as requested."
+  elif [[ "$mode" == manual ]] && ! systemctl is-active --quiet xerabora.service; then
+    echo "Service installed; manual mode preserved (not started)."
   else
-    echo "Service not active. Check logs; previous binary backed up as .previous" >&2
-    return 1
+    sudo systemctl restart xerabora.service
+    if systemctl is-active --quiet xerabora.service; then
+      echo "Service active: $version"
+    else
+      echo "Service not active. Check logs; previous binary backed up as .previous" >&2
+      return 1
+    fi
   fi
   echo "Matching PS2 ELF: /opt/xerabora/OPL-RA.ELF (copy to your PS2 when upgrading)"
   prompt_api_key
@@ -233,6 +242,66 @@ test_api() {
     "$DIR/$BIN" --recent
   fi
 }
+
+service_startup_mode() {
+  local state
+  state="$(systemctl is-enabled xerabora.service 2>/dev/null || true)"
+  case "$state" in
+    enabled|enabled-runtime|linked) echo auto ;;
+    disabled|disabled-runtime|static) echo manual ;;
+    masked|masked-runtime) echo disabled ;;
+    *) echo auto ;;
+  esac
+}
+configure_service_startup() {
+  local choice mode dir="/etc/systemd/system/xerabora.service.d" current
+  [[ -f /etc/systemd/system/xerabora.service ]] || { echo "Install xeRAbora first."; return 1; }
+  current="$(service_startup_mode)"
+  xr_draw_header "Service startup and recovery"
+  printf ' Current startup mode: %s\n' "$current"
+  echo "  1) Automatic: start on boot, restart if unexpectedly stopped"
+  echo "  2) Manual: start only when requested, no automatic recovery"
+  echo "  3) Disabled: prevent startup until re-enabled"
+  echo "  0) Return to main menu"
+  xr_draw_footer
+  read -rp "Choose an option: " choice || return 0
+  case "$choice" in
+    1) mode=auto ;;
+    2) mode=manual ;;
+    3) mode=disabled ;;
+    0) return 0 ;;
+    *) echo "Invalid selection."; return 1 ;;
+  esac
+  sudo -v || return 1
+  sudo install -d -m 0755 "$dir"
+  if [[ "$mode" == auto ]]; then
+    printf '[Service]\nRestart=always\nRestartSec=10\n' | sudo tee "$dir/restart.conf" >/dev/null
+    sudo systemctl daemon-reload
+    sudo systemctl unmask xerabora.service
+    sudo systemctl enable xerabora.service
+    sudo systemctl start xerabora.service
+  else
+    printf '[Service]\nRestart=no\n' | sudo tee "$dir/restart.conf" >/dev/null
+    sudo systemctl daemon-reload
+    sudo systemctl disable xerabora.service
+    if [[ "$mode" == disabled ]]; then
+      sudo systemctl stop xerabora.service
+      sudo systemctl mask xerabora.service
+    else
+      sudo systemctl unmask xerabora.service
+    fi
+  fi
+  echo "Startup mode: $mode"
+  systemctl is-active xerabora.service 2>/dev/null || true
+  if [[ "$mode" == auto ]]; then
+    echo "Automatic recovery enabled. Intentional 'systemctl stop' will not trigger a restart."
+  elif [[ "$mode" == manual ]]; then
+    echo "Manual mode selected; an already-running service is left running."
+  else
+    echo "Service stopped and masked; select Automatic or Manual to enable it again."
+  fi
+}
+
 web_ui_settings() {
   local choice cfg unit=/etc/systemd/system/xerabora.service tmp
   cfg="$(active_config_dir)"
@@ -304,7 +373,7 @@ uninstall_client() {
     sudo systemctl disable --now xerabora.service || return 1
     sudo rm -f -- "$unit"
   fi
-  sudo rm -f -- /etc/systemd/system/xerabora.service.d/profile.conf
+  sudo rm -f -- /etc/systemd/system/xerabora.service.d/profile.conf /etc/systemd/system/xerabora.service.d/restart.conf
   if [[ -d /etc/systemd/system/xerabora.service.d ]]; then
     sudo rmdir /etc/systemd/system/xerabora.service.d 2>/dev/null || true
   fi
@@ -331,6 +400,7 @@ menu() {
     echo " 10) Manage player profiles"
     echo " 11) Uninstall xeRAbora and delete all local data"
     echo " 12) Configure Web UI / LAN access"
+    echo " 13) Service startup / automatic recovery"
     echo "  0) Exit"
     xr_draw_footer
     read -rp "Choose an option: " choice || break
@@ -347,6 +417,7 @@ menu() {
       10) bash "$SCRIPT_DIR/profiles.sh" ;;
       11) uninstall_client; xr_pause ;;
       12) web_ui_settings; xr_pause ;;
+      13) configure_service_startup; xr_pause ;;
       0|q|Q) break ;;
       *) echo "Invalid selection."; xr_pause ;;
     esac
@@ -367,6 +438,7 @@ case "${1:-menu}" in
   follow-log) xr_follow_log ;;
   uninstall) uninstall_client ;;
   web-ui) web_ui_settings ;;
+  startup) configure_service_startup ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
-  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|start|stop|restart]"; exit 2 ;;
+  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|web-ui|startup|start|stop|restart]"; exit 2 ;;
 esac
