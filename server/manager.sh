@@ -7,6 +7,14 @@ EXPORT="$HOME/retrodb-exports/retroachievements-compatibility.csv"
 [[ $EUID -ne 0 ]] || { echo 'Run as normal user, not root.' >&2; exit 1; }
 state() { systemctl is-active "$1" 2>/dev/null || true; }
 web() { curl -fsS -m 2 -o /dev/null "$1" 2>/dev/null && echo responding || echo unavailable; }
+protected_status() {
+  local flag="$1" path="$2"
+  if sudo -n test "$flag" "$path" 2>/dev/null; then
+    echo present
+  else
+    echo "protected / unavailable"
+  fi
+}
 header() {
   [[ ! -t 1 ]] || printf '\033[2J\033[H'
   cat <<'ART'
@@ -21,7 +29,7 @@ ART
   echo '----------------------------------------------------------------'
   printf ' RetroDB: %-12s Local API: http://127.0.0.1:8000/health (%s)\n' "$(state retrodb.service)" "$(web http://127.0.0.1:8000/health)"
   printf ' PostgreSQL: %-9s RetroNAS: %s\n' "$(state postgresql.service)" "$(mountpoint -q "$MOUNT" && echo mounted || echo unavailable)"
-  printf ' RAHasher: %-12s CSV report: %s\n' "$([[ -x /opt/retrodb-tools/RAHasher ]] && echo installed || echo missing)" "$([[ -f "$REPORT" ]] && echo present || echo missing)"
+  printf ' RAHasher: %-12s CSV report: %s\n' "$(protected_status -x /opt/retrodb-tools/RAHasher)" "$(protected_status -f "$REPORT")"
   printf ' xeRAbora: %-12s Web UI: http://127.0.0.1:18280/ (%s)\n' "$(state xerabora.service)" "$(web http://127.0.0.1:18280/)"
   echo '----------------------------------------------------------------'
 }
@@ -33,7 +41,10 @@ mount_ready() {
   sudo bash "$HERE/retronas.sh" mount && mountpoint -q "$MOUNT"
 }
 export_csv() {
-  [[ -f "$REPORT" ]] || { echo 'Report missing; run RA match first.'; return 1; }
+  if ! sudo test -f "$REPORT"; then
+    echo "Report not found. Run an RA match first." >&2
+    return 1
+  fi
   install -d -m 0700 "$HOME/retrodb-exports"
   sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$REPORT" "$EXPORT"
   echo "[OK] CSV copied to $EXPORT"
