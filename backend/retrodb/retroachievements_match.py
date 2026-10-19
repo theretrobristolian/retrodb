@@ -266,6 +266,38 @@ def suggest_game(local_path: str, games: tuple[CatalogueGame, ...]) -> tuple[Cat
     return None, "ambiguous" if best_score >= 0.72 else "", best_score
 
 
+def game_db_ra_candidates(
+    title: str, games: tuple[CatalogueGame, ...]
+) -> tuple[CatalogueGame | None, str, float, str]:
+    """Crosswalk GameDB to RA; suggest only a clear, high-scoring single identity.
+
+    Rejected/uncertain matches are review suggestions, never hash matches.
+    """
+    if not title:
+        return None, "", 0.0, ""
+    ranked = rank_game_candidates(title, games)
+    ranked = [(score, game) for score, game in ranked if score >= 0.72]
+    if not ranked:
+        return None, "gamedb-no-ra-candidate", 0.0, ""
+    best_score, best = ranked[0]
+    second_score = ranked[1][0] if len(ranked) > 1 else 0.0
+    review = " | ".join(
+        f"{game.title} [RA {game.game_id}; {score:.3f}]"
+        for score, game in ranked[:3]
+    )
+    exact = [game for score, game in ranked
+             if comparable_title(game.title) == comparable_title(title)]
+    if len(exact) == 1:
+        return exact[0], "gamedb-exact-title", 1.0, ""
+    if len(exact) > 1:
+        return None, "gamedb-ambiguous", best_score, review
+    # Strict fuzzy threshold, clear margin, and identical sequel/version markers.
+    # A fuzzy recommendation still needs an RAHasher-compatible replacement ISO.
+    if best_score >= 0.94 and best_score - second_score >= 0.10:
+        return best, "gamedb-high-confidence-title", best_score, ""
+    return None, "gamedb-review", best_score, review
+
+
 def alternative_candidates(
     local_path: str, games: tuple[CatalogueGame, ...], limit: int = 3
 ) -> str:
@@ -465,18 +497,34 @@ def match_collection(
                     recommendation, confidence, score = suggest_by_serial(
                         serial, games, serial_aliases
                     )
+                gamedb_review = ""
                 if recommendation is None and gamedb_title:
-                    exact = [
-                        game for game in games
-                        if comparable_title(game.title) == comparable_title(gamedb_title)
-                    ]
-                    # GameDB identity is not a compatibility claim. Require one RA title.
-                    if len(exact) == 1:
-                        recommendation, confidence, score = exact[0], 'gamedb-exact-title', 1.0
+                    game, method, value, gamedb_review = game_db_ra_candidates(
+                        gamedb_title, games
+                    )
+                    if game:
+                        recommendation, confidence, score = game, method, value
+                    else:
+                        confidence = method
                 if recommendation is None and confidence not in ('serial-alias-no-unique-ra-title',):
-                    recommendation, confidence, score = suggest_game(item.relative_path, games)
-                if confidence == "ambiguous":
-                    alternatives = alternative_candidates(item.relative_path, games)
+                    filename_game, filename_method, filename_score = suggest_game(
+                        item.relative_path, games
+                    )
+                    # Do not silently override a different GameDB identification.
+                    if filename_game and gamedb_title and comparable_title(
+                        filename_game.title
+                    ) != comparable_title(gamedb_title):
+                        filename_game = None
+                    if filename_game:
+                        recommendation, confidence, score = (
+                            filename_game, filename_method, filename_score
+                        )
+                    elif not gamedb_title:
+                        confidence = filename_method
+                if recommendation is None:
+                    alternatives = gamedb_review or alternative_candidates(
+                        item.relative_path, games
+                    )
                 if recommendation:
                     counts["recommended"] += 1
 
