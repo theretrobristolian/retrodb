@@ -252,3 +252,24 @@ The sync requests supported hashes and caches the response for 180 days. Use `sy
 The bootstrap creates a non-login service user, protects configuration and data paths, and keeps PostgreSQL on loopback. It deliberately does not configure a firewall, mount collection shares, publish a port or place the application on the Internet.
 
 Future work will add database creation, versioned application deployment, systemd units, migrations, health checks, backup/restore verification, reverse-proxy configuration and rollback handling.
+
+### Effective collection compatibility (keep duplicate releases)
+
+Excel now distinguishes **physical disc images** from **effective disc images**
+used for its collection-wide RA percentage. If two PS2 images resolve to the
+same nonempty RetroAchievements game ID and at least one has a verified
+RAHasher match, the incompatible copy is labelled
+`EXCLUDE — compatible copy present` and discounted from the effective
+denominator. Both files and both detailed rows remain in place; RetroNAS is
+never altered. The `Collection decision` column makes this transparent.
+
+**Important:** this does *not* blindly deduplicate by RA game ID: multiple
+verified discs for one game (e.g. disc 1 and disc 2) remain counted. Games
+without a verified copy remain counted even if they share an RA ID; rows
+without a reliable RA ID are not suppressed. These are **image-level**
+effective counts, not yet one-game-per-RA-ID counts for verified multi-disc
+sets. A separate unique-game metric can be added later.
+
+Use menu option **4 — Export latest Excel workbook** to apply this
+report-only change to the latest raw CSV without rehashing the collection.
+
