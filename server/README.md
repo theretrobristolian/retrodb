@@ -150,11 +150,14 @@ A shared provider also declares a PS1/PSX source, ready for future rollout;
 the default full audit currently **only synchronises PS2**.
 
 When GameDB identifies a filename disc serial, the raw compatibility CSV records
-`gamedb_title` and `gamedb_identified`. A GameDB title is compared against RA
-titles conservatively: only exact canonical title identity promotes a supported
-RA game recommendation. Otherwise the Excel report uses that title to improve
+`gamedb_title` and `gamedb_identified`. A GameDB title is compared against RA titles conservatively. Unique exact
+canonical titles, or exceptionally high similarity (at least 0.94 with a
+0.10 lead over the next candidate and matching sequel/edition safeguards),
+can produce an **alternative-ISO recommendation**. Lower-scoring possible RA
+matches are retained strictly as review candidates, never auto-accepted.
+The original disc RA hash always determines play-ready compatibility. Otherwise the Excel report uses that title to improve
 identification, but retains an **UNKNOWN** RA status. Its summary includes
-`GameDB identified unknown` so recognised discs without a confirmed RA match
+`GameDB identified unknown` and `RA candidates to review` so recognised discs without a confirmed RA match
 are distinguishable from completely unidentified ones.
 
 GameDB metadata is **not proof of disc hash compatibility or the availability
