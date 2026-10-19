@@ -73,26 +73,75 @@ export_csv() {
   printf '   scp "%s" "%s"\n' "$remote" '$env:USERPROFILE\Downloads\retroachievements-compatibility.csv'
   echo 'Excel includes Summary, PlayStation 1 and PlayStation 2 tabs; the CSV remains available for technical diagnosis.'
 }
-audit() {
-  mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.'; return 1; }
-  sudo bash "$HERE/retronas.sh" scan || return 1
-  sudo bash "$HERE/retronas.sh" match || return 1
-  export_csv
+stage() {
+  printf '\n================================================================\n'
+  printf ' [STAGE %s] %s\n' "$1" "$2"
+  printf '================================================================\n'
 }
-run() { if "$@"; then echo '[OK] Completed.'; else echo '[ERROR] Command failed.' >&2; fi; }
+step() {
+  local number="$1" label="$2"; shift 2
+  stage "$number" "$label"
+  if "$@"; then
+    printf '[OK] %s\n' "$label"
+  else
+    printf '[FAILED] %s — stopping this workflow.\n' "$label" >&2
+    return 1
+  fi
+}
+audit() {
+  stage "1/7" "Prerequisites and read-only RetroNAS connection"
+  mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.' >&2; return 1; }
+  sudo test -x /opt/retrodb-tools/RAHasher || { echo '[ERROR] RAHasher unavailable.' >&2; return 1; }
+  printf '[OK] RetroNAS mounted; RAHasher available.\n'
+  step "2/7" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
+  step "3/7" "Inventory PS1 / PS2 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
+  step "4/7" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
+  step "5/7" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
+  step "6/7" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
+  step "7/7" "Export formatted Excel workbook and raw CSV" export_csv || return 1
+  printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
+  echo 'NOTE: No original RetroNAS game images were changed.'
+}
+patch_audit() {
+  sudo bash "$HERE/retronas.sh" patch-download || return 1
+  sudo bash "$HERE/retronas.sh" patch-prepare
+}
+patch_download() {
+  mount_ready || return 1
+  step "1/2" "Generate official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
+  step "2/2" "Download / reuse safe patch packages" sudo bash "$HERE/retronas.sh" patch-download
+  printf '\nPatches are stored locally under /var/lib/retrodb/patches/downloads.\n'
+  echo 'No ISO has been patched and RetroNAS has not been modified.'
+}
+patch_apply() {
+  local answer
+  mount_ready || return 1
+  cat <<'INFO'
+This action applies patches ONLY to locally verified clean source images.
+It writes verified outputs to:
+  /var/lib/retrodb/patches/verified/
+
+The original RetroNAS collection remains read-only.
+You must review the patched outputs and manually transfer selected files
+to RetroNAS yourself, replacing nothing automatically.
+INFO
+  read -rp 'Type APPLY to proceed, or press Enter to cancel: ' answer
+  [[ "$answer" == APPLY ]] || { echo 'Cancelled.'; return 0; }
+  step "1/2" "Verify candidate source checksums against patch instructions" sudo bash "$HERE/retronas.sh" patch-prepare || return 1
+  step "2/2" "Apply patches locally and verify output RA hashes" sudo bash "$HERE/retronas.sh" patch-apply || return 1
+  printf '\n[COMPLETE] Inspect the locally verified outputs before manually copying them to RetroNAS.\n'
+  echo 'Results: /var/lib/retrodb/patches/patch-apply.json'
+}
+run() { if "$@"; then echo '[OK] Operation completed.'; else echo '[ERROR] Operation failed.' >&2; fi; }
 menu() {
-  local choice ans
+  local choice
   while true; do
     header
-    echo '  1) Full ROM audit (scan, RA match, export CSV)'
-    echo '  2) Scan RetroNAS inventory'
-    echo '  3) Match games against RetroAchievements'
-    echo '  4) Export Excel + raw CSV and show download commands'
-    echo '  5) Sync RetroAchievements catalogue (cached)'
-    echo '  6) Force refresh RetroAchievements catalogue'
-    echo '  7) Check / mount RetroNAS'
-    echo '  8) RetroDB service details'
-    echo '  9) xeRAbora service details'
+    echo '  1) FULL AUDIT — refresh, scan, verify patches, export Excel'
+    echo '  2) Download / update official patch packages'
+    echo '  3) Apply verified patches LOCALLY (confirmation required)'
+    echo '  4) Export latest Excel workbook (no new audit)'
+    echo '  5) Service / integration details'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -101,15 +150,11 @@ menu() {
     read -rp 'Choose an option: ' choice || break
     case "$choice" in
       1) run audit; pause ;;
-      2) if mount_ready; then run sudo bash "$HERE/retronas.sh" scan; fi; pause ;;
-      3) if mount_ready; then run sudo bash "$HERE/retronas.sh" match; fi; pause ;;
+      2) run patch_download; pause ;;
+      3) run patch_apply; pause ;;
       4) run export_csv; pause ;;
-      5) run sudo bash "$HERE/retroachievements.sh" sync; pause ;;
-      6) read -rp 'Force upstream catalogue refresh? [y/N] ' ans
-         if [[ "$ans" =~ ^[Yy]$ ]]; then run sudo bash "$HERE/retroachievements.sh" sync --force; fi; pause ;;
-      7) if mountpoint -q "$MOUNT"; then echo 'RetroNAS mounted.'; else run sudo bash "$HERE/retronas.sh" mount; fi; pause ;;
-      8) systemctl --no-pager status retrodb.service || true; pause ;;
-      9) systemctl --no-pager status xerabora.service || true; pause ;;
+      5) echo; systemctl --no-pager --full status retrodb.service xerabora.service || true
+         echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
@@ -119,6 +164,8 @@ case "${1:-menu}" in
   menu) menu ;;
   audit) audit ;;
   export) export_csv ;;
+  patches) patch_download ;;
+  patch-apply) patch_apply ;;
   status) header ;;
-  *) echo 'Usage: bash server/manager.sh [menu|audit|export|status]' >&2; exit 2 ;;
+  *) echo 'Usage: bash server/manager.sh [menu|audit|export|patches|patch-apply|status]' >&2; exit 2 ;;
 esac
