@@ -119,13 +119,17 @@ class RetroAchievementsClient:
         if not force and self._cache_is_fresh(cache_path):
             try:
                 payload = json.loads(cache_path.read_text(encoding="utf-8"))
-                if isinstance(payload, list):
+                # Old filtered catalogues (f=1) must be refreshed once.
+                if isinstance(payload, list) and all(
+                    isinstance(game, dict) and "NumAchievements" in game
+                    for game in payload
+                ) and any(int(game.get("NumAchievements", 0)) == 0 for game in payload):
                     return payload, True
             except (OSError, ValueError):
                 pass
 
         payload = self._request(
-            "API_GetGameList.php", {"i": system_id, "f": 1, "h": 1}
+            "API_GetGameList.php", {"i": system_id, "f": 0, "h": 1}
         )
         if not isinstance(payload, list):
             raise RetroAchievementsError(
