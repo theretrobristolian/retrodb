@@ -48,7 +48,15 @@ export_csv() {
   install -d -m 0700 "$HOME/retrodb-exports"
   sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$REPORT" "$EXPORT"
   local excel="$HOME/retrodb-exports/RetroDB-Compatibility.xlsx"
-  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" ) || return 1
+  local prepare="/var/lib/retrodb/patches/patch-prepare.json"
+  local prepared_copy="$HOME/retrodb-exports/patch-prepare.json"
+  if sudo -n test -f "$prepare" 2>/dev/null || sudo test -f "$prepare"; then
+    sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$prepare" "$prepared_copy" || return 1
+    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prepared_copy" ) || return 1
+  else
+    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" ) || return 1
+    echo '[INFO] Patchable verification unavailable; run patch-plan, patch-download and patch-prepare to identify verified patch sources.'
+  fi
   echo "[OK] CSV copied to $EXPORT"
   echo "[OK] Excel workbook: $excel"
   ls -lh "$EXPORT"
