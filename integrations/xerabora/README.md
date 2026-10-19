@@ -2,7 +2,7 @@
 
 Community installer, updater and multi-account manager for [xeRAbora](https://github.com/hacan359/xerabora) and its matching PS2 `OPL-RA.ELF`. Maintained in the [RetroDB](https://github.com/theretrobristolian/retrodb) repository, but **RetroDB is not required**: no PostgreSQL, Python RetroDB application, RetroNAS, database, ROM scanner or existing VM image is involved.
 
-**Status:** The xeRAbora client has been exercised successfully on a Debian 13 VM connected to a real UK PAL PS2 Slim, including game identification and achievement notifications for *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Fresh-machine provisioning and the new multi-account switching features are not yet end-to-end tested. Upstream xeRAbora remains alpha software.
+**Status:** The xeRAbora client has been exercised successfully on a Debian 13 VM connected to a real UK PAL PS2 Slim, including game identification and achievement notifications for *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Multi-account switching has now been tested on the existing Debian VM: two separate RetroAchievements profiles were activated successfully, and the browser dashboard displayed the selected account while tracking live PS2 gameplay and achievement progress. Service auto-start and the 20-second pre-start delay have also been observed running on that VM. A clean, fresh-machine end-to-end install has **not** yet been tested. Upstream xeRAbora remains alpha software.
 
 ## Fresh Debian 13 VM / server
 
@@ -175,6 +175,10 @@ systemctl cat xerabora.service
 ```
 
 After pulling the latest installer, run `bash integrations/xerabora/install.sh` and choose **13**, then **1** to apply automatic mode to an existing installation. This does not require a host reboot.
+
+## Future security improvement: dedicated service account
+
+The installer currently runs xeRAbora as the normal Linux user who installs it; that account owns the protected RetroAchievements login tokens, API keys, cache and log files. A future hardening enhancement would support an optional dedicated, unprivileged systemd service account with no interactive shell or sudo rights. This would require careful ownership and permission management for all player profiles, plus a safe migration path for existing installations. **This is planned, not implemented:** do not change the service user manually without first migrating the profile directories and confirming profile switching still works. No service-account changes are necessary for the current working setup.
 
 ## Uninstalling
 
