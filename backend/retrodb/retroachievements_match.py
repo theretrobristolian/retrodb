@@ -24,7 +24,7 @@ from retrodb.providers.retroachievements import (
 
 HASH_PATTERN = re.compile(r"\b([0-9a-fA-F]{32})\b")
 SERIAL_PATTERN = re.compile(
-    r"\b(SCUS|SLUS|SCES|SLES|SCPS|SLPS|SLPM|SCCS|SCKA)[_. -]?(\d{3})[_. -]?(\d{2})\b",
+    r"\b(SCUS|SLUS|SCES|SLES|SCPS|SLPS|SLPM|SCCS|SCKA|SCPM|USGR)[_. -]?(\d{3})[_. -]?(\d{2})\b",
     re.IGNORECASE,
 )
 HASH_TARGET_EXTENSIONS = {"playstation": {"cue"}, "playstation-2": {"iso"}}
@@ -33,6 +33,7 @@ REGION_BY_PREFIX = {
     "SCES": "Europe", "SLES": "Europe",
     "SCPS": "Japan", "SLPS": "Japan", "SLPM": "Japan",
     "SCCS": "China", "SCKA": "Korea",
+    "SCPM": "Japan",
 }
 REGION_WORDS = (
     "USA", "Europe", "Japan", "World", "Australia", "Asia", "Korea", "China",
@@ -189,7 +190,7 @@ def is_compatible_title_candidate(local_path: str, candidate_title: str) -> bool
         return False
     local_words = set(normalise_title(local_path).split())
     candidate_words = set(normalise_title(candidate_title).split())
-    special = {"demo", "prototype", "hack", "bonus"}
+    special = {"demo", "prototype", "hack", "bonus", "compilation"}
     return (local_words & special) == (candidate_words & special)
 
 
@@ -218,6 +219,10 @@ def comparable_title(value: str) -> str:
     comparable = re.sub(r"\bdual shock (?:ver|version)\b", "", comparable)
     aliases = {
         "harry potter and philosophers stone": "harry potter and sorcerers stone",
+        "guitar hero rocks 80s": "guitar hero encore rocks 80s",
+        "lara croft tomb raider anniversary": "tomb raider anniversary",
+        "lara croft tomb raider legend": "tomb raider legend",
+        "disneys haunted mansion": "haunted mansion",
     }
     comparable = aliases.get(comparable.strip(), comparable)
     return " ".join(comparable.split())
@@ -488,11 +493,18 @@ def match_collection(
 
             serial, local_region = identify_local_release(item.relative_path)
             gamedb_title = gamedb_titles.get(serial, '')
+            # Non-retail discs are identified but never promoted from a retail
+            # title alone. Their hashes can still legitimately match RA.
+            special_disc = serial.startswith("USGR-") or serial == "SCPM-85101"
+            if serial == "SCPM-85101" and not gamedb_title:
+                gamedb_title = "McDonald's Original Happy Disc (promotional demo)"
+            elif serial == "USGR-00036" and not gamedb_title:
+                gamedb_title = "Shoot 'Em Up Collection (hack compilation)"
             recommendation = None
             confidence = ""
             score = 0.0
             alternatives = ""
-            if item.ra_match_status == "unmatched":
+            if item.ra_match_status == "unmatched" and not special_disc:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
                         serial, games, serial_aliases
@@ -574,6 +586,7 @@ def match_collection(
                 "local_friendly_title": friendly_local_title(item.relative_path),
                 "gamedb_title": gamedb_title,
                 "gamedb_identified": "YES" if gamedb_title else "NO",
+                "disc_classification": ("special-disc-review" if special_disc else "standard"),
                 "local_region": local_region,
                 "local_ra_hash": item.ra_hash or "",
                 "ra_game_id": item.ra_game_id or "",
@@ -610,6 +623,7 @@ def match_collection(
     fields = [
         "platform", "status", "path", "local_serial", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
+        "disc_classification",
         "local_ra_hash", "ra_game_id", "ra_game_title",
         "recommendation_confidence", "recommendation_score",
         "recommended_ra_game_id", "recommended_ra_title",
