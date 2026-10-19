@@ -10,6 +10,7 @@ from retrodb.retroachievements_match import (
     friendly_local_title,
     game_db_ra_candidates,
     resolve_catalogue_identity,
+    review_reason,
     load_serial_aliases,
     suggest_by_serial,
     load_hash_catalogue,
@@ -260,3 +261,32 @@ def test_distinct_editions_are_not_equated_by_regional_crosswalk():
                   "Need for Speed: Most Wanted"]:
         game, _, _, _ = resolve_catalogue_identity(title, games)
         assert game is None
+
+def test_reviewed_kof_and_blood_omen_title_variants():
+    games = (
+        CatalogueGame(101, "Legacy of Kain: Blood Omen 2", ("a" * 32,)),
+        CatalogueGame(102, "KOF: Maximum Impact", ("b" * 32,)),
+        CatalogueGame(103, "KOF: Maximum Impact 2", ("c" * 32,)),
+        CatalogueGame(104, "Virtua Fighter 10th Anniversary", ("d" * 32,)),
+    )
+    for title, gid in [
+        ("Blood Omen 2: The Legacy of Kain Series", 101),
+        ("The King of Fighters: Maximum Impact", 102),
+        ("The King of Fighters: Maximum Impact 2", 103),
+        ("Virtua Fighter: 10th Anniversary Edition", 104),
+    ]:
+        game, method, _, _ = resolve_catalogue_identity(title, games)
+        assert game is not None and game.game_id == gid
+        assert method == "curated-regional-title"
+
+
+def test_review_reasons_are_explicit_without_false_match():
+    assert review_reason("MGS 2", "Metal Gear Solid 2: Substance [RA 2]") == (
+        "different-edition: compare supported hash and release before replacing"
+    )
+    assert review_reason("EyeToy: Chat", "EyeToy: Play [RA 3]") == (
+        "different-game: EyeToy titles are not interchangeable"
+    )
+    assert review_reason("Unknown", "") == (
+        "no-RA-title-crosswalk: check RA catalogue and edition metadata"
+    )
