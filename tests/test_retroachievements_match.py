@@ -163,3 +163,8 @@ def test_serial_alias_never_guesses_missing_or_duplicate_games():
 def test_friendly_title_strips_ps2_serial_from_filename():
     assert friendly_local_title("dvd/SCES_516.08.Jak II Renegade.iso") == "Jak II Renegade"
     assert friendly_local_title("dvd/SCES_504.10.Ace Combat Distant Thunder.iso") == "Ace Combat Distant Thunder"
+
+def test_zero_padded_title_numbers_are_equivalent_for_catalogue_identity():
+    assert comparable_title("Ace Combat 04: Shattered Skies") == comparable_title(
+        "Ace Combat 4: Shattered Skies"
+    )
