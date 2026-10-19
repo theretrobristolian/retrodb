@@ -19,7 +19,7 @@ def patch_sources(path):
 
 def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
     yes = r['status'] == 'matched'
-    title = r['ra_game_title'] or r['recommended_ra_title'] or Path(r['path']).stem
+    title = r.get('ra_game_title') or r.get('recommended_ra_title') or r.get('local_friendly_title') or Path(r['path']).stem
     patch = r['preferred_patch_url']
     suggested = bool(r['recommended_ra_title'])
     source = str(Path(root) / r['path'])
@@ -31,7 +31,9 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
     elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
     elif suggested:
         status = 'NO'
-        if patch: reason = 'Official patch available; verify required source before applying'
+        if r.get('recommendation_confidence') == 'verified-serial-alias':
+            reason = 'Game identified via verified disc serial; current ISO hash not RA supported'
+        elif patch: reason = 'Official patch available; verify required source before applying'
         elif r['local_region'] and r['preferred_region'] and r['local_region'] != r['preferred_region']:
             reason = 'Different region recommended: ' + r['preferred_region']
         else: reason = 'Different ISO release or revision recommended'
