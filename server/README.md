@@ -140,6 +140,39 @@ The manager exports `~/retrodb-exports/RetroDB-Compatibility.xlsx` alongside the
 
 Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`, `bash server/manager.sh patches`, `bash server/manager.sh patch-apply`.
 
+
+### Disc serial identification (conservative first pass)
+
+The matcher now recognises selected, **source-attributed** regional PS2 disc serials from
+`backend/retrodb/data/ps2_serial_aliases.json`. Initially verified mappings include
+`SCES-50410` (Ace Combat: Distant Thunder → Ace Combat 04: Shattered Skies),
+`SCES-51608` (Jak II: Renegade → Jak II), and `SCES-51607`
+(Ratchet & Clank 2 → Ratchet & Clank: Going Commando). A candidate is recommended
+only if exactly one RA catalogue title matches the mapped identity. These are
+**identity matches, not compatible ISO/hash confirmations**: RAHasher continues to
+determine whether a particular disc image is ready to play.
+
+The raw CSV includes `local_friendly_title` and a
+`recommendation_confidence=verified-serial-alias` indication where appropriate.
+Excel prefers the mapped RA game title when the identity is resolved and otherwise
+uses a cleaned local filename. Existing historical reports still import correctly.
+
+This is a small, manually verified alias catalogue, **not yet a comprehensive
+Redump disc-serial index**. Games without a serial mapping or high-confidence
+title recommendation remain unknown; no-RA-set status cannot be inferred from
+that alone. Expand the JSON file only with independently confirmed serial/release
+records and provenance. Existing title matching remains conservative, and
+hash matching always has precedence.
+
+After updating the Git checkout, deploy the current backend code and rerun the
+full audit to generate fresh classifications:
+
+```bash
+cd ~/retrodb
+sudo bash server/deploy.sh
+bash server/manager.sh
+```
+
 ## RetroAchievements credentials
 
 The deployment adds a labelled RetroAchievements section to the protected configuration file:
