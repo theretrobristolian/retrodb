@@ -113,6 +113,25 @@ sudo systemctl status retrodb
 
 The service deliberately binds only to loopback. LAN or guest access will be added later through a separately hardened HTTPS reverse proxy.
 
+## RetroDB terminal manager
+
+Run the standalone ASCII dashboard as your normal Debian user:
+
+```bash
+cd ~/retrodb
+git pull --ff-only origin main
+bash -n server/manager.sh
+bash server/manager.sh
+```
+
+Its header shows RetroDB/PostgreSQL status, the RetroNAS mount, RAHasher, report availability and the xeRAbora service/Web UI. RetroDB currently provides a local API health endpoint at `http://127.0.0.1:8000/health`, **not a complete RetroDB browser frontend**.
+
+Option **1** checks/mounts RetroNAS, runs the read-only ROM inventory and cached RetroAchievements hash match, then exports the CSV. Option **4** exports an existing report without scanning. Options **5** and **6** refresh the RetroAchievements catalogue (normal cached sync or forced refresh).
+
+The manager creates a private copy at `~/retrodb-exports/retroachievements-compatibility.csv`, with directory mode `700` and file mode `600`, leaving the protected original in `/var/lib/retrodb/reports/` unchanged. It displays macOS/Linux and Windows PowerShell `scp` commands for downloading the CSV **from your computer**, outside the SSH session. The CSV contains PS1 and PS2 rows; filter by platform to see PS2 only. Neither the audit nor the export modifies ROMs on RetroNAS.
+
+Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`.
+
 ## RetroAchievements credentials
 
 The deployment adds a labelled RetroAchievements section to the protected configuration file:
