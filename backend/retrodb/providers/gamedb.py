@@ -91,3 +91,13 @@ def sync(cache_dir: Path, platform: str, force: bool = False) -> tuple[int, str]
             except (OSError, ValueError):
                 pass
         raise RuntimeError(f"Could not retrieve GameDB {platform} catalogue: {exc}") from exc
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Refresh the cached GameDB serial/title catalogue")
+    parser.add_argument("--platform", choices=list(SOURCES), default="playstation-2")
+    parser.add_argument("--cache-dir", type=Path, default=Path("/var/cache/retrodb/providers/gamedb"))
+    parser.add_argument("--force", action="store_true")
+    args = parser.parse_args()
+    count, source = sync(args.cache_dir, args.platform, args.force)
+    print(f"[OK] GameDB {args.platform}: {count} serial/title records ({source}).")
