@@ -37,3 +37,25 @@ def test_unverified_pairs_and_unknown_ids_remain_counted():
             entry("Game A", "", "UNKNOWN"), entry("Game B", "", "UNKNOWN")]
     assert all(not r[13].startswith("EXCLUDE")
                for r in report.apply_collection_dedup(rows))
+
+def test_no_set_is_not_counted_as_ra_ready():
+    data = {
+        "status": "unmatched", "path": "PS2/Endgame.iso",
+        "ra_game_title": "", "recommended_ra_title": "",
+        "gamedb_title": "Endgame", "local_friendly_title": "Endgame",
+        "preferred_patch_url": "", "local_serial": "SLES-12345",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "preferred_release_name": "", "local_region": "Europe",
+        "alternative_candidates": "", "disc_classification": "standard",
+        "ra_set_status": "NO_SET", "no_set_ra_game_id": 123,
+    }
+    row = report.row_for(data)
+    assert row[3] == "NO SET"
+    assert row[14] == "NO_SET"
+
+
+def test_no_set_rows_stay_in_effective_denominator():
+    good = entry("Game US", "1234", "YES")
+    no_set = entry("Endgame", "", "NO SET")
+    rows = report.apply_collection_dedup([good, no_set])
+    assert len([r for r in rows if not r[13].startswith("EXCLUDE")]) == 2
