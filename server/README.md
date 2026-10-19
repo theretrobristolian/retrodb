@@ -273,3 +273,27 @@ sets. A separate unique-game metric can be added later.
 Use menu option **4 — Export latest Excel workbook** to apply this
 report-only change to the latest raw CSV without rehashing the collection.
 
+
+### Recognised RA games with no achievement set
+
+RetroDB now asks RetroAchievements for the **complete** console game directory
+(`API_GetGameList`, `f=0,h=1`) rather than the old `f=1` catalogue which
+omitted games without a published set. The first sync after this change must
+download the expanded catalogue; future audits reuse the 180-day cache.
+
+The matcher distinguishes a game with a recognised RA identity but **zero core
+achievements** from one that has an achievement set but needs another ISO/hash.
+It currently confirms no-set identity through unique canonical-title matches
+to GameDB (rather than assigning questionable fuzzy identities). The CSV adds
+`ra_set_status`, `no_set_ra_game_id` and `no_set_ra_title`.
+The Excel report lists these as **NO SET** rather than implying that a
+different-region image would unlock achievements. Unresolved entries remain
+unresolved until a reliable crosswalk exists.
+
+Summary columns now explicitly show **RA-ready %**, **Patchable %**,
+**No-set %**, **Unresolved %** and **RA identified %**. Each uses the same
+effective-image denominator (all images minus demonstrably redundant
+incompatible copies), so values can be compared consistently. RA-ready is
+restricted to verified hashes for games with an achievement set; identifying
+a game without a set does not count as an achievement-ready image.
+
