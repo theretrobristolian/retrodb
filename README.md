@@ -252,11 +252,13 @@ The repository also contains a community installer/updater for [xeRAbora by haca
 
 **[xeRAbora Debian installer, multi-player profile manager and setup guide](integrations/xerabora/README.md)**
 
-It installs the xeRAbora headless client, matching `OPL-RA.ELF`, systemd service and RetroAchievements account configuration on a Debian x86-64 server or VM. The installer includes checks for prerequisites, release checksum validation, active-player log monitoring, account switching and a confirmed uninstall option.
+It installs the xeRAbora headless client, matching `OPL-RA.ELF`, systemd service and RetroAchievements account configuration on a Debian x86-64 server or VM. The installer includes prerequisite checks, release checksum verification, live per-player logging, multi-profile switching, browser dashboard access (localhost by default, optional trusted-LAN exposure on TCP 18280), service management and a confirmed uninstall option. Startup mode can be set to **Automatic**, **Manual** or **Disabled**: Automatic enables systemd startup after network readiness with a 20-second delay and restarts the client after unexpected exits with a 10-second interval. These settings remain available through the terminal manager.
 
 **This integration is intentionally standalone:** anyone can use it with a fresh Debian host and compatible PS2 **without installing or configuring the RetroDB database, backend, RetroNAS integration or ROM auditing tools**. Likewise, RetroDB can audit and catalogue a collection without xeRAbora. They complement each other rather than requiring one another.
 
-The xeRAbora/OPL-RA integration has been tested on a real PS2 Slim with MemCard Pro 2 in MMCE mode, with game identification and successful achievement unlocks in *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. The independent fresh-server setup remains under active testing. PS2 ELF installation and copying game images to console storage are manual steps.
+The xeRAbora/OPL-RA integration has been tested on a real PS2 Slim with MemCard Pro 2 in MMCE mode, with game identification and successful achievement unlocks in *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Two independent RetroAchievements profiles have been switched successfully on the existing Debian VM, with the selected player shown correctly in the xeRAbora Web UI and live achievement progression tracked. A fresh Debian install on a separate clean host remains to be tested. PS2 ELF installation and copying game images to console storage are manual steps.
+
+**Future hardening:** The xeRAbora integration currently runs under the installing Linux account. Optional support for a dedicated, non-interactive, unprivileged xeRAbora service account is planned, but **not yet implemented**; existing installations and profile ownership are unchanged. See the [integration guide](integrations/xerabora/README.md) for details.
 
 ## Planned repository layout
 
