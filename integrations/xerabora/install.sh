@@ -116,7 +116,8 @@ check_version() {
 }
 install_client() {
   prerequisites || return 1
-  local version old base tmp file confirm
+  local version old base tmp file confirm mode
+  mode="$(service_startup_mode)"
   old="$(installed_version)"
   version="$(latest_release)"
   [[ "$version" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo "Unable to validate release tag" >&2; exit 1; }
@@ -170,8 +171,6 @@ EOF
   sudo install -m 0644 "$unit" /etc/systemd/system/xerabora.service
   rm -f "$unit"
   sudo systemctl daemon-reload
-  local mode
-  mode="$(service_startup_mode)"
   if [[ "$mode" == auto ]]; then sudo systemctl enable xerabora.service; fi
   if [[ "$old" == unknown && ! -s "$HOME_PATH/.config/xerabora/credentials" ]]; then
     read -rp "Authenticate now? [Y/n] " confirm
@@ -284,7 +283,7 @@ configure_service_startup() {
     printf '# xeRAbora startup mode: auto\n[Service]\nExecStartPre=\nExecStartPre=/bin/sleep 20\nRestart=always\nRestartSec=10\n' | sudo tee "$dir/restart.conf" >/dev/null
     sudo systemctl daemon-reload
     sudo systemctl enable xerabora.service
-    sudo systemctl start xerabora.service
+    sudo systemctl restart xerabora.service
   else
     printf '# xeRAbora startup mode: %s\n[Service]\nExecStartPre=\nRestart=no\n' "$mode" | sudo tee "$dir/restart.conf" >/dev/null
     sudo systemctl daemon-reload
