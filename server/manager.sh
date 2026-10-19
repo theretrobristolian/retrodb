@@ -55,7 +55,7 @@ export_csv() {
   echo ' Mac / Linux:'
   printf '   scp "%s" ~/Downloads/\n' "$remote"
   echo ' Windows PowerShell:'
-  printf '   scp "%s" "$env:USERPROFILE\Downloads\retroachievements-compatibility.csv"\n' "$remote"
+  printf '   scp "%s" "$env:USERPROFILE\\Downloads\\retroachievements-compatibility.csv"\\n' "$remote"
   echo 'Both PS1 and PS2 appear in the report; filter the CSV by platform.'
 }
 audit() {
