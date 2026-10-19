@@ -277,7 +277,27 @@ REGIONAL_IDENTITIES = {
     "ratchet gladiator": "Ratchet: Deadlocked",
     "ratchet and clank 3": "Ratchet & Clank: Up Your Arsenal",
     "godfather": "The Godfather: The Game",
+    "blood omen 2 legacy of kain series": "Legacy of Kain: Blood Omen 2",
+    "king of fighters maximum impact": "KOF: Maximum Impact",
+    "king of fighters maximum impact 2": "KOF: Maximum Impact 2",
+    "virtua fighter 10th anniversary edition": "Virtua Fighter 10th Anniversary",
 }
+
+def review_reason(title: str, candidates: str, special: bool = False) -> str:
+    """Explicit non-assertive explanation for unresolved RA identities."""
+    if special:
+        return "special-disc: independently verify homebrew/demo compilation support"
+    source = comparable_title(title)
+    if not candidates:
+        return "no-RA-title-crosswalk: check RA catalogue and edition metadata"
+    # Do not promote title matches across different product editions.
+    guarded = ("black edition", "substance", "arena edition")
+    if any(word in candidates.casefold() for word in guarded):
+        return "different-edition: compare supported hash and release before replacing"
+    if "eyetoy" in source and "eyetoy" in candidates.casefold():
+        return "different-game: EyeToy titles are not interchangeable"
+    return "candidate-review: confirm regional or branded title against RA identity"
+
 
 def resolve_catalogue_identity(title: str, games: tuple[CatalogueGame, ...]):
     """Reviewed regional identity aliases; no equivalence of editions or hashes."""
@@ -620,6 +640,10 @@ def match_collection(
                 "local_serial": serial,
                 "local_friendly_title": friendly_local_title(item.relative_path),
                 "gamedb_title": gamedb_title,
+                "identity_review_reason": review_reason(
+                    gamedb_title or friendly_local_title(item.relative_path),
+                    alternatives, special_disc
+                ) if not recommendation and not no_set_game and not match else "",
                 "identity_resolution": (
                     "verified-ra-hash" if match else
                     confidence if recommendation or no_set_game else
@@ -676,7 +700,7 @@ def match_collection(
     fields = [
         "platform", "status", "path", "local_serial", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
-        "identity_resolution",
+        "identity_resolution", "identity_review_reason",
         "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
         "disc_classification",
         "local_ra_hash", "ra_game_id", "ra_game_title",
