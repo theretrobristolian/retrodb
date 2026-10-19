@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL']
+COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity']
 VERIFIED = 'clean-base-verified-ready-to-patch'
 def patch_sources(path):
     if not path or not Path(path).is_file(): return set()
@@ -19,7 +19,7 @@ def patch_sources(path):
 
 def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
     yes = r['status'] == 'matched'
-    title = r.get('ra_game_title') or r.get('recommended_ra_title') or r.get('local_friendly_title') or Path(r['path']).stem
+    title = r.get('ra_game_title') or r.get('recommended_ra_title') or r.get('gamedb_title') or r.get('local_friendly_title') or Path(r['path']).stem
     patch = r['preferred_patch_url']
     suggested = bool(r['recommended_ra_title'])
     source = str(Path(root) / r['path'])
@@ -39,23 +39,24 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
         else: reason = 'Different ISO release or revision recommended'
         if r['release_guidance']: reason += ' — ' + r['release_guidance']
     elif r['alternative_candidates']: status, reason = 'UNKNOWN', 'Ambiguous title; verify alternatives manually'
+    elif r.get('gamedb_title'): status, reason = 'UNKNOWN', 'GameDB identified disc; no confident RetroAchievements match yet'
     else: status, reason = 'UNKNOWN', 'No confident match; possibly unsupported'
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             r['ra_game_id'] or r['recommended_ra_game_id'], r['preferred_release_name'],
-            r['local_region'], patch]
+            r['local_region'], patch, r.get('gamedb_title', '')]
 def xml_sheet(rows):
     xml=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
          '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
          '<cols>']
-    for i,width in enumerate(([30,18,20,24,24,18] if len(rows[0]) == 6 else [38,54,18,17,16,75,17,44,16,55]),1):
+    for i,width in enumerate(([30,18,20,20,24,18,18,18] if len(rows[0]) == 8 else [38,54,18,17,16,75,17,44,16,55,44]),1):
         xml.append('<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i,i,width))
     xml.append('</cols><sheetData>')
     for n,row in enumerate(rows,1):
         xml.append('<row r="%d">' % n)
         for i,val in enumerate(row):
             style = 1 if n == 1 else (2 if n%2 == 0 else 0)
-            if n > 1 and len(row) == 10 and i == 3:
+            if n > 1 and len(row) == 11 and i == 3:
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6}.get(val,style)
             if n > 1 and len(row) == 10 and i == 4 and val == 'YES': style = 3
             xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
@@ -68,13 +69,14 @@ def main(source,destination,preparation=None):
     assert entries and 'preferred_patch_url' in entries[0], 'Invalid RetroDB audit CSV'
     sources = patch_sources(preparation)
     sheets=[]
-    summary=[['Console','Disc images','RA compatible','Patchable','Alternative ISO','Unknown','Hash errors']]
+    summary=[['Console','Disc images','RA compatible','Patchable','Alternative ISO','Unknown','GameDB identified unknown','Hash errors']]
     for platform,name in [('Sony PlayStation','PlayStation 1'),('Sony PlayStation 2','PlayStation 2')]:
         entries_console=sorted((row_for(r, sources) for r in entries if r['platform']==platform),
                                key=lambda r:(r[0].casefold(),r[1].casefold()))
         counts=Counter(r[3] for r in entries_console)
         patched=sum(r[4]=='YES' for r in entries_console)
-        summary.append([name,len(entries_console),counts['YES'],patched,counts['NO']-patched,counts['UNKNOWN'],counts['ERROR']])
+        identified_unknown=sum(r[3]=='UNKNOWN' and bool(r[10]) for r in entries_console)
+        summary.append([name,len(entries_console),counts['YES'],patched,counts['NO']-patched,counts['UNKNOWN'],identified_unknown,counts['ERROR']])
         sheets.append((name,[COLS]+entries_console))
     sheets.insert(0,('Summary',summary))
     destination=Path(destination)
