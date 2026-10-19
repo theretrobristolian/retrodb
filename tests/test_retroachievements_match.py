@@ -8,6 +8,7 @@ from retrodb.retroachievements_match import (
     extract_hash,
     identify_local_release,
     friendly_local_title,
+    game_db_ra_candidates,
     load_serial_aliases,
     suggest_by_serial,
     load_hash_catalogue,
@@ -168,3 +169,46 @@ def test_zero_padded_title_numbers_are_equivalent_for_catalogue_identity():
     assert comparable_title("Ace Combat 04: Shattered Skies") == comparable_title(
         "Ace Combat 4: Shattered Skies"
     )
+
+def test_gamedb_exact_ra_title_crosswalk():
+    games = (CatalogueGame(10, "Ace Combat 04: Shattered Skies", ("a" * 32,)),)
+    game, confidence, score, review = game_db_ra_candidates(
+        "Ace Combat 4: Shattered Skies", games
+    )
+    assert game and game.game_id == 10
+    assert confidence == "gamedb-exact-title"
+    assert score == 1.0 and not review
+
+
+def test_gamedb_does_not_cross_sequels():
+    games = (CatalogueGame(20, "Cool Boarders 2", ("b" * 32,)),)
+    game, _, _, _ = game_db_ra_candidates("Cool Boarders 3", games)
+    assert game is None
+
+
+def test_gamedb_never_promotes_demo_to_retail():
+    games = (CatalogueGame(30, "~Demo~ Need for Speed Most Wanted", ("c" * 32,)),)
+    game, _, _, _ = game_db_ra_candidates("Need for Speed Most Wanted", games)
+    assert game is None
+
+
+def test_gamedb_ambiguous_ra_matches_remain_for_review():
+    games = (
+        CatalogueGame(40, "Alpha Racing", ("d" * 32,)),
+        CatalogueGame(41, "Alpha Racer", ("e" * 32,)),
+    )
+    game, method, _, review = game_db_ra_candidates("Alpha Race", games)
+    assert game is None
+    assert method == "gamedb-review"
+    assert "RA 40" in review and "RA 41" in review
+
+
+def test_gamedb_does_not_promote_duplicate_exact_titles():
+    games = (
+        CatalogueGame(50, "Game", ("f" * 32,)),
+        CatalogueGame(51, "Game", ("0" * 32,)),
+    )
+    game, method, _, review = game_db_ra_candidates("Game", games)
+    assert game is None
+    assert method == "gamedb-ambiguous"
+    assert "RA 50" in review
