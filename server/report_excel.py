@@ -18,7 +18,7 @@ def patch_sources(path):
             and row.get('candidate_path')}
 
 def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
-    yes = r['status'] == 'matched'
+    yes = r['status'] == 'matched' and r.get('ra_set_status', 'HAS_SET') == 'HAS_SET'
     title = r.get('ra_game_title') or r.get('recommended_ra_title') or r.get('gamedb_title') or r.get('local_friendly_title') or Path(r['path']).stem
     patch = r['preferred_patch_url']
     suggested = bool(r['recommended_ra_title'])
@@ -78,7 +78,7 @@ def xml_sheet(rows):
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
          '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
          '<cols>']
-    for i,width in enumerate(([28,16,18,18,18,18,20,22,24,19,24,20,18] if len(rows[0]) == 13 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20]),1):
+    for i,width in enumerate(([28,16,18,18,18,18,20,22,24,19,24,20,18,18,18,18,20] if len(rows[0]) == 17 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20]),1):
         xml.append('<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i,i,width))
     xml.append('</cols><sheetData>')
     for n,row in enumerate(rows,1):
@@ -98,7 +98,7 @@ def main(source,destination,preparation=None):
     assert entries and 'preferred_patch_url' in entries[0], 'Invalid RetroDB audit CSV'
     sources = patch_sources(preparation)
     sheets=[]
-    summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors']]
+    summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors','Patchable %','No-set %','Unresolved %','RA identified %']]
     for platform,name in [('Sony PlayStation','PlayStation 1'),('Sony PlayStation 2','PlayStation 2')]:
         entries_console=sorted((row_for(r, sources) for r in entries if r['platform']==platform),
                                key=lambda r:(r[0].casefold(),r[1].casefold()))
@@ -111,7 +111,11 @@ def main(source,destination,preparation=None):
         review_count=sum(r[3]=='UNKNOWN' and bool(r[11]) for r in active)
         effective=len(active)
         percent=f'{100*counts["YES"]/effective:.2f}%' if effective else '0.00%'
-        summary.append([name,len(entries_console),effective,excluded,percent,counts['YES'],patched,counts['NO']-patched,counts['NO SET'],counts['UNKNOWN'],identified_unknown,review_count,counts['ERROR']])
+        summary.append([name,len(entries_console),effective,excluded,percent,counts['YES'],patched,counts['NO']-patched,counts['NO SET'],counts['UNKNOWN'],identified_unknown,review_count,counts['ERROR'],
+                        f'{100*patched/effective:.2f}%' if effective else '0.00%',
+                        f'{100*counts["NO SET"]/effective:.2f}%' if effective else '0.00%',
+                        f'{100*counts["UNKNOWN"]/effective:.2f}%' if effective else '0.00%',
+                        f'{100*(counts["YES"]+counts["NO"]+counts["NO SET"])/effective:.2f}%' if effective else '0.00%'])
         sheets.append((name,[COLS]+entries_console))
     sheets.insert(0,('Summary',summary))
     destination=Path(destination)
