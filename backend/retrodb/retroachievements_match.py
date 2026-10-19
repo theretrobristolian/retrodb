@@ -466,10 +466,13 @@ def match_collection(
                         serial, games, serial_aliases
                     )
                 if recommendation is None and gamedb_title:
-                    game, method, value = suggest_game(gamedb_title, games)
-                    # Use only exact identity, not a fuzzy guess from provider metadata.
-                    if game and method == 'exact-title':
-                        recommendation, confidence, score = game, 'gamedb-exact-title', value
+                    exact = [
+                        game for game in games
+                        if comparable_title(game.title) == comparable_title(gamedb_title)
+                    ]
+                    # GameDB identity is not a compatibility claim. Require one RA title.
+                    if len(exact) == 1:
+                        recommendation, confidence, score = exact[0], 'gamedb-exact-title', 1.0
                 if recommendation is None and confidence not in ('serial-alias-no-unique-ra-title',):
                     recommendation, confidence, score = suggest_game(item.relative_path, games)
                 if confidence == "ambiguous":
