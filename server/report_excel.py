@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID']
+COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence']
 VERIFIED = 'clean-base-verified-ready-to-patch'
 def patch_sources(path):
     if not path or not Path(path).is_file(): return set()
@@ -43,11 +43,11 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
     elif r.get('disc_classification') == 'special-disc-review':
         status, reason = 'UNKNOWN', 'Promotional/demo or hack compilation: do not assume retail RA compatibility'
     elif r['alternative_candidates']: status, reason = 'UNKNOWN', 'Potential RA titles found; review candidates manually (not verified)'
-    elif r.get('gamedb_title'): status, reason = 'UNKNOWN', 'GameDB identified disc; no confident RetroAchievements match yet'
+    elif r.get('gamedb_title'): status, reason = 'UNKNOWN', 'GameDB identified disc; RA identity still needs evidence, not an assumed unsupported release'
     else: status, reason = 'UNKNOWN', 'No confident match; possibly unsupported'
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             r['ra_game_id'] or r['recommended_ra_game_id'], r['preferred_release_name'],
-            r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', '')]
+            r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', '')]
 def apply_collection_dedup(entries):
     """Discount only demonstrably redundant noncompatible copies.
 
@@ -78,14 +78,14 @@ def xml_sheet(rows):
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
          '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
          '<cols>']
-    for i,width in enumerate(([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20]),1):
+    for i,width in enumerate(([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28]),1):
         xml.append('<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i,i,width))
     xml.append('</cols><sheetData>')
     for n,row in enumerate(rows,1):
         xml.append('<row r="%d">' % n)
         for i,val in enumerate(row):
             style = 1 if n == 1 else (2 if n%2 == 0 else 0)
-            if n > 1 and len(row) == 16 and i == 3:
+            if n > 1 and len(row) == 17 and i == 3:
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6,'NO SET':5}.get(val,style)
             if n > 1 and len(row) == 16 and i == 4 and val == 'YES': style = 3
             xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
