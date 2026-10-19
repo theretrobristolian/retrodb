@@ -117,6 +117,46 @@ def identify_local_release(path: str) -> tuple[str, str]:
     return serial, REGION_BY_PREFIX.get(match.group(1).upper(), "")
 
 
+def load_serial_aliases(path: Path | None = None) -> dict[str, str]:
+    """Curated, source-attributed serial aliases; not compatibility assertions."""
+    source = path or Path(__file__).with_name("data") / "ps2_serial_aliases.json"
+    try:
+        data = json.loads(source.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        serial.upper(): row["title"]
+        for serial, row in data.items()
+        if isinstance(row, dict) and isinstance(row.get("title"), str)
+        and SERIAL_PATTERN.fullmatch(serial)
+        and row.get("source")
+    }
+
+
+def suggest_by_serial(
+    serial: str, games: tuple[CatalogueGame, ...], aliases: dict[str, str]
+) -> tuple[CatalogueGame | None, str, float]:
+    """Resolve a *documented* serial only if exactly one RA title matches."""
+    title = aliases.get(serial, "")
+    if not title:
+        return None, "", 0.0
+    matches = [game for game in games if comparable_title(game.title) == comparable_title(title)]
+    if len(matches) == 1:
+        return matches[0], "verified-serial-alias", 1.0
+    return None, "serial-alias-no-unique-ra-title", 0.0
+
+
+def friendly_local_title(path: str) -> str:
+    """Show legible filenames without product codes; never infer RA compatibility."""
+    name = Path(path).stem
+    name = SERIAL_PATTERN.sub(" ", name)
+    name = re.sub(r"^[\s._-]+|[\s._-]+$", "", name)
+    name = re.sub(r"[._]+", " ", name)
+    return re.sub(r"\s+", " ", name).strip() or Path(path).stem
+
+
 def normalise_title(value: str) -> str:
     title = Path(value).name
     title = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
@@ -360,6 +400,7 @@ def match_collection(
     report_rows: list[dict[str, object]] = []
     summaries: list[MatchSummary] = []
     detail_cache: dict[int, list[dict[str, object]]] = {}
+    serial_aliases = load_serial_aliases()
 
     for slug, extensions in HASH_TARGET_EXTENSIONS.items():
         platform = session.scalar(select(Platform).where(Platform.slug == slug))
@@ -409,7 +450,12 @@ def match_collection(
             score = 0.0
             alternatives = ""
             if item.ra_match_status == "unmatched":
-                recommendation, confidence, score = suggest_game(item.relative_path, games)
+                if slug == "playstation-2":
+                    recommendation, confidence, score = suggest_by_serial(
+                        serial, games, serial_aliases
+                    )
+                if recommendation is None and confidence != "serial-alias-no-unique-ra-title":
+                    recommendation, confidence, score = suggest_game(item.relative_path, games)
                 if confidence == "ambiguous":
                     alternatives = alternative_candidates(item.relative_path, games)
                 if recommendation:
@@ -458,6 +504,7 @@ def match_collection(
                 "status": item.ra_match_status,
                 "path": item.relative_path,
                 "local_serial": serial,
+                "local_friendly_title": friendly_local_title(item.relative_path),
                 "local_region": local_region,
                 "local_ra_hash": item.ra_hash or "",
                 "ra_game_id": item.ra_game_id or "",
@@ -493,6 +540,7 @@ def match_collection(
     temporary = report_path.with_suffix(".tmp")
     fields = [
         "platform", "status", "path", "local_serial", "local_region",
+        "local_friendly_title",
         "local_ra_hash", "ra_game_id", "ra_game_title",
         "recommendation_confidence", "recommendation_score",
         "recommended_ra_game_id", "recommended_ra_title",
