@@ -311,3 +311,19 @@ than inflating readiness; if a future catalogue resolves them as NO SET the
 denominator shrinks. These are effective-image metrics, not complete multi-disc
 unique-game coverage metrics. Both counts preserve source ROMs.
 
+
+### Regional title identity resolver
+
+A reviewed regional-title crosswalk now recognises identities including
+Canis Canem Edit → Bully, Fahrenheit → Indigo Prophecy,
+Ratchet: Gladiator → Ratchet: Deadlocked, and Ratchet & Clank 3 →
+Ratchet & Clank: Up Your Arsenal. The same resolver checks both
+achievement-enabled and no-set RA catalogue entries. Source files are
+never modified, and a game identity recommendation is not a verified hash.
+
+The raw CSV now includes `identity_resolution`; Excel adds an
+**Identity evidence** column. Results distinguish verified RA hash, reviewed
+regional title, candidate review, and no catalogue crosswalk. Explicit
+edition distinctions such as Sons of Liberty/Substance or Most Wanted/Black
+Edition are not overridden by aliases. Games without sufficient evidence
+stay unresolved; the target is zero **unexplained** games, not forced matches.
