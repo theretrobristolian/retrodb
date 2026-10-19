@@ -47,16 +47,23 @@ export_csv() {
   fi
   install -d -m 0700 "$HOME/retrodb-exports"
   sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$REPORT" "$EXPORT"
+  local excel="$HOME/retrodb-exports/RetroDB-Compatibility.xlsx"
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" ) || return 1
   echo "[OK] CSV copied to $EXPORT"
+  echo "[OK] Excel workbook: $excel"
   ls -lh "$EXPORT"
   local remote
   remote="$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/retroachievements-compatibility.csv"
   echo 'Run on your own computer, not inside SSH:'
-  echo ' Mac / Linux:'
+  echo ' Mac / Linux (recommended Excel workbook):'
+  printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Compatibility.xlsx"
+  echo ' Mac / Linux (raw CSV):'
   printf '   scp "%s" ~/Downloads/\n' "$remote"
-  echo ' Windows PowerShell:'
+  echo ' Windows PowerShell (recommended Excel workbook):'
+  printf '   scp "%s" "%s"\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Compatibility.xlsx" '$env:USERPROFILE\Downloads\RetroDB-Compatibility.xlsx'
+  echo ' Windows PowerShell (raw CSV):'
   printf '   scp "%s" "%s"\n' "$remote" '$env:USERPROFILE\Downloads\retroachievements-compatibility.csv'
-  echo 'Both PS1 and PS2 appear in the report; filter the CSV by platform.'
+  echo 'Excel includes Summary, PlayStation 1 and PlayStation 2 tabs; the CSV remains available for technical diagnosis.'
 }
 audit() {
   mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.'; return 1; }
@@ -72,7 +79,7 @@ menu() {
     echo '  1) Full ROM audit (scan, RA match, export CSV)'
     echo '  2) Scan RetroNAS inventory'
     echo '  3) Match games against RetroAchievements'
-    echo '  4) Export latest CSV and show download commands'
+    echo '  4) Export Excel + raw CSV and show download commands'
     echo '  5) Sync RetroAchievements catalogue (cached)'
     echo '  6) Force refresh RetroAchievements catalogue'
     echo '  7) Check / mount RetroNAS'
