@@ -327,3 +327,20 @@ regional title, candidate review, and no catalogue crosswalk. Explicit
 edition distinctions such as Sons of Liberty/Substance or Most Wanted/Black
 Edition are not overridden by aliases. Games without sufficient evidence
 stay unresolved; the target is zero **unexplained** games, not forced matches.
+
+### Unresolved RA identity triage
+
+The current resolver now recognises reviewed branded titles for Blood Omen 2,
+The King of Fighters: Maximum Impact (and sequel) and Virtua Fighter 10th
+Anniversary. Identity mappings are suggestions only until a real RA hash
+matches the ISO. Distinct editions and game entries are not assumed
+interchangeable.
+
+The raw CSV now includes `identity_review_reason`. Excel includes
+`Resolution detail` for the remaining unknowns, distinguishing no RA
+crosswalk, possible edition mismatch, different games and unusual
+compilations. This reduces undifferentiated *Unknown* rows without claiming
+there is a supported downloadable release where no official RA hash is known.
+
+To reevaluate identities and hash metadata, deploy the updated backend and
+run manager **Full Audit**. Export-only does not rerun the matching logic.
