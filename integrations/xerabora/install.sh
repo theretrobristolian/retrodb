@@ -190,9 +190,29 @@ EOF
     fi
   fi
   echo "Matching PS2 ELF: /opt/xerabora/OPL-RA.ELF (copy to your PS2 when upgrading)"
+  show_elf_download
   prompt_api_key
 }
 
+
+
+show_elf_download() {
+  local host remote
+  host="$(hostname -f 2>/dev/null || hostname)"
+  remote="$(id -un)@${host}:/opt/xerabora/OPL-RA.ELF"
+  echo
+  echo 'Matching PS2 OPL-RA ELF — download it to your own computer:'
+  if [[ ! -f /opt/xerabora/OPL-RA.ELF ]]; then
+    echo '[WARN] OPL-RA.ELF is not installed; install/update xeRAbora first.'
+    return 1
+  fi
+  echo 'Run these commands on your Mac / Linux / Windows computer, NOT in SSH:'
+  echo ' macOS / Linux terminal:'
+  printf '   scp "%s" ~/Downloads/\n' "$remote"
+  echo ' Windows PowerShell:'
+  printf '   scp "%s" "%s"\n' "$remote" '$env:USERPROFILE\Downloads\OPL-RA.ELF'
+  echo 'Then copy the downloaded ELF onto your PS2 storage and update the OPL-RA entry if necessary.'
+}
 
 api_key_present() { [[ -s "$(active_config_dir)/apikey" ]]; }
 set_api_key() {
@@ -403,6 +423,7 @@ menu() {
     echo " 11) Uninstall xeRAbora and delete all local data"
     echo " 12) Configure Web UI / LAN access"
     echo " 13) Service startup / automatic recovery"
+    echo " 14) Show OPL-RA.ELF download commands"
     echo "  0) Exit"
     xr_draw_footer
     read -rp "Choose an option: " choice || break
@@ -420,6 +441,7 @@ menu() {
       11) uninstall_client; xr_pause ;;
       12) web_ui_settings; xr_pause ;;
       13) configure_service_startup; xr_pause ;;
+      14) show_elf_download || true; xr_pause ;;
       0|q|Q) break ;;
       *) echo "Invalid selection."; xr_pause ;;
     esac
@@ -441,6 +463,7 @@ case "${1:-menu}" in
   uninstall) uninstall_client ;;
   web-ui) web_ui_settings ;;
   startup) configure_service_startup ;;
+  elf|download-elf) show_elf_download ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
-  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|web-ui|startup|start|stop|restart]"; exit 2 ;;
+  *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|web-ui|startup|elf|download-elf|start|stop|restart]"; exit 2 ;;
 esac
