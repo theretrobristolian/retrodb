@@ -152,6 +152,30 @@ The logs live in `~/.config/xerabora/xerabora.log` for the original default acco
 
 Run `bash integrations/xerabora/install.sh` to open the main menu or `bash integrations/xerabora/profiles.sh` for player management. Both show the same ASCII banner, project link, service state, installed version, active profile and author/footer. The **main menu option 8** and **player menu option 7** follow the active player's log in real time; press **Ctrl+C** to stop viewing and return to the menu.
 
+## Service startup, reboot delay and automatic recovery
+
+The installer manages the `xerabora.service` systemd unit, including a **20-second startup delay** after network readiness and a **10-second restart interval** when automatic recovery is enabled. The main menu includes **13) Service startup / automatic recovery**:
+
+| Mode | Boot | Unexpected exit | When selected |
+| --- | --- | --- | --- |
+| **Automatic** | Starts after network and delay | Restarts after 10 seconds (including a clean, unexpected process exit) | Starts the service if stopped |
+| **Manual** | Does not start | No automatic restart | Leaves an already-running service alone |
+| **Disabled** | Does not start | No automatic restart | Stops the service |
+
+Automatic is the normal installation default. systemd `Restart=always` **does not restart after an intentional** `systemctl stop`. Manual and Disabled both disable boot-time activation; Disabled additionally stops the running service. Neither mode removes the application or accounts.
+
+These choices are stored in the systemd drop-in at `/etc/systemd/system/xerabora.service.d/restart.conf`, separate from the profile switching drop-in, and preserved by future installer upgrades. Updating xeRAbora **respects the selected mode**: it won't unexpectedly start a disabled installation or a manually stopped installation.
+
+To check settings and service status:
+
+```bash
+systemctl is-enabled xerabora.service
+systemctl is-active xerabora.service
+systemctl cat xerabora.service
+```
+
+After pulling the latest installer, run `bash integrations/xerabora/install.sh` and choose **13**, then **1** to apply automatic mode to an existing installation. This does not require a host reboot.
+
 ## Uninstalling
 
 Choose **11) Uninstall xeRAbora and delete all local data** from the main menu, or run:
