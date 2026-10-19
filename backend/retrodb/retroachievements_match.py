@@ -209,6 +209,8 @@ def comparable_title(value: str) -> str:
             expanded.append(match.group(1))
         elif word in ROMAN_NUMBERS:
             expanded.append(ROMAN_NUMBERS[word])
+        elif word.isdigit():
+            expanded.append(str(int(word)))
         elif word not in {"a", "an", "the"}:
             expanded.append({"vs": "versus"}.get(word, word))
     comparable = " ".join(expanded)
