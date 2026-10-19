@@ -89,8 +89,8 @@ menu() {
     esac
   done
 }
-case "$1" in
-  ""|menu) menu ;;
+case "${1:-menu}" in
+  menu) menu ;;
   audit) audit ;;
   export) export_csv ;;
   status) header ;;
