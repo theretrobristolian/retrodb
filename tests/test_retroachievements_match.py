@@ -7,6 +7,9 @@ from retrodb.retroachievements_match import (
     comparable_title,
     extract_hash,
     identify_local_release,
+    friendly_local_title,
+    load_serial_aliases,
+    suggest_by_serial,
     load_hash_catalogue,
     normalise_title,
     preferred_release,
@@ -129,3 +132,34 @@ def test_patch_guidance_is_explicit():
         "Europe", "USA", "Crash Bash (USA) (Menu Glitch Fix)", "rapatches; redump"
     )
     assert guidance.startswith("Apply the RA-supported patch")
+
+
+def test_serial_aliases_are_documented_and_normalised():
+    aliases = load_serial_aliases()
+    assert aliases["SCES-50410"] == "Ace Combat 04: Shattered Skies"
+    assert aliases["SCES-51608"] == "Jak II"
+
+
+def test_serial_alias_recognises_european_title_without_hash_claim():
+    aliases = load_serial_aliases()
+    games = (CatalogueGame(91, "Ace Combat 04: Shattered Skies", ("a" * 32,)),)
+    game, method, score = suggest_by_serial("SCES-50410", games, aliases)
+    assert game and game.game_id == 91
+    assert method == "verified-serial-alias"
+    assert score == 1.0
+
+
+def test_serial_alias_never_guesses_missing_or_duplicate_games():
+    aliases = load_serial_aliases()
+    one = CatalogueGame(91, "Ace Combat 04: Shattered Skies", ("a" * 32,))
+    game, method, _ = suggest_by_serial("SCES-50410", (one, one), aliases)
+    assert game is None
+    assert method == "serial-alias-no-unique-ra-title"
+    game, method, _ = suggest_by_serial("SLUS-99999", (one,), aliases)
+    assert game is None
+    assert not method
+
+
+def test_friendly_title_strips_ps2_serial_from_filename():
+    assert friendly_local_title("dvd/SCES_516.08.Jak II Renegade.iso") == "Jak II Renegade"
+    assert friendly_local_title("dvd/SCES_504.10.Ace Combat Distant Thunder.iso") == "Ace Combat Distant Thunder"
