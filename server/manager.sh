@@ -88,17 +88,23 @@ step() {
     return 1
   fi
 }
+sync_gamedb() {
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-2
+}
+
 audit() {
-  stage "1/7" "Prerequisites and read-only RetroNAS connection"
+  stage "1/8" "Prerequisites and read-only RetroNAS connection"
   mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.' >&2; return 1; }
   sudo test -x /opt/retrodb-tools/RAHasher || { echo '[ERROR] RAHasher unavailable.' >&2; return 1; }
   printf '[OK] RetroNAS mounted; RAHasher available.\n'
-  step "2/7" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
-  step "3/7" "Inventory PS1 / PS2 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
-  step "4/7" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
-  step "5/7" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
-  step "6/7" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
-  step "7/7" "Export formatted Excel workbook and raw CSV" export_csv || return 1
+  step "2/8" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
+  step "3/8" "Synchronise PS2 GameDB serial catalogue (cache-aware)" sync_gamedb || return 1
+  step "4/8" "Inventory PS1 / PS2 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
+  step "5/8" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
+  step "6/8" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
+  step "7/8" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
+  step "8/8" "Export formatted Excel workbook and raw CSV" export_csv || return 1
   printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
   echo 'NOTE: No original RetroNAS game images were changed.'
 }
