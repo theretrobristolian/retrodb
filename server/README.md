@@ -297,3 +297,17 @@ incompatible copies), so values can be compared consistently. RA-ready is
 restricted to verified hashes for games with an achievement set; identifying
 a game without a set does not count as an achievement-ready image.
 
+
+### Overall versus eligible achievement coverage
+
+The Summary includes two distinct progress measures:
+
+- **RA-ready %** = verified RA-compatible images / effective images.
+- **Eligible RA-ready %** = verified RA-compatible images / (effective
+  images minus confidently identified NO SET games).
+
+Unresolved images **remain in the eligible denominator provisionally** rather
+than inflating readiness; if a future catalogue resolves them as NO SET the
+denominator shrinks. These are effective-image metrics, not complete multi-disc
+unique-game coverage metrics. Both counts preserve source ROMs.
+
