@@ -15,7 +15,7 @@ SOURCES = {
 }
 CACHE_DAYS = 180
 MAX_BYTES = 5 * 1024 * 1024
-SERIAL = re.compile(r"^([A-Z]{4})[-_. ]?(\\d{3})[-_. ]?(\\d{2})$", re.I)
+SERIAL = re.compile(r"^([A-Z]{4})[-_. ]?(\d{3})[-_. ]?(\d{2})$", re.I)
 
 
 def normalise_serial(value: str) -> str:
