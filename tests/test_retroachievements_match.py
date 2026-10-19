@@ -212,3 +212,26 @@ def test_gamedb_does_not_promote_duplicate_exact_titles():
     assert game is None
     assert method == "gamedb-ambiguous"
     assert "RA 50" in review
+
+def test_nonstandard_ps2_serial_formats_are_identified():
+    assert identify_local_release("SCPM_851.01.McDonalds Original Happy Disc.iso") == (
+        "SCPM-85101", "Japan"
+    )
+    assert identify_local_release("USGR_000.36.Shoot Em Up Collection.iso") == (
+        "USGR-00036", ""
+    )
+
+
+def test_curated_branding_and_regional_aliases():
+    cases = (
+        ("Guitar Hero: Rocks the 80s", "Guitar Hero Encore: Rocks the '80s"),
+        ("Lara Croft Tomb Raider: Anniversary", "Tomb Raider: Anniversary"),
+        ("Lara Croft Tomb Raider: Legend", "Tomb Raider: Legend"),
+        ("Disney's The Haunted Mansion", "The Haunted Mansion"),
+    )
+    for local, ra in cases:
+        assert comparable_title(local) == comparable_title(ra), (local, ra)
+
+
+def test_aliases_do_not_collapse_unrelated_racing_games():
+    assert comparable_title("Antz Extreme Racing") != comparable_title("XGIII Extreme G Racing")
