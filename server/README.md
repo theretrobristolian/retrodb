@@ -141,6 +141,25 @@ The manager exports `~/retrodb-exports/RetroDB-Compatibility.xlsx` alongside the
 Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`, `bash server/manager.sh patches`, `bash server/manager.sh patch-apply`.
 
 
+
+### Safer regional aliases and unusual PS2 discs
+
+Title normalisation now covers selected, reviewed branding/region variants
+(Guitar Hero Rocks the 80s, Tomb Raider Anniversary/Legend and Disney's
+Haunted Mansion). These are narrow identity aliases, not a global fuzzy
+threshold reduction, and only a **verified RA hash** marks a local ISO as
+compatible.
+
+The filename serial parser also recognises `SCPM-85101` (McDonald's
+Original Happy Disc, promotional demo) and `USGR-00036` (Shoot 'Em Up
+Collection, hack compilation). These special discs have separate
+`disc_classification` metadata and do not receive automatic **retail**
+RA-title recommendations from name similarity. They can still legitimately
+match RA via their hash. The Excel report includes their classification and
+review note. Disc IDs and classifications are based on user-supplied
+release references and should not be mistaken for cryptographic disc
+validation.
+
 ### GameDB identification (PS2 initial integration)
 
 The `backend/retrodb/providers/gamedb.py` provider fetches the official
