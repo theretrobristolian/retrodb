@@ -9,6 +9,7 @@ from retrodb.retroachievements_match import (
     identify_local_release,
     friendly_local_title,
     game_db_ra_candidates,
+    resolve_catalogue_identity,
     load_serial_aliases,
     suggest_by_serial,
     load_hash_catalogue,
@@ -235,3 +236,27 @@ def test_curated_branding_and_regional_aliases():
 
 def test_aliases_do_not_collapse_unrelated_racing_games():
     assert comparable_title("Antz Extreme Racing") != comparable_title("XGIII Extreme G Racing")
+
+def test_regional_identity_crosswalk_without_claiming_hash_compatibility():
+    games = (CatalogueGame(101, "Bully", ("a" * 32,)),
+             CatalogueGame(102, "Indigo Prophecy", ("b" * 32,)),
+             CatalogueGame(103, "Ratchet: Deadlocked", ("c" * 32,)),
+             CatalogueGame(104, "Ratchet & Clank: Up Your Arsenal", ("d" * 32,)))
+    for local, expected in [
+        ("Canis Canem Edit", 101),
+        ("Fahrenheit", 102),
+        ("Ratchet: Gladiator", 103),
+        ("Ratchet & Clank 3", 104),
+    ]:
+        game, method, _, _ = resolve_catalogue_identity(local, games)
+        assert game and game.game_id == expected
+        assert method == "curated-regional-title"
+
+
+def test_distinct_editions_are_not_equated_by_regional_crosswalk():
+    games = (CatalogueGame(200, "Metal Gear Solid 2: Substance", ("a" * 32,)),
+             CatalogueGame(201, "Need for Speed: Most Wanted Black Edition", ("b" * 32,)))
+    for title in ["Metal Gear Solid 2: Sons of Liberty",
+                  "Need for Speed: Most Wanted"]:
+        game, _, _, _ = resolve_catalogue_identity(title, games)
+        assert game is None
