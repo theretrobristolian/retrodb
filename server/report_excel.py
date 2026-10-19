@@ -58,7 +58,7 @@ def xml_sheet(rows):
             style = 1 if n == 1 else (2 if n%2 == 0 else 0)
             if n > 1 and len(row) == 11 and i == 3:
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6}.get(val,style)
-            if n > 1 and len(row) == 10 and i == 4 and val == 'YES': style = 3
+            if n > 1 and len(row) == 11 and i == 4 and val == 'YES': style = 3
             xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
                        (chr(65+i),n,style,escape(str(val or ''))))
         xml.append('</row>')
