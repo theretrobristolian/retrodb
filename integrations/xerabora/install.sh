@@ -275,12 +275,12 @@ configure_service_startup() {
   sudo -v || return 1
   sudo install -d -m 0755 "$dir"
   if [[ "$mode" == auto ]]; then
-    printf '# xeRAbora startup mode: auto\n[Service]\nRestart=always\nRestartSec=10\n' | sudo tee "$dir/restart.conf" >/dev/null
+    printf '# xeRAbora startup mode: auto\n[Service]\nExecStartPre=\nExecStartPre=/bin/sleep 20\nRestart=always\nRestartSec=10\n' | sudo tee "$dir/restart.conf" >/dev/null
     sudo systemctl daemon-reload
     sudo systemctl enable xerabora.service
     sudo systemctl start xerabora.service
   else
-    printf '# xeRAbora startup mode: %s\n[Service]\nRestart=no\n' "$mode" | sudo tee "$dir/restart.conf" >/dev/null
+    printf '# xeRAbora startup mode: %s\n[Service]\nExecStartPre=\nRestart=no\n' "$mode" | sudo tee "$dir/restart.conf" >/dev/null
     sudo systemctl daemon-reload
     sudo systemctl disable xerabora.service
     if [[ "$mode" == disabled ]]; then
