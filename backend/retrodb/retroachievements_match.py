@@ -601,9 +601,15 @@ def match_collection(
                 "gamedb_title": gamedb_title,
                 "ra_set_status": ("HAS_SET" if (recommendation or match) and
                     counts_by_id.get(recommendation.game_id if recommendation else match[0], 0) > 0
-                    else "NO_SET" if no_set_game else "UNRESOLVED"),
-                "no_set_ra_game_id": no_set_game.game_id if no_set_game else "",
-                "no_set_ra_title": no_set_game.title if no_set_game else "",
+                    else "NO_SET" if (no_set_game or match) else "UNRESOLVED"),
+                "no_set_ra_game_id": (
+                    no_set_game.game_id if no_set_game else
+                    match[0] if match and counts_by_id.get(match[0], 0) == 0 else ""
+                ),
+                "no_set_ra_title": (
+                    no_set_game.title if no_set_game else
+                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else ""
+                ),
                 "gamedb_identified": "YES" if gamedb_title else "NO",
                 "disc_classification": ("special-disc-review" if special_disc else "standard"),
                 "local_region": local_region,
