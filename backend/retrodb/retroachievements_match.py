@@ -271,6 +271,23 @@ def suggest_game(local_path: str, games: tuple[CatalogueGame, ...]) -> tuple[Cat
     return None, "ambiguous" if best_score >= 0.72 else "", best_score
 
 
+REGIONAL_IDENTITIES = {
+    "canis canem edit": "Bully",
+    "fahrenheit": "Indigo Prophecy",
+    "ratchet gladiator": "Ratchet: Deadlocked",
+    "ratchet and clank 3": "Ratchet & Clank: Up Your Arsenal",
+    "godfather": "The Godfather: The Game",
+}
+
+def resolve_catalogue_identity(title: str, games: tuple[CatalogueGame, ...]):
+    """Reviewed regional identity aliases; no equivalence of editions or hashes."""
+    canonical = REGIONAL_IDENTITIES.get(comparable_title(title), title)
+    game, method, score, review = game_db_ra_candidates(canonical, games)
+    if game and canonical != title:
+        method = "curated-regional-title"
+    return game, method, score, review
+
+
 def game_db_ra_candidates(
     title: str, games: tuple[CatalogueGame, ...]
 ) -> tuple[CatalogueGame | None, str, float, str]:
@@ -518,7 +535,7 @@ def match_collection(
                     )
                 gamedb_review = ""
                 if recommendation is None and gamedb_title:
-                    game, method, value, gamedb_review = game_db_ra_candidates(
+                    game, method, value, gamedb_review = resolve_catalogue_identity(
                         gamedb_title, with_sets
                     )
                     if game:
@@ -549,10 +566,14 @@ def match_collection(
 
             if item.ra_match_status == "unmatched" and not recommendation and not special_disc:
                 identity = gamedb_title or friendly_local_title(item.relative_path)
-                exact = [game for game in no_sets
-                         if comparable_title(game.title) == comparable_title(identity)]
-                if len(exact) == 1:
-                    no_set_game = exact[0]
+                candidate, method, _, review = resolve_catalogue_identity(
+                    identity, no_sets
+                )
+                if candidate:
+                    no_set_game = candidate
+                    confidence = confidence or method
+                elif review and not alternatives:
+                    alternatives = review
 
             accepted_hashes: list[str] = []
             accepted_names: list[str] = []
@@ -599,6 +620,13 @@ def match_collection(
                 "local_serial": serial,
                 "local_friendly_title": friendly_local_title(item.relative_path),
                 "gamedb_title": gamedb_title,
+                "identity_resolution": (
+                    "verified-ra-hash" if match else
+                    confidence if recommendation or no_set_game else
+                    "special-disc" if special_disc else
+                    "review-candidates" if alternatives else
+                    "no-catalogue-crosswalk"
+                ),
                 "ra_set_status": ("HAS_SET" if (recommendation or match) and
                     counts_by_id.get(recommendation.game_id if recommendation else match[0], 0) > 0
                     else "NO_SET" if (no_set_game or match) else "UNRESOLVED"),
@@ -648,6 +676,7 @@ def match_collection(
     fields = [
         "platform", "status", "path", "local_serial", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
+        "identity_resolution",
         "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
         "disc_classification",
         "local_ra_hash", "ra_game_id", "ra_game_title",
