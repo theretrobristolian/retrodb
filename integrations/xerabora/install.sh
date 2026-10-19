@@ -245,7 +245,13 @@ test_api() {
 
 service_startup_mode() {
   local state mode_file="/etc/systemd/system/xerabora.service.d/restart.conf"
-  if [[ -f "$mode_file" ]] && grep -q '^# xeRAbora startup mode: disabled"$(systemctl is-enabled xerabora.service 2>/dev/null || true)"
+  if [[ -f "$mode_file" ]]; then
+    if grep -q '^# xeRAbora startup mode: auto$' "$mode_file"; then echo auto; return; fi
+    if grep -q '^# xeRAbora startup mode: manual$' "$mode_file"; then echo manual; return; fi
+    if grep -q '^# xeRAbora startup mode: disabled$' "$mode_file"; then echo disabled; return; fi
+  fi
+  [[ -f /etc/systemd/system/xerabora.service ]] || { echo auto; return; }
+  state="$(systemctl is-enabled xerabora.service 2>/dev/null || true)"
   case "$state" in
     enabled|enabled-runtime|linked) echo auto ;;
     disabled|disabled-runtime|static) echo manual ;;
