@@ -447,7 +447,13 @@ def match_collection(
         platform = session.scalar(select(Platform).where(Platform.slug == slug))
         if platform is None:
             raise MatchError(f"Platform is missing from the database: {slug}")
-        console_id, catalogue, games = load_catalogue(cache_dir / f"{slug}.json")
+        catalogue_path = cache_dir / f"{slug}.json"
+        console_id, catalogue, games = load_catalogue(catalogue_path)
+        records = json.loads(catalogue_path.read_text(encoding="utf-8"))
+        counts_by_id = {int(g["ID"]): int(g.get("NumAchievements", 0))
+                        for g in records if isinstance(g, dict) and "ID" in g}
+        with_sets = tuple(g for g in games if counts_by_id.get(g.game_id, 0) > 0)
+        no_sets = tuple(g for g in games if counts_by_id.get(g.game_id, 0) == 0)
         try:
             gamedb_titles = load_gamedb(gamedb_cache, slug)
         except (OSError, ValueError) as exc:
@@ -500,6 +506,7 @@ def match_collection(
                 gamedb_title = "McDonald's Original Happy Disc (promotional demo)"
             elif serial == "USGR-00036" and not gamedb_title:
                 gamedb_title = "Shoot 'Em Up Collection (hack compilation)"
+            no_set_game = None
             recommendation = None
             confidence = ""
             score = 0.0
@@ -507,12 +514,12 @@ def match_collection(
             if item.ra_match_status == "unmatched" and not special_disc:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
-                        serial, games, serial_aliases
+                        serial, with_sets, serial_aliases
                     )
                 gamedb_review = ""
                 if recommendation is None and gamedb_title:
                     game, method, value, gamedb_review = game_db_ra_candidates(
-                        gamedb_title, games
+                        gamedb_title, with_sets
                     )
                     if game:
                         recommendation, confidence, score = game, method, value
@@ -520,7 +527,7 @@ def match_collection(
                         confidence = method
                 if recommendation is None and confidence not in ('serial-alias-no-unique-ra-title',):
                     filename_game, filename_method, filename_score = suggest_game(
-                        item.relative_path, games
+                        item.relative_path, with_sets
                     )
                     # Do not silently override a different GameDB identification.
                     if filename_game and gamedb_title and comparable_title(
@@ -535,10 +542,17 @@ def match_collection(
                         confidence = filename_method
                 if recommendation is None:
                     alternatives = gamedb_review or alternative_candidates(
-                        item.relative_path, games
+                        item.relative_path, with_sets
                     )
                 if recommendation:
                     counts["recommended"] += 1
+
+            if item.ra_match_status == "unmatched" and not recommendation and not special_disc:
+                identity = gamedb_title or friendly_local_title(item.relative_path)
+                exact = [game for game in no_sets
+                         if comparable_title(game.title) == comparable_title(identity)]
+                if len(exact) == 1:
+                    no_set_game = exact[0]
 
             accepted_hashes: list[str] = []
             accepted_names: list[str] = []
@@ -585,6 +599,11 @@ def match_collection(
                 "local_serial": serial,
                 "local_friendly_title": friendly_local_title(item.relative_path),
                 "gamedb_title": gamedb_title,
+                "ra_set_status": ("HAS_SET" if (recommendation or match) and
+                    counts_by_id.get(recommendation.game_id if recommendation else match[0], 0) > 0
+                    else "NO_SET" if no_set_game else "UNRESOLVED"),
+                "no_set_ra_game_id": no_set_game.game_id if no_set_game else "",
+                "no_set_ra_title": no_set_game.title if no_set_game else "",
                 "gamedb_identified": "YES" if gamedb_title else "NO",
                 "disc_classification": ("special-disc-review" if special_disc else "standard"),
                 "local_region": local_region,
@@ -623,6 +642,7 @@ def match_collection(
     fields = [
         "platform", "status", "path", "local_serial", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
+        "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
         "disc_classification",
         "local_ra_hash", "ra_game_id", "ra_game_title",
         "recommendation_confidence", "recommendation_score",
