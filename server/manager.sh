@@ -49,8 +49,8 @@ export_csv() {
 }
 audit() {
   mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.'; return 1; }
-  sudo bash "$HERE/retronas.sh" scan
-  sudo bash "$HERE/retronas.sh" match
+  sudo bash "$HERE/retronas.sh" scan || return 1
+  sudo bash "$HERE/retronas.sh" match || return 1
   export_csv
 }
 run() { if "$@"; then echo '[OK] Completed.'; else echo '[ERROR] Command failed.' >&2; fi; }
