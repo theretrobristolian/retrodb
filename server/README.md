@@ -126,11 +126,19 @@ bash server/manager.sh
 
 Its header shows RetroDB/PostgreSQL status, the RetroNAS mount, RAHasher, report availability and the xeRAbora service/Web UI. RetroDB currently provides a local API health endpoint at `http://127.0.0.1:8000/health`, **not a complete RetroDB browser frontend**.
 
-Option **1** checks/mounts RetroNAS, runs the read-only ROM inventory and cached RetroAchievements hash match, then exports a formatted **Excel workbook** and retains the technical CSV. Option **4** generates both from the existing report without rescanning. Options **5** and **6** refresh the RetroAchievements catalogue (normal cached sync or forced refresh).
+The simplified menu focuses on three workflows:
+
+- **1 — FULL AUDIT:** Seven clearly labelled stages: verify the RetroNAS mount and RAHasher, synchronise the RA catalogue (cache-aware), scan games, hash and match discs, generate a patch plan, download/reuse official patches and verify source checksums, then export the Excel workbook and raw CSV. The workflow stops on failed stages and **never modifies ROMs on RetroNAS**. The patch download stage may access the internet to fetch official patch packages.
+- **2 — Download official patch packages:** Create/update the patch manifest and download/reuse official patch packages locally. No ROM patching occurs.
+- **3 — Apply verified patches locally:** Requires typing `APPLY`, refreshes source checksum verification, and only applies patches to eligible clean images. Patched outputs are placed in `/var/lib/retrodb/patches/verified/` and validated using RAHasher. Review those outputs and copy them back to RetroNAS yourself; the original share remains read-only.
+- **4 — Export latest Excel:** Rebuild Excel and copy raw CSV from the existing audit without scanning or downloading patches.
+- **5 — Service/integration details:** Show RetroDB, xeRAbora and RetroNAS systemd status.
+
+Run `bash server/manager.sh` for the menu, or `bash server/manager.sh audit`, `export`, `patches` or `patch-apply` directly.
 
 The manager exports `~/retrodb-exports/RetroDB-Compatibility.xlsx` alongside the raw `retroachievements-compatibility.csv`. The Excel report has a **Summary** tab and separate **PlayStation 1** and **PlayStation 2** tabs. Console tabs are sorted by friendly game name and show the filename, disc ID, RA compatibility, a separate **Patchable** YES/NO field, clear issue/recommendation, RA game ID, recommended release, region and patch reference. The Summary tab separately totals verified RA-compatible games, confirmed patchable sources, other suggested ISO replacements, unknown games and hash errors. **RA compatible YES** means the existing ISO/disc image hash matches RA. **Patchable YES** requires a matching source entry in `/var/lib/retrodb/patches/patch-prepare.json` with state `clean-base-verified-ready-to-patch`, and the verified candidate must be the actual RetroNAS collection file, not a separately supplied incoming image. A mere patch URL or `rapatches` label does *not* qualify. Generate that verification with `sudo bash server/retronas.sh patch-plan`, `patch-download`, then `patch-prepare`. Re-run `patch-prepare` after changing any source files; the report reflects the *last preparation run*, not a new checksum test during Excel export. Patchability does not mean RA compatibility until the patched output passes RAHasher verification. It uses Python's standard library (no additional package installation). The export directory and files are private to the Linux account (directory `700`, files `600`), leaving the protected original in `/var/lib/retrodb/reports/` unchanged. It displays macOS/Linux and Windows PowerShell `scp` commands for downloading the CSV **from your computer**, outside the SSH session. The Excel workbook is the recommended download; the CSV is available when deeper technical troubleshooting is needed. Neither the audit nor the export modifies ROMs on RetroNAS.
 
-Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`.
+Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`, `bash server/manager.sh patches`, `bash server/manager.sh patch-apply`.
 
 ## RetroAchievements credentials
 
