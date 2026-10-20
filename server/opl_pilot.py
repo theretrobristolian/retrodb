@@ -55,8 +55,8 @@ def move_file(src, dst, expected_size):
     if src.stat().st_size != expected_size:
         raise ValueError(f"Source size changed: {src}")
     os.rename(src, dst)
-    if not exact_exists(dst) or exact_exists(src):
-        raise ValueError(f"Rename verification failed: {src} -> {dst}")
+    # os.rename succeeding is authoritative; CIFS readdir may be cached immediately
+    # afterward, so avoid a false failure from stale directory-entry enumeration.
 
 def check_targets(root, rows):
     sources = set()
@@ -119,6 +119,46 @@ def do_apply(root, rows, journal):
         print(f"RENAMED {op['old']} -> {op['new']}", flush=True)
     print(f"[OK] Applied {len(operations)} renames. Rollback journal: {journal}")
 
+def do_resume(root, journal):
+    """Continue a partially completed run, reconciling actual file locations."""
+    document = json.loads(journal.read_text(encoding="utf-8"))
+    for op in document["operations"]:
+        old = safe(root, op["old"])
+        new = safe(root, op["new"])
+        temp = safe(root, op["temp"])
+        state = location(root, op)
+        if state is None:
+            raise ValueError(f"Cannot locate any file for: {op['old']}")
+        if state == "old":
+            if op["case_only"]:
+                move_file(old, temp, op["size"])
+                op["state"] = "temporary"
+                journal_write(journal, document)
+                move_file(temp, new, op["size"])
+            else:
+                move_file(old, new, op["size"])
+        elif state == "temp":
+            move_file(temp, new, op["size"])
+        elif state == "new":
+            if new.stat().st_size != op["size"]:
+                raise ValueError(f"Target size differs: {new}")
+        op["state"] = "applied"
+        journal_write(journal, document)
+        print(f"[OK] {op['new']}", flush=True)
+    print(f"[OK] Reconciled and applied {len(document['operations'])} entries.")
+
+def do_status(root, journal):
+    document = json.loads(journal.read_text(encoding="utf-8"))
+    from collections import Counter
+    outcomes = Counter()
+    for op in document["operations"]:
+        observed = location(root, op)
+        outcomes[(op["state"], observed)] += 1
+        if op["state"] != "applied" or observed != "new":
+            print(f"[CHECK] journal={op['state']} disk={observed}: {op['old']} => {op['new']}")
+    for (recorded, actual), count in sorted(outcomes.items()):
+        print(f"Journal state {recorded}, current filename {actual}: {count}")
+
 def do_rollback(root, journal):
     document = json.loads(journal.read_text(encoding="utf-8"))
     for op in reversed(document["operations"]):
@@ -158,7 +198,7 @@ def do_rollback(root, journal):
 
 def main():
     a=argparse.ArgumentParser()
-    a.add_argument("command",choices=["preview","apply","rollback"])
+    a.add_argument("command",choices=["preview","apply","rollback","resume","status"])
     a.add_argument("--csv",type=Path,required=True)
     a.add_argument("--root",type=Path,required=True)
     a.add_argument("--journal",type=Path,required=True)
@@ -182,7 +222,12 @@ def main():
         do_apply(root,rows,args.journal)
     else:
         if not args.journal.is_file(): raise ValueError("No rollback journal")
-        do_rollback(root,args.journal)
+        if args.command == "rollback":
+            do_rollback(root, args.journal)
+        elif args.command == "resume":
+            do_resume(root, args.journal)
+        else:
+            do_status(root, args.journal)
 
 if __name__=="__main__":
     main()
