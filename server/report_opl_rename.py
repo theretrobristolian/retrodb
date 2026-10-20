@@ -32,6 +32,9 @@ def compact_title(value):
     if sega:
         number, game = sega.groups()
         value = f"Sega Ages {number} {game}"
+        if len(value) > TITLE_LIMIT:
+            value = re.sub(r"\\bIII\\b", "3", value)
+            value = re.sub(r"\\bII\\b", "2", value)
     # Prefer complete words, but retain a full series volume or sequel marker.
     if len(value) <= TITLE_LIMIT:
         return value
