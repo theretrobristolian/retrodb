@@ -44,7 +44,7 @@ CURATED_DISPLAY_TITLES = {
     "the legend of spyro a new beginning": "Spyro A New Beginning",
     "the legend of spyro the eternal night": "Spyro The Eternal Night",
     "the legend of spyro dawn of the dragon": "Spyro Dawn of the Dragon",
-    "spider-man web of shadows amazing allies edition": "Spider-Man Web of Shadows",
+    "spider-man web of shadows amazing allies edition": "Spidey Web of Shadows AA",
     "score international baja 1000 the official game": "SCORE Baja 1000",
     "short track racing trading paint": "Short Track Trading Paint",
     "mtv pimp my ride street racing": "Pimp My Ride Street Racing",
