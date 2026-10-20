@@ -57,6 +57,9 @@ export_csv() {
     ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" ) || return 1
     echo '[INFO] Patchable verification unavailable; run patch-plan, patch-download and patch-prepare to identify verified patch sources.'
   fi
+  local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
+  ( umask 077; python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" ) || return 1
+  echo "[OK] OPL rename proposals: $rename_report"
   echo "[OK] CSV copied to $EXPORT"
   echo "[OK] Excel workbook: $excel"
   ls -lh "$EXPORT"
@@ -65,6 +68,8 @@ export_csv() {
   echo 'Run on your own computer, not inside SSH:'
   echo ' Mac / Linux (recommended Excel workbook):'
   printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Compatibility.xlsx"
+  echo ' Mac / Linux (read-only OPL rename proposals):'
+  printf '   scp "%s" ~/Downloads/\\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   echo ' Mac / Linux (raw CSV):'
   printf '   scp "%s" ~/Downloads/\n' "$remote"
   echo ' Windows PowerShell (recommended Excel workbook):'
