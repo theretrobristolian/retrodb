@@ -35,3 +35,21 @@ def test_collisions_and_no_gamedb_are_not_silently_accepted():
         sample("DVD/C.iso", "SLES-23456", ""),
     ])
     assert [row["Status"] for row in rows] == ["COLLISION", "COLLISION", "REVIEW"]
+
+def test_unicode_titles_transliterate_before_sanitising():
+    rows = module.propose([sample("DVD/SLES_544.39.kami.iso", "SLES-54439", "Ōkami")])
+    assert rows[0]["Proposed filename"] == "SLES_544.39.Okami.iso"
+
+
+def test_sega_ages_keeps_volume_and_game_name():
+    rows = module.propose([
+        sample("DVD/SLPM_624.46.Old.iso", "SLPM-62446",
+               "Sega Ages 2500 Series Vol. 10: After Burner II"),
+        sample("DVD/SLPM_623.64.Old.iso", "SLPM-62364",
+               "Sega Ages 2500 Series Vol. 2: Monaco GP"),
+    ])
+    for row, number in zip(rows, ("10", "2")):
+        assert "Sega Ages " + number in row["Proposed filename"]
+        assert len(row["Display preview with RA"]) <= 32
+    assert "After Burner 2" in rows[0]["Proposed filename"]
+    assert "Monaco GP" in rows[1]["Proposed filename"]
