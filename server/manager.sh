@@ -155,7 +155,21 @@ opl_update_all() {
   mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
   mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
   # Preserve the completed 40-title journal; new bulk jobs always get a new name.
-  journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$$.json"
+  local previous
+  while IFS= read -r previous; do
+    if python3 - "$previous" <<'PYJOURNAL'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    ops = json.load(handle)["operations"]
+sys.exit(0 if any(op["state"] != "applied" for op in ops) else 1)
+PYJOURNAL
+    then
+      echo "[STOP] Incomplete rename journal: $previous"
+      echo 'Use option 7 to inspect/recover before starting a new operation.'
+      return 1
+    fi
+  done < <(find "$OPL_JOURNAL_DIR" -maxdepth 1 -type f -name 'opl-rename-*.json' | sort)
+  journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$.json"
   echo 'OPL full-library rename — proposed changes (read-only):'
   python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
   echo 'All PROPOSED titles, including case-only changes, are eligible. REVIEW/COLLISION entries are skipped.'
@@ -168,12 +182,35 @@ opl_update_all() {
   if mountpoint -q "$PILOT_ROOT"; then
     echo 'Temporary RW mount is already active; refusing to proceed.'; return 1
   fi
-  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,nosuid,nodev,noexec" || return 1
+  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
   python3 "$HERE/opl_pilot.py" apply --csv "$PILOT_CSV" --root "$PILOT_ROOT" --journal "$journal" || result=$?
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Temporary RW mount still active; inspect manually.' >&2; return 1; }
   echo "Bulk rename rollback journal: $journal"
   echo 'The previous 40-game pilot journal is unchanged.'
   [[ $result -eq 0 ]] || echo '[WARNING] Rename was interrupted/failed. Keep the journal; inspect it before retrying.'
+  return "$result"
+}
+opl_recover() {
+  local selected source result=0 answer
+  mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
+  echo 'Available bulk rename journals:'
+  find "$OPL_JOURNAL_DIR" -maxdepth 1 -type f -name 'opl-rename-*.json' -printf '%f\n' | sort
+  read -rp 'Enter the exact journal filename: ' selected
+  [[ "$selected" =~ ^opl-rename-[A-Za-z0-9T-]+\.json$ ]] || { echo 'Invalid journal filename'; return 1; }
+  local journal="$OPL_JOURNAL_DIR/$selected"
+  [[ -f "$journal" ]] || { echo 'Journal not found.'; return 1; }
+  echo 'Inspecting filesystem via the read-only mount:'
+  python3 "$HERE/opl_pilot.py" status --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
+  read -rp 'Type RESUME to finish pending renames, or press Enter to cancel: ' answer
+  [[ "$answer" == RESUME ]] || return 0
+  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  [[ "$source" == //* ]] || return 1
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  mountpoint -q "$PILOT_ROOT" && { echo 'Temporary RW mount already active.'; return 1; }
+  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  python3 "$HERE/opl_pilot.py" resume --csv "$PILOT_CSV" --root "$PILOT_ROOT" --journal "$journal" || result=$?
+  sudo umount "$PILOT_ROOT" || { echo 'WARNING: RW mount remains active.'; return 1; }
+  echo "Journal: $journal"
   return "$result"
 }
 
@@ -187,7 +224,7 @@ menu() {
     echo '  3) Apply verified patches LOCALLY (confirmation required)'
     echo '  4) Export latest Excel workbook (no new audit)'
     echo '  5) Service / integration details'
-    echo '  6) UPDATE ALL eligible OPL titles (confirmation + rollback journal)'
+    echo '  6) UPDATE ALL eligible OPL titles (confirmation + rollback journal)'\n    echo '  7) INSPECT / RESUME interrupted OPL rename journal'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -201,7 +238,7 @@ menu() {
       4) run export_csv; pause ;;
       5) echo; systemctl --no-pager --full status retrodb.service xerabora.service || true
          echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
-      6) run opl_update_all; pause ;;
+      6) run opl_update_all; pause ;;\n      7) run opl_recover; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
