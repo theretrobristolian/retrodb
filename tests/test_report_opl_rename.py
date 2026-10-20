@@ -53,3 +53,34 @@ def test_sega_ages_keeps_volume_and_game_name():
         assert len(row["Display preview with RA"]) <= 32
     assert "After Burner 2" in rows[0]["Proposed filename"]
     assert "Monaco GP" in rows[1]["Proposed filename"]
+
+def test_case_only_rename_is_a_normal_proposal():
+    rows = module.propose([sample("DVD/SLES_123.45.example game.iso")])
+    assert rows[0]["Status"] == "PROPOSED"
+
+def test_no_disc_is_quarantined_from_gamedb_title():
+    rows = module.propose([sample("DVD/SLES_528.58.No Disc.iso",
+                                  "SLES-52858", "Cocoto Kart Racer")])
+    assert rows[0]["Status"] == "REVIEW"
+    assert not rows[0]["Proposed filename"]
+
+def test_identical_collision_files_are_manual_duplicate_candidates(tmp_path):
+    (tmp_path / "DVD").mkdir()
+    for name in ("A.iso", "B.iso"):
+        (tmp_path / "DVD" / name).write_bytes(b"same payload")
+    rows = module.propose([
+        sample("DVD/A.iso", title="Same Game"),
+        sample("DVD/B.iso", title="Same Game"),
+    ], verify_root=tmp_path)
+    assert all(r["Status"] == "COLLISION" for r in rows)
+    assert all("IDENTICAL SHA256" in r["Duplicate recommendation"] for r in rows)
+
+def test_different_collision_files_must_not_be_deleted(tmp_path):
+    (tmp_path / "DVD").mkdir()
+    (tmp_path / "DVD" / "A.iso").write_bytes(b"first")
+    (tmp_path / "DVD" / "B.iso").write_bytes(b"second")
+    rows = module.propose([
+        sample("DVD/A.iso", title="Same Game"),
+        sample("DVD/B.iso", title="Same Game"),
+    ], verify_root=tmp_path)
+    assert all("DIFFERENT SHA256" in r["Duplicate recommendation"] for r in rows)
