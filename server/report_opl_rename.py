@@ -57,6 +57,17 @@ CURATED_DISPLAY_TITLES = {
     "teenage mutant ninja turtles smash-up": "TMNT Smash-Up",
 }
 
+PILOT_DISPLAY_OVERRIDES = {
+    "SLUS-20152": "Ace Combat 04 Shat Skies",
+    "SLES-54617": "Action Man ATOM",
+    "SLES-50282": "Age of Empires II",
+    "SLES-50185": "Alone in the Dark New Night",
+    "SLUS-21096": "Ape Escape Pumped Primed",
+    "SCUS-97231": "Arc the Lad Twilight Spirits",
+    "SLUS-21043": "Backyard Wrestling 2",
+    "SLES-53481": "10 000 Bullets"
+}
+
 def compact_title(value):
     """Preserve the distinctive game, series and volume rather than truncating blindly."""
     sega = re.match(
@@ -208,7 +219,7 @@ def propose(rows, verify_root=None):
                 record["Status"] = "REVIEW"
                 record["Notes"] = "GameDB title became empty after sanitisation"
             else:
-                trimmed = compact_title(title)
+                trimmed = PILOT_DISPLAY_OVERRIDES.get(serial, compact_title(title))
                 record["Title truncated"] = "YES" if trimmed != cleaned else "NO"
                 proposed = f"{prefix}.{trimmed}.iso"
                 target = str(current.with_name(proposed))
