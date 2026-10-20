@@ -17,10 +17,12 @@ def safe(root, relative):
     return path
 
 def plan(rows):
-    # Select first 20 eligible titles alphabetically, not first 20 raw CSV rows.
+    # Select first 20 safe non-case-only title changes alphabetically.
+    # Case-only changes need a separate two-stage SMB rename flow.
     eligible = [r for r in rows if r.get("Status") == "PROPOSED"
                 and r.get("Proposed relative path")
-                and r.get("Current relative path")]
+                and r.get("Current relative path")
+                and r["Current relative path"].casefold() != r["Proposed relative path"].casefold()]
     eligible.sort(key=lambda r: ((r.get("GameDB title") or r.get("Current filename") or "").casefold(),
                                  r["Current relative path"].casefold()))
     return eligible[:20]
@@ -42,6 +44,8 @@ def check_targets(root, rows):
             raise ValueError(f"Source missing: {src}")
         if dst.exists():
             raise ValueError(f"Destination exists: {dst}")
+        if src.stat().st_dev != dst.parent.stat().st_dev:
+            raise ValueError("Rename would cross filesystems")
         key = str(dst).casefold()
         if key in targets:
             raise ValueError(f"Target collision: {dst}")
