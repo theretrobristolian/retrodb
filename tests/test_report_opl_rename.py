@@ -151,3 +151,14 @@ def test_curated_opl_display_names_keep_game_identity():
 def test_existing_short_titles_remain_intact():
     assert module.compact_title("Guitar Hero: Metallica") == "Guitar Hero Metallica"
     assert module.compact_title("Guitar Hero: Van Halen") == "Guitar Hero Van Halen"
+
+
+def test_backyard_wrestling_and_arc_pilot_titles():
+    cases = [("SLUS-20638", "Backyard Wrestling"),
+             ("SCUS-97231", "Arc Lad Twilight Spirits")]
+    for serial, title in cases:
+        prefix, digits = serial.split("-")
+        path = f"DVD/{prefix}_{digits[:3]}.{digits[3:]}.Old.iso"
+        row = module.propose([sample(path, serial, "Long game title")])[0]
+        assert row["Display preview with RA"] == title + " [RA]"
+        assert len(row["Display preview with RA"]) <= 32
