@@ -467,3 +467,29 @@ After application, test titles, artwork and settings with OPL Manager and
 test a few ISOs on MMCE / OPL-RA. A full audit is needed to refresh cached
 RetroDB inventory after renames. If the temporary mount fails to unmount,
 manually inspect and unmount it before another operation.
+
+### Update all OPL titles
+
+Use menu **6 — UPDATE ALL eligible OPL titles** after menu **4 — Export**
+has regenerated the latest rename proposals from a current FULL AUDIT.
+It previews every proposed rename, then requires typing `RENAMEALL`.
+Eligible entries must have status PROPOSED and have a non-case-only name
+change. REVIEW, COLLISION, UNCHANGED and case-only changes are skipped
+and the skipped totals are shown before confirmation. There is no fixed
+batch size. The existing read-only mount is unchanged. Only the temporary
+second SMB mount is read/write, and it is unmounted afterward.
+
+A unique per-run journal is created under
+`~/retrodb-exports/opl-rename-journals/`. The earlier pilot file
+`~/retrodb-exports/opl-pilot-rollback.json` is preserved. The new journal
+records each original path, target, size, and progress and is written
+before any renames. Back up both journals off the VM. On any error,
+do not immediately rerun; check whether the journal contains partially
+completed operations first.
+
+Recovery is possible using `python3 server/opl_pilot.py rollback
+--csv ~/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv
+--root <temporary-writable-retroNAS-mount>
+--journal <exact-journal-path>`, after explicitly mounting a writable
+connection. Rollback uses the original manifest (not the current CSV)
+to restore exact names, and never overwrites an existing file.
