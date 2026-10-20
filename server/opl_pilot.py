@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reversible, journalled first-40 OPL rename pilot. Never alters ISO contents."""
+"""Reversible, journalled OPL bulk renaming. Never alters ISO contents."""
 import argparse
 import csv
 import json
@@ -17,7 +17,7 @@ def safe(root, relative):
     return path
 
 def plan(rows):
-    # Select first 40 safe non-case-only title changes alphabetically.
+    # Select all safe non-case-only title changes alphabetically.
     # Case-only changes need a separate two-stage SMB rename flow.
     eligible = [r for r in rows if r.get("Status") == "PROPOSED"
                 and r.get("Proposed relative path")
@@ -25,7 +25,7 @@ def plan(rows):
                 and r["Current relative path"].casefold() != r["Proposed relative path"].casefold()]
     eligible.sort(key=lambda r: ((r.get("GameDB title") or r.get("Current filename") or "").casefold(),
                                  r["Current relative path"].casefold()))
-    return eligible[:40]
+    return eligible
 
 def journal_write(path, data):
     tmp = path.with_suffix(".tmp")
@@ -104,9 +104,12 @@ def main():
         entries=list(csv.DictReader(f))
     rows=plan(entries)
     if args.command=="preview":
-        print(f"First {len(rows)} eligible alphabetical proposed PS2 renames:")
+        print(f"All {len(rows)} eligible alphabetical proposed PS2 renames:")
         for i,row in enumerate(rows,1):
             print(f"{i:02} {row['Current relative path']} -> {row['Proposed relative path']}")
+        excluded_case = sum(r.get("Status") == "PROPOSED" and r.get("Current relative path", "").casefold() == r.get("Proposed relative path", "").casefold() for r in entries)
+        excluded_review = sum(r.get("Status") in {"COLLISION", "REVIEW"} for r in entries)
+        print(f"Excluded: {excluded_case} case-only, {excluded_review} collision/review entries")
         print(f"Journal: {args.journal}")
         return
     args.journal.parent.mkdir(parents=True,exist_ok=True)
