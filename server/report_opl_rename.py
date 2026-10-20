@@ -75,10 +75,10 @@ def sha256_file(path):
 
 
 def inspect_iso(root, relative):
-    """Read a bounded first 8 MiB looking for SYSTEM.CNF/BOOT2 metadata.
+    """Read ISO9660 root SYSTEM.CNF and its BOOT/BOOT2 ID without writing.
 
-    This is a heuristic preliminary inspection, not a full ISO9660 parser.
-    Never trust filename/serial alone and never label a disc positively.
+    Supports ordinary 2048-byte-sector ISO images. Unusual disc layouts
+    remain inconclusive rather than receiving an invented identification.
     """
     try:
         base = root.resolve()
@@ -86,19 +86,47 @@ def inspect_iso(root, relative):
         if not file.is_relative_to(base):
             return "ERROR: source escaped read-only mount"
         with file.open("rb") as stream:
-            data = stream.read(8 * 1024 * 1024)
-        if len(data) < 32774 or data[32769:32774] != b"CD001":
-            return "INCONCLUSIVE: ISO9660 primary descriptor not at standard sector"
-        boot_ids = sorted(set(re.findall(
-            rb"BOOT2?\s*=\s*(?:cdrom0?:)?[\\\\/]*([A-Z]{4}[_\\.-][0-9]{3}[_\\.-][0-9]{2})",
-            data, flags=re.I,
-        )))
-        if boot_ids:
-            ids = ", ".join(value.decode("ascii", "replace") for value in boot_ids)
-            return "BOOT ID CANDIDATE: " + ids + " — confirm from SYSTEM.CNF"
-        if b"SYSTEM.CNF" in data.upper():
-            return "SYSTEM.CNF referenced; boot ID not recovered in bounded scan"
-        return "INCONCLUSIVE: no boot metadata located in first 8 MiB"
+            stream.seek(16 * 2048)
+            pvd = stream.read(2048)
+            if len(pvd) != 2048 or pvd[1:6] != b"CD001" or pvd[0] != 1:
+                return "INCONCLUSIVE: standard ISO9660 primary descriptor absent"
+            root_record = pvd[156:190]
+            root_lba = int.from_bytes(root_record[2:6], "little")
+            root_size = int.from_bytes(root_record[10:14], "little")
+            if root_lba <= 0 or not 0 < root_size <= 4 * 1024 * 1024:
+                return "INCONCLUSIVE: invalid ISO9660 root directory"
+            stream.seek(root_lba * 2048)
+            directory = stream.read(root_size)
+            offset = 0
+            cnf = None
+            while offset < len(directory):
+                length = directory[offset]
+                if length == 0:
+                    offset = ((offset // 2048) + 1) * 2048
+                    continue
+                entry = directory[offset:offset + length]
+                if len(entry) < 34:
+                    break
+                name_size = entry[32]
+                name = entry[33:33 + name_size].decode("ascii", "replace")
+                if name.upper().split(";")[0] == "SYSTEM.CNF":
+                    cnf = (int.from_bytes(entry[2:6], "little"),
+                           int.from_bytes(entry[10:14], "little"))
+                    break
+                offset += length
+            if cnf is None:
+                return "INCONCLUSIVE: SYSTEM.CNF missing from ISO root"
+            if cnf[0] <= 0 or not 0 < cnf[1] <= 65536:
+                return "INCONCLUSIVE: invalid SYSTEM.CNF extent"
+            stream.seek(cnf[0] * 2048)
+            config = stream.read(cnf[1]).decode("latin-1", "replace")
+        match = re.search(
+            r"(?im)^\s*BOOT2?\s*=\s*(?:cdrom0?:)?[\\/]*"
+            r"([A-Z]{4}[_\.-]\d{3}[_\.-]\d{2})", config
+        )
+        if match:
+            return "SYSTEM.CNF BOOT ID: " + match.group(1).upper()
+        return "SYSTEM.CNF read; BOOT/BOOT2 disc ID not recognised"
     except (OSError, ValueError) as exc:
         return f"ERROR: {type(exc).__name__}: {exc}"
 
