@@ -145,48 +145,38 @@ INFO
   printf '\n[COMPLETE] Inspect the locally verified outputs before manually copying them to RetroNAS.\n'
   echo 'Results: /var/lib/retrodb/patches/patch-apply.json'
 }
-# An opt-in second CIFS mount; the normal RetroNAS systemd mount stays ro.
+# Separate, temporary CIFS write mount; the audit mount remains read-only.
 PILOT_ROOT=/mnt/retrodb-retronas-pilot-rw
-PILOT_JOURNAL="$HOME/retrodb-exports/opl-pilot-rollback.json"
 PILOT_CSV="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
-pilot_preview() {
-  [[ -r "$PILOT_CSV" ]] || { echo 'Export the OPL rename CSV first (option 4).'; return 1; }
-  python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$PILOT_JOURNAL"
-}
-pilot_with_write_mount() {
-  local action="$1" source answer
-  [[ -r "$PILOT_CSV" ]] || { echo 'Export the OPL rename CSV first (option 4).'; return 1; }
-  mountpoint -q "$MOUNT" || { echo 'Read-only RetroNAS mount is unavailable.'; return 1; }
-  if [[ "$action" == apply ]]; then
-    [[ ! -e "$PILOT_JOURNAL" ]] || { echo "Existing pilot journal found: $PILOT_JOURNAL. Roll back/review before a new pilot."; return 1; }
-    pilot_preview || return 1
-    read -rp 'Type APPLY40 to mount temporary RW and rename up to 40 files: ' answer
-    [[ "$answer" == APPLY40 ]] || { echo 'Cancelled'; return 0; }
-  else
-    [[ -r "$PILOT_JOURNAL" ]] || { echo 'No pilot rollback record found.'; return 1; }
-    read -rp 'Type ROLLBACK40 to restore the original names: ' answer
-    [[ "$answer" == ROLLBACK40 ]] || { echo 'Cancelled'; return 0; }
-  fi
+OPL_JOURNAL_DIR="$HOME/retrodb-exports/opl-rename-journals"
+opl_update_all() {
+  local source answer result=0 journal
+  [[ -r "$PILOT_CSV" ]] || { echo 'Generate a current rename CSV with option 4 first.'; return 1; }
+  mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
+  mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
+  # Preserve the completed 40-title journal; new bulk jobs always get a new name.
+  journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$$.json"
+  echo 'OPL full-library rename — proposed changes (read-only):'
+  python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
+  echo 'Only PROPOSED, non-case-only titles are eligible. REVIEW/COLLISION and case-only titles are skipped.'
+  echo 'Original filenames are recorded in a NEW rollback manifest before any rename.'
+  read -rp 'Type RENAMEALL to proceed (anything else cancels): ' answer
+  [[ "$answer" == RENAMEALL ]] || { echo 'Cancelled'; return 0; }
   source="$(findmnt -n -o SOURCE --target "$MOUNT")"
   [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
   if mountpoint -q "$PILOT_ROOT"; then
-    echo "Pilot RW mount already active; refusing to use it."
-    return 1
+    echo 'Temporary RW mount is already active; refusing to proceed.'; return 1
   fi
-  echo "Attempting separate temporary RW mount. SMB account must have rename rights."
   sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,nosuid,nodev,noexec" || return 1
-  local result=0
-  # Keep the journal on the local disk and owned by the invoking user.
-  python3 "$HERE/opl_pilot.py" "$action" --csv "$PILOT_CSV" --root "$PILOT_ROOT" --journal "$PILOT_JOURNAL" || result=$?
-  sudo umount "$PILOT_ROOT" || { echo 'WARNING: temporary RW mount still active. Unmount manually.' >&2; return 1; }
-  if [[ "$result" -eq 0 ]]; then
-    echo '[OK] Pilot complete. Keep the local JSON rollback journal and copy it off the VM.'
-    echo "Rollback record: $PILOT_JOURNAL"
-    echo 'NOTE: normal RetroNAS read-only mount has not been modified.'
-  fi
+  python3 "$HERE/opl_pilot.py" apply --csv "$PILOT_CSV" --root "$PILOT_ROOT" --journal "$journal" || result=$?
+  sudo umount "$PILOT_ROOT" || { echo '[WARNING] Temporary RW mount still active; inspect manually.' >&2; return 1; }
+  echo "Bulk rename rollback journal: $journal"
+  echo 'The previous 40-game pilot journal is unchanged.'
+  [[ $result -eq 0 ]] || echo '[WARNING] Rename was interrupted/failed. Keep the journal; inspect it before retrying.'
   return "$result"
 }
+
 run() { if "$@"; then echo '[OK] Operation completed.'; else echo '[ERROR] Operation failed.' >&2; fi; }
 menu() {
   local choice
