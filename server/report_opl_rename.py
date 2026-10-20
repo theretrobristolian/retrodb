@@ -153,8 +153,8 @@ def propose(rows, verify_root=None):
                     if not candidate.is_relative_to(base):
                         raise ValueError("Outside permitted mount")
                     row["SHA256"] = sha256_file(candidate)
-                except (OSError, ValueError):
-                    row["Duplicate recommendation"] = "UNVERIFIED — check mount and file path"
+                except (OSError, ValueError) as exc:
+                    row["Duplicate recommendation"] = f"UNVERIFIED — {type(exc).__name__}: {exc}"
             values = [row["SHA256"] for row in group]
             if len(values) > 1 and all(values):
                 verdict = ("IDENTICAL SHA256 — manual removal candidate; retain one"
