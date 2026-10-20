@@ -429,3 +429,41 @@ sequels. Short titles such as Guitar Hero Metallica remain untouched.
 These abbreviations affect only the *proposed filename and OPL display
 preview*, never GameDB's stored identity or RA matching. Proposed renames
 are still read-only and must be reviewed before any future write workflow.
+
+### First-20 OPL rename pilot (explicit opt-in write access)
+
+`bash server/manager.sh` now offers:
+
+- **6 — Preview** first 20 eligible PS2 games, alphabetically by GameDB title.
+- **7 — Apply** only those 20 after an `APPLY20` confirmation.
+- **8 — Rollback** their exact original filenames after `ROLLBACK20` confirmation.
+
+The default systemd RetroNAS mount remains **read-only at all times**.
+The manager briefly creates a **second**, separately mounted CIFS connection
+at `/mnt/retrodb-retronas-pilot-rw` with `rw` only for explicitly
+confirmed apply/rollback actions, and unmounts that second connection
+afterward. The NAS SMB credential itself must have write/rename permission.
+If the original SMB account is read-only on the NAS, ask the NAS admin to
+grant limited write permission or provision a distinct scoped credential.
+Do not change the permanent audit mount to `rw`.
+
+The pilot uses only CSV rows classified `PROPOSED`, skipping review,
+collision, unchanged, and **case-only** changes for the initial batch
+(case-only SMB handling will be added after the pilot). It validates
+source existence, destination absence, and filesystem constraints. A
+durable local rollback journal is created at
+`~/retrodb-exports/opl-pilot-rollback.json` BEFORE the first rename
+and updated after every operation. It is retained after rollback.
+No file data is changed. The pilot refuses to overwrite destinations.
+
+Keep a second copy of the journal OFF the VM, e.g. on Mac:
+`scp david@retrodb.it.gattaca.house:retrodb-exports/opl-pilot-rollback.json ~/Downloads/`.
+If interrupted, use menu option 8: rollback checks actual source/target
+existence and recovers operations even if the last journal update was
+interrupted. No new pilot can start while a previous journal exists;
+archive that record only after successfully verifying rollback.
+
+After application, test titles, artwork and settings with OPL Manager and
+test a few ISOs on MMCE / OPL-RA. A full audit is needed to refresh cached
+RetroDB inventory after renames. If the temporary mount fails to unmount,
+manually inspect and unmount it before another operation.
