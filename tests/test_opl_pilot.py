@@ -92,3 +92,34 @@ def test_existing_case_variant_cannot_be_overwritten(tmp_path):
         pilot.do_apply(tmp_path,
             [row("Demo", "games/OLD.iso", "games/Another.iso")],
             tmp_path / "test.json")
+
+def test_resume_after_case_rename_completed_but_journal_stale(tmp_path):
+    import json
+    (tmp_path / "games").mkdir()
+    old = tmp_path / "games" / "7 SINS.iso"
+    old.write_bytes(b"case only payload")
+    rows = [row("7 Sins", "games/7 SINS.iso", "games/7 Sins.iso")]
+    journal = tmp_path / "interrupted.json"
+    pilot.do_apply(tmp_path, rows, journal)
+    data = json.loads(journal.read_text())
+    data["operations"][0]["state"] = "temporary"
+    journal.write_text(json.dumps(data))
+    pilot.do_resume(tmp_path, journal)
+    assert (tmp_path / "games" / "7 Sins.iso").read_bytes() == b"case only payload"
+    assert json.loads(journal.read_text())["operations"][0]["state"] == "applied"
+
+def test_resume_from_intermediate_case_name(tmp_path):
+    import json
+    (tmp_path / "games").mkdir()
+    (tmp_path / "games" / "7 SINS.iso").write_bytes(b"payload")
+    rows = [row("7 Sins", "games/7 SINS.iso", "games/7 Sins.iso")]
+    journal = tmp_path / "intermediate.json"
+    pilot.do_apply(tmp_path, rows, journal)
+    data = json.loads(journal.read_text())
+    op = data["operations"][0]
+    (tmp_path / op["new"]).rename(tmp_path / op["temp"])
+    op["state"] = "temporary"
+    journal.write_text(json.dumps(data))
+    pilot.do_resume(tmp_path, journal)
+    assert (tmp_path / op["new"]).read_bytes() == b"payload"
+    assert not (tmp_path / op["temp"]).exists()
