@@ -13,15 +13,15 @@ def row(title, old, new, status="PROPOSED"):
     return {"GameDB title": title, "Current relative path": old,
             "Proposed relative path": new, "Status": status}
 
-def test_first_twenty_sorted_and_exclusions():
+def test_first_forty_sorted_and_exclusions():
     rows = [row(f"Game {i:02d}", f"x/{i}.iso", f"x/renamed-{i}.iso")
-            for i in range(30, 0, -1)]
+            for i in range(50, 0, -1)]
     rows += [row("AAA", "x/Case.iso", "x/case.iso"),
              row("AAB", "x/Collision.iso", "x/New.iso", "COLLISION")]
     chosen = pilot.plan(rows)
-    assert len(chosen) == 20
+    assert len(chosen) == 40
     assert chosen[0]["GameDB title"] == "Game 01"
-    assert chosen[-1]["GameDB title"] == "Game 20"
+    assert chosen[-1]["GameDB title"] == "Game 40"
 
 def test_round_trip(tmp_path):
     (tmp_path / "games").mkdir()
