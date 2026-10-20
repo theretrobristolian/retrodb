@@ -26,15 +26,15 @@ def clean_title(value):
 def compact_title(value):
     """Preserve the distinctive game, series and volume rather than truncating blindly."""
     sega = re.match(
-        r"^Sega Ages 2500 Series Vol\\.?\\s*(\\d+)\\s*:\\s*(.+)$",
+        r"^Sega Ages 2500 Series Vol\.?\s*(\d+)\s*:\s*(.+)$",
         value, re.IGNORECASE
     )
     if sega:
         number, game = sega.groups()
         value = f"Sega Ages {number} {game}"
         if len(value) > TITLE_LIMIT:
-            value = re.sub(r"\\bIII\\b", "3", value)
-            value = re.sub(r"\\bII\\b", "2", value)
+            value = re.sub(r"\bIII\b", "3", value)
+            value = re.sub(r"\bII\b", "2", value)
     # Prefer complete words, but retain a full series volume or sequel marker.
     if len(value) <= TITLE_LIMIT:
         return value
