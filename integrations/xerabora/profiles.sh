@@ -160,6 +160,7 @@ menu() {
     echo "  5) Switch active player (numbered selection)"
     echo "  6) View xeRAbora service status"
     echo "  7) Follow active player's log (Ctrl+C to return)"
+    echo "  8) Configure server-wide Web UI / LAN access"
     echo "  0) Return to main menu"
     xr_draw_footer
     read -rp "Choose an option: " answer || return
