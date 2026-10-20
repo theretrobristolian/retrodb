@@ -35,6 +35,7 @@ def compact_title(value):
         if len(value) > TITLE_LIMIT:
             value = re.sub(r"\bIII\b", "3", value)
             value = re.sub(r"\bII\b", "2", value)
+    value = clean_title(value)
     # Prefer complete words, but retain a full series volume or sequel marker.
     if len(value) <= TITLE_LIMIT:
         return value
@@ -90,7 +91,7 @@ def propose(rows):
                 record["Status"] = "REVIEW"
                 record["Notes"] = "GameDB title became empty after sanitisation"
             else:
-                trimmed = compact_title(cleaned)
+                trimmed = compact_title(title)
                 record["Title truncated"] = "YES" if trimmed != cleaned else "NO"
                 proposed = f"{prefix}.{trimmed}.iso"
                 target = str(current.with_name(proposed))
