@@ -430,13 +430,13 @@ These abbreviations affect only the *proposed filename and OPL display
 preview*, never GameDB's stored identity or RA matching. Proposed renames
 are still read-only and must be reviewed before any future write workflow.
 
-### First-20 OPL rename pilot (explicit opt-in write access)
+### First-40 OPL rename pilot (explicit opt-in write access)
 
 `bash server/manager.sh` now offers:
 
-- **6 — Preview** first 20 eligible PS2 games, alphabetically by GameDB title.
-- **7 — Apply** only those 20 after an `APPLY20` confirmation.
-- **8 — Rollback** their exact original filenames after `ROLLBACK20` confirmation.
+- **6 — Preview** first 40 eligible PS2 games, alphabetically by GameDB title.
+- **7 — Apply** only those 40 after an `APPLY40` confirmation.
+- **8 — Rollback** their exact original filenames after `ROLLBACK40` confirmation.
 
 The default systemd RetroNAS mount remains **read-only at all times**.
 The manager briefly creates a **second**, separately mounted CIFS connection
