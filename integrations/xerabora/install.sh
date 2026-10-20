@@ -395,7 +395,8 @@ uninstall_client() {
   echo "This will permanently remove:"
   echo "  /opt/xerabora (binary, previous versions and OPL-RA.ELF)"
   echo "  $HOME_PATH/.config/xerabora (original login, API key, logs)"
-  echo "  $HOME_PATH/.config/xerabora-profiles (ALL accounts and logs)\n  $HOME_PATH/.config/xerabora-server (server-wide Web UI settings)"
+  echo "  $HOME_PATH/.config/xerabora-profiles (ALL accounts and logs)"
+  echo "  $HOME_PATH/.config/xerabora-server (server-wide Web UI settings)"
   echo "  $unit and its xerabora.service.d/profile.conf override"
   echo
   echo "Your RetroDB repository and unrelated applications will remain."
