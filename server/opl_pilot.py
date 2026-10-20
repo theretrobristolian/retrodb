@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reversible, journalled first-20 OPL rename pilot. Never alters ISO contents."""
+"""Reversible, journalled first-40 OPL rename pilot. Never alters ISO contents."""
 import argparse
 import csv
 import json
@@ -17,7 +17,7 @@ def safe(root, relative):
     return path
 
 def plan(rows):
-    # Select first 20 safe non-case-only title changes alphabetically.
+    # Select first 40 safe non-case-only title changes alphabetically.
     # Case-only changes need a separate two-stage SMB rename flow.
     eligible = [r for r in rows if r.get("Status") == "PROPOSED"
                 and r.get("Proposed relative path")
@@ -25,7 +25,7 @@ def plan(rows):
                 and r["Current relative path"].casefold() != r["Proposed relative path"].casefold()]
     eligible.sort(key=lambda r: ((r.get("GameDB title") or r.get("Current filename") or "").casefold(),
                                  r["Current relative path"].casefold()))
-    return eligible[:20]
+    return eligible[:40]
 
 def journal_write(path, data):
     tmp = path.with_suffix(".tmp")
