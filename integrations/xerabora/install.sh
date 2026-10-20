@@ -326,7 +326,7 @@ configure_service_startup() {
 
 web_ui_settings() {
   local choice cfg unit=/etc/systemd/system/xerabora.service tmp
-  cfg="$(active_config_dir)"
+  cfg="$HOME_PATH/.config/xerabora-server"
   [[ -f "$unit" ]] || { echo "Install xeRAbora first."; return 1; }
   xr_draw_header "Web interface settings"
   echo "  1) Enable Web UI on this server (localhost only)"
@@ -377,7 +377,7 @@ uninstall_client() {
   echo "This will permanently remove:"
   echo "  /opt/xerabora (binary, previous versions and OPL-RA.ELF)"
   echo "  $HOME_PATH/.config/xerabora (original login, API key, logs)"
-  echo "  $HOME_PATH/.config/xerabora-profiles (ALL accounts and logs)"
+  echo "  $HOME_PATH/.config/xerabora-profiles (ALL accounts and logs)\n  $HOME_PATH/.config/xerabora-server (server-wide Web UI settings)"
   echo "  $unit and its xerabora.service.d/profile.conf override"
   echo
   echo "Your RetroDB repository and unrelated applications will remain."
@@ -401,7 +401,7 @@ uninstall_client() {
   fi
   sudo systemctl daemon-reload
   if [[ -d /opt/xerabora ]]; then sudo rm -rf -- /opt/xerabora; fi
-  rm -rf -- "$HOME_PATH/.config/xerabora" "$HOME_PATH/.config/xerabora-profiles"
+  rm -rf -- "$HOME_PATH/.config/xerabora" "$HOME_PATH/.config/xerabora-profiles" "$HOME_PATH/.config/xerabora-server"
   echo "Full xeRAbora uninstall completed."
   echo "The source checkout and PS2 ELF copies on the console were not removed."
 }
