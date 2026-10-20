@@ -24,6 +24,39 @@ def clean_title(value):
     return " ".join(value.split()).strip(" ._-")
 
 
+CURATED_DISPLAY_TITLES = {
+    "wacky races starring dastardly and muttley": "Wacky Races Dastardly",
+    "ready 2 rumble boxing round 2": "Ready 2 Rumble Round 2",
+    "18 wheeler american pro trucker": "18 Wheeler Pro Trucker",
+    "gungriffon blaze (enemy awgs disc)": "GunGriffon Blaze",
+    "pinball hall of fame the gottlieb collection": "Pinball HoF Gottlieb",
+    "pinball hall of fame the williams collection": "Pinball HoF Williams",
+    "wrc 3 the official game of the fia world rally championship": "WRC 3 FIA Rally",
+    "singstar pop (scus-97580)": "SingStar Pop",
+    "blood omen 2 the legacy of kain series": "Blood Omen 2",
+    "midnight club 3 dub edition remix": "Midnight Club 3 DUB Remix",
+    "gunvari collection time crisis": "Gunvari and Time Crisis",
+    "walt disneys the jungle book rhythm n groove": "Jungle Book Rhythm n Groove",
+    "the lord of the rings the fellowship of the ring": "LOTR Fellowship of the Ring",
+    "the lord of the rings the two towers": "LOTR The Two Towers",
+    "the lord of the rings the return of the king": "LOTR Return of the King",
+    "the lord of the rings the third age": "LOTR The Third Age",
+    "the legend of spyro a new beginning": "Spyro A New Beginning",
+    "the legend of spyro the eternal night": "Spyro The Eternal Night",
+    "the legend of spyro dawn of the dragon": "Spyro Dawn of the Dragon",
+    "spider-man web of shadows amazing allies edition": "Spider-Man Web of Shadows",
+    "score international baja 1000 the official game": "SCORE Baja 1000",
+    "short track racing trading paint": "Short Track Trading Paint",
+    "mtv pimp my ride street racing": "Pimp My Ride Street Racing",
+    "transformers revenge of the fallen": "Transformers Revenge Fallen",
+    "the secret saturdays beasts of the 5th sun": "Secret Saturdays 5th Sun",
+    "teenage mutant ninja turtles": "TMNT",
+    "teenage mutant ninja turtles 2 battle nexus": "TMNT 2 Battle Nexus",
+    "teenage mutant ninja turtles 3 mutant nightmare": "TMNT 3 Mutant Nightmare",
+    "teenage mutant ninja turtles mutant melee": "TMNT Mutant Melee",
+    "teenage mutant ninja turtles smash-up": "TMNT Smash-Up",
+}
+
 def compact_title(value):
     """Preserve the distinctive game, series and volume rather than truncating blindly."""
     sega = re.match(
@@ -37,6 +70,9 @@ def compact_title(value):
             value = re.sub(r"\bIII\b", "3", value)
             value = re.sub(r"\bII\b", "2", value)
     value = clean_title(value)
+    preferred = CURATED_DISPLAY_TITLES.get(value.casefold())
+    if preferred:
+        return preferred
     # Prefer a meaningful edition over a dangling article after truncation.
     if re.match(r"^Hyper Street Fighter II The Anniversary Edition$", value, re.I):
         return "Hyper Street Fighter II Anniv"
@@ -59,7 +95,7 @@ def compact_title(value):
     if chosen:
         result = " ".join(chosen)
         # Avoid leaving a dangling series designator, e.g. "Vol".
-        if result.split()[-1].casefold() in {"vol", "volume", "series", "ser"}:
+        if result.split()[-1].casefold() in {"vol", "volume", "series", "ser", "the", "of", "and", "a", "for", "starring"}:
             result = " ".join(result.split()[:-1])
         if result:
             return result
