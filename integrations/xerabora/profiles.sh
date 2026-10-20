@@ -107,6 +107,13 @@ activate() {
   local answer
   read -rp "Continue? [y/N] " answer
   [[ "$answer" =~ ^[Yy]$ ]] || { echo "Cancelled."; return 0; }
+  # xeRAbora reads native LAN flag from each profile's XDG config directory.
+  # Mirror the single server-wide preference into the selected profile before start.
+  local lan_flag=0
+  [[ "$(cat "$HOME/.config/xerabora-server/lan" 2>/dev/null || true)" == 1 ]] && lan_flag=1
+  install -d -m 700 "$cfg/xerabora"
+  printf '%s\\n' "$lan_flag" > "$cfg/xerabora/lan"
+  chmod 600 "$cfg/xerabora/lan"
   sudo systemctl stop "$SERVICE"
   temp="$(mktemp)"
   cat > "$temp" <<EOF
