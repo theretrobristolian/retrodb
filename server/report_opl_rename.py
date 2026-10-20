@@ -70,7 +70,9 @@ PILOT_DISPLAY_OVERRIDES = {
     "SLES-51792": "Aliens vs Predator Extinct",
     "SLES-50541": "Capcom vs SNK 2",
     "SLUS-21168": "Castlevania Curse Darkness",
-    "SLUS-21329": "Karaoke Revolution Country"
+    "SLUS-21329": "Karaoke Revolution Country",
+    "SLUS-20238": "Crash Wrath of Cortex",
+    "SLES-54471": "Captain Scarlet"
 }
 
 def compact_title(value):
