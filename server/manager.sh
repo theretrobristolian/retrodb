@@ -199,8 +199,8 @@ opl_recover() {
   [[ "$selected" =~ ^opl-rename-[A-Za-z0-9T-]+\.json$ ]] || { echo 'Invalid journal filename'; return 1; }
   local journal="$OPL_JOURNAL_DIR/$selected"
   [[ -f "$journal" ]] || { echo 'Journal not found.'; return 1; }
-  echo 'Inspecting filesystem via the read-only mount:'
-  python3 "$HERE/opl_pilot.py" status --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
+  echo 'Inspecting filesystem via the read-only mount (elevated read permissions):'
+  sudo python3 "$HERE/opl_pilot.py" status --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
   read -rp 'Type RESUME to finish pending renames, or press Enter to cancel: ' answer
   [[ "$answer" == RESUME ]] || return 0
   source="$(findmnt -n -o SOURCE --target "$MOUNT")"
