@@ -63,8 +63,9 @@ PILOT_DISPLAY_OVERRIDES = {
     "SLES-50282": "Age of Empires II",
     "SLES-50185": "Alone in the Dark New Night",
     "SLUS-21096": "Ape Escape Pumped Primed",
-    "SCUS-97231": "Arc Lad Twilight of Spirits",
+    "SCUS-97231": "Arc Lad Twilight Spirits",
     "SLUS-21043": "Backyard Wrestling 2",
+    "SLUS-20638": "Backyard Wrestling",
     "SLES-53481": "10 000 Bullets",
     "SLES-51792": "Aliens vs Predator Extinct"
 }
