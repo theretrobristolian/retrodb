@@ -187,9 +187,7 @@ menu() {
     echo '  3) Apply verified patches LOCALLY (confirmation required)'
     echo '  4) Export latest Excel workbook (no new audit)'
     echo '  5) Service / integration details'
-    echo '  6) Preview first 40 alphabetical OPL renames (read-only)'
-    echo '  7) APPLY first 40 OPL renames (temporary RW mount, rollback saved)'
-    echo '  8) ROLLBACK pilot OPL renames (temporary RW mount)'
+    echo '  6) UPDATE ALL eligible OPL titles (confirmation + rollback journal)'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -203,9 +201,7 @@ menu() {
       4) run export_csv; pause ;;
       5) echo; systemctl --no-pager --full status retrodb.service xerabora.service || true
          echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
-      6) run pilot_preview; pause ;;
-      7) run pilot_with_write_mount apply; pause ;;
-      8) run pilot_with_write_mount rollback; pause ;;
+      6) run opl_update_all; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
