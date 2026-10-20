@@ -171,6 +171,7 @@ menu() {
       5) activate; xr_pause ;;
       6) systemctl --no-pager status "$SERVICE" || true; xr_pause ;;
       7) xr_follow_log; xr_pause ;;
+      8) bash "$SCRIPT_DIR/install.sh" web-ui; xr_pause ;;
       0|q|Q) return ;;
       *) echo "Invalid selection."; xr_pause ;;
     esac
