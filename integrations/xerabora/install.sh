@@ -382,11 +382,12 @@ EOF
     rm -f "$staging"
     sudo systemctl daemon-reload
     sudo systemctl enable --now xerabora-lan.service || return 1
+    sudo systemctl restart xerabora-lan.service || return 1
     if ! systemctl is-active --quiet xerabora-lan.service; then
       echo "LAN proxy failed. Check: sudo journalctl -u xerabora-lan.service -n 30" >&2
       return 1
     fi
-    echo "LAN proxy active on $ip:18280."
+    echo "LAN proxy active on $ip:18280 (auto-discovers xeRAbora Web UI port)."
   elif [[ "$action" == disable ]]; then
     sudo systemctl disable --now xerabora-lan.service 2>/dev/null || true
     echo "LAN proxy disabled."
