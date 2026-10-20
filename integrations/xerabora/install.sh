@@ -342,6 +342,57 @@ migrate_web_ui_lan_setting() {
 
 migrate_web_ui_lan_setting
 
+
+configure_lan_proxy() {
+  local action="${1:?}" ip unit=/etc/systemd/system/xerabora-lan.service
+  if [[ "$action" == enable ]]; then
+    ip="$(xr_server_ip)"
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "No server IPv4 detected; cannot enable LAN proxy."; return 1; }
+    python3 - "$ip" <<'PYIP' || return 1
+import ipaddress, sys
+address = ipaddress.ip_address(sys.argv[1])
+assert address.version == 4 and not (address.is_loopback or address.is_unspecified or address.is_multicast)
+PYIP
+    # Never bind publicly; only the server's selected local IPv4.
+    sudo install -m 0644 "$SCRIPT_DIR/lan_proxy.py" /opt/xerabora/lan_proxy.py || return 1
+    local staging
+    staging="$(mktemp)"
+    cat > "$staging" <<EOF
+[Unit]
+Description=xeRAbora trusted-LAN Web UI forwarding
+After=network-online.target xerabora.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$USER_NAME
+Group=$(id -gn "$USER_NAME")
+ExecStart=/usr/bin/python3 /opt/xerabora/lan_proxy.py --bind $ip --port 18280
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    sudo install -m 0644 "$staging" "$unit"
+    rm -f "$staging"
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now xerabora-lan.service || return 1
+    if ! systemctl is-active --quiet xerabora-lan.service; then
+      echo "LAN proxy failed. Check: sudo journalctl -u xerabora-lan.service -n 30" >&2
+      return 1
+    fi
+    echo "LAN proxy active on $ip:18280."
+  elif [[ "$action" == disable ]]; then
+    sudo systemctl disable --now xerabora-lan.service 2>/dev/null || true
+    echo "LAN proxy disabled."
+  fi
+}
+
 web_ui_settings() {
   local choice cfg unit=/etc/systemd/system/xerabora.service tmp
   cfg="$HOME_PATH/.config/xerabora-server"
@@ -384,6 +435,15 @@ web_ui_settings() {
   chmod 600 "$cfg/lan"
   sudo systemctl daemon-reload
   sudo systemctl restart xerabora.service
+  if [[ "$choice" == 2 ]]; then
+    if ! configure_lan_proxy enable; then
+      printf "0\\n" > "$cfg/lan"
+      echo "LAN exposure failed; the shared LAN preference was reset to disabled." >&2
+      return 1
+    fi
+  else
+    configure_lan_proxy disable
+  fi
   echo "Web UI setting saved; xeRAbora service restarted."
   xr_web_urls
   echo "Exit and relaunch OPL-RA if a PS2 session was interrupted."
@@ -397,7 +457,7 @@ uninstall_client() {
   echo "  $HOME_PATH/.config/xerabora (original login, API key, logs)"
   echo "  $HOME_PATH/.config/xerabora-profiles (ALL accounts and logs)"
   echo "  $HOME_PATH/.config/xerabora-server (server-wide Web UI settings)"
-  echo "  $unit and its xerabora.service.d/profile.conf override"
+  echo "  $unit, xerabora-lan.service and its xerabora.service.d/profile.conf override"
   echo
   echo "Your RetroDB repository and unrelated applications will remain."
   echo "systemd's shared journal is not purged (doing so affects other services)."
@@ -414,6 +474,8 @@ uninstall_client() {
     sudo systemctl disable --now xerabora.service || return 1
     sudo rm -f -- "$unit"
   fi
+  sudo systemctl disable --now xerabora-lan.service 2>/dev/null || true
+  sudo rm -f -- /etc/systemd/system/xerabora-lan.service
   sudo rm -f -- /etc/systemd/system/xerabora.service.d/profile.conf /etc/systemd/system/xerabora.service.d/restart.conf
   if [[ -d /etc/systemd/system/xerabora.service.d ]]; then
     sudo rmdir /etc/systemd/system/xerabora.service.d 2>/dev/null || true
