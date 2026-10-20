@@ -3,6 +3,7 @@
 import argparse
 import csv
 import re
+import unicodedata
 from collections import Counter
 from pathlib import Path
 
@@ -13,9 +14,43 @@ SERIAL = re.compile(r"^([A-Z]{4})-([0-9]{3})([0-9]{2})$")
 NONPRINT = re.compile(r"[^A-Za-z0-9 ()\[\]_-]+")
 
 def clean_title(value):
-    value = value.replace("&", " and ").replace("’", "'")
+    # Transliterate diacritics BEFORE stripping punctuation: Ōkami -> Okami.
+    value = unicodedata.normalize("NFKD", value)
+    value = value.encode("ascii", "ignore").decode("ascii")
+    value = value.replace("&", " and ")
+    value = value.replace("'", "")
     value = NONPRINT.sub(" ", value)
     return " ".join(value.split()).strip(" ._-")
+
+
+def compact_title(value):
+    """Preserve the distinctive game, series and volume rather than truncating blindly."""
+    sega = re.match(
+        r"^Sega Ages 2500 Series Vol\\.?\\s*(\\d+)\\s*:\\s*(.+)$",
+        value, re.IGNORECASE
+    )
+    if sega:
+        number, game = sega.groups()
+        value = f"Sega Ages {number} {game}"
+    # Prefer complete words, but retain a full series volume or sequel marker.
+    if len(value) <= TITLE_LIMIT:
+        return value
+    words = value.split()
+    chosen = []
+    for word in words:
+        candidate = " ".join(chosen + [word])
+        if len(candidate) > TITLE_LIMIT:
+            break
+        chosen.append(word)
+    if chosen:
+        result = " ".join(chosen)
+        # Avoid leaving a dangling series designator, e.g. "Vol".
+        if result.split()[-1].casefold() in {"vol", "volume", "series", "ser"}:
+            result = " ".join(result.split()[:-1])
+        if result:
+            return result
+    return value[:TITLE_LIMIT].rstrip(" ._-")
+
 
 def propose(rows):
     results = []
@@ -52,7 +87,7 @@ def propose(rows):
                 record["Status"] = "REVIEW"
                 record["Notes"] = "GameDB title became empty after sanitisation"
             else:
-                trimmed = cleaned[:TITLE_LIMIT].rstrip(" ._-")
+                trimmed = compact_title(cleaned)
                 record["Title truncated"] = "YES" if trimmed != cleaned else "NO"
                 proposed = f"{prefix}.{trimmed}.iso"
                 target = str(current.with_name(proposed))
