@@ -324,6 +324,24 @@ configure_service_startup() {
   fi
 }
 
+
+migrate_web_ui_lan_setting() {
+  # Upgrade old per-player UI preferences without modifying account credentials.
+  local shared="$HOME_PATH/.config/xerabora-server" legacy
+  [[ ! -f "$shared/lan" ]] || return 0
+  # An explicit LAN enable on any existing player wins over older localhost defaults.
+  for legacy in "$HOME_PATH/.config/xerabora-profiles/"*/xerabora/lan "$HOME_PATH/.config/xerabora/lan"; do
+    if [[ -f "$legacy" ]] && [[ "$(cat "$legacy")" == 1 ]]; then
+      install -d -m 700 "$shared"
+      printf '1\n' > "$shared/lan"
+      chmod 600 "$shared/lan"
+      return 0
+    fi
+  done
+}
+
+migrate_web_ui_lan_setting
+
 web_ui_settings() {
   local choice cfg unit=/etc/systemd/system/xerabora.service tmp
   cfg="$HOME_PATH/.config/xerabora-server"
