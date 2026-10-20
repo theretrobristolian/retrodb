@@ -371,3 +371,27 @@ the filename-only fallback matcher, but RetroDB already prioritises
 GameDB identification and verified RA hashes. Before any future rename
 executor, validate SMB target behaviour, backup, stale scan paths,
 cover-art and per-game OPL configuration effects.
+
+### OPL rename review: case changes and duplicate evidence
+
+Case-only filename changes are now normal **PROPOSED** renames, not
+review blockers. On a case-insensitive SMB target, a future controlled
+write executor should rename through a temporary intermediate filename
+to ensure casing is actually updated.
+
+A source image currently named **No Disc** is flagged for manual
+identification, rather than being renamed to the GameDB title associated
+with its reported serial. It may be a PS2 networking/setup disc; that
+claim is not proven until the actual image is inspected.
+
+During report export, RetroDB reads the **collision candidates only**
+from the read-only RetroNAS mount and calculates full-file SHA-256.
+Identical SHA-256 hashes produce a **manual duplicate-removal candidate**
+recommendation; different SHA-256 hashes produce a **preserve/investigate**
+warning. Missing source files remain unverified. No deletions or
+renames occur. The report includes two additional fields:
+`Duplicate recommendation` and `SHA256`.
+
+The operation may take longer for large duplicate ISOs because it
+reads each colliding source end-to-end. Do not assume identical disc IDs
+or RA hashes imply byte-for-byte duplicate files.
