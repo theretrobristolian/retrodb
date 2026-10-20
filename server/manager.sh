@@ -145,6 +145,48 @@ INFO
   printf '\n[COMPLETE] Inspect the locally verified outputs before manually copying them to RetroNAS.\n'
   echo 'Results: /var/lib/retrodb/patches/patch-apply.json'
 }
+# An opt-in second CIFS mount; the normal RetroNAS systemd mount stays ro.
+PILOT_ROOT=/mnt/retrodb-retronas-pilot-rw
+PILOT_JOURNAL="$HOME/retrodb-exports/opl-pilot-rollback.json"
+PILOT_CSV="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
+pilot_preview() {
+  [[ -r "$PILOT_CSV" ]] || { echo 'Export the OPL rename CSV first (option 4).'; return 1; }
+  python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$PILOT_JOURNAL"
+}
+pilot_with_write_mount() {
+  local action="$1" source answer
+  [[ -r "$PILOT_CSV" ]] || { echo 'Export the OPL rename CSV first (option 4).'; return 1; }
+  mountpoint -q "$MOUNT" || { echo 'Read-only RetroNAS mount is unavailable.'; return 1; }
+  if [[ "$action" == apply ]]; then
+    [[ ! -e "$PILOT_JOURNAL" ]] || { echo "Existing pilot journal found: $PILOT_JOURNAL. Roll back/review before a new pilot."; return 1; }
+    pilot_preview || return 1
+    read -rp 'Type APPLY20 to mount temporary RW and rename up to 20 files: ' answer
+    [[ "$answer" == APPLY20 ]] || { echo 'Cancelled'; return 0; }
+  else
+    [[ -r "$PILOT_JOURNAL" ]] || { echo 'No pilot rollback record found.'; return 1; }
+    read -rp 'Type ROLLBACK20 to restore the original names: ' answer
+    [[ "$answer" == ROLLBACK20 ]] || { echo 'Cancelled'; return 0; }
+  fi
+  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo "Pilot RW mount already active; refusing to use it."
+    return 1
+  fi
+  echo "Attempting separate temporary RW mount. SMB account must have rename rights."
+  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,nosuid,nodev,noexec" || return 1
+  local result=0
+  # Keep the journal on the local disk and owned by the invoking user.
+  python3 "$HERE/opl_pilot.py" "$action" --csv "$PILOT_CSV" --root "$PILOT_ROOT" --journal "$PILOT_JOURNAL" || result=$?
+  sudo umount "$PILOT_ROOT" || { echo 'WARNING: temporary RW mount still active. Unmount manually.' >&2; return 1; }
+  if [[ "$result" -eq 0 ]]; then
+    echo '[OK] Pilot complete. Keep the local JSON rollback journal and copy it off the VM.'
+    echo "Rollback record: $PILOT_JOURNAL"
+    echo 'NOTE: normal RetroNAS read-only mount has not been modified.'
+  fi
+  return "$result"
+}
 run() { if "$@"; then echo '[OK] Operation completed.'; else echo '[ERROR] Operation failed.' >&2; fi; }
 menu() {
   local choice
@@ -155,6 +197,9 @@ menu() {
     echo '  3) Apply verified patches LOCALLY (confirmation required)'
     echo '  4) Export latest Excel workbook (no new audit)'
     echo '  5) Service / integration details'
+    echo '  6) Preview first 20 alphabetical OPL renames (read-only)'
+    echo '  7) APPLY first 20 OPL renames (temporary RW mount, rollback saved)'
+    echo '  8) ROLLBACK pilot OPL renames (temporary RW mount)'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -168,6 +213,9 @@ menu() {
       4) run export_csv; pause ;;
       5) echo; systemctl --no-pager --full status retrodb.service xerabora.service || true
          echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
+      6) run pilot_preview; pause ;;
+      7) run pilot_with_write_mount apply; pause ;;
+      8) run pilot_with_write_mount rollback; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
