@@ -131,3 +131,23 @@ def test_disc_inspection_reads_system_cnf(tmp_path):
     assert module.inspect_iso(tmp_path, "Mystery.iso") == (
         "SYSTEM.CNF BOOT ID: SLUS_123.45"
     )
+
+
+def test_curated_opl_display_names_keep_game_identity():
+    cases = [["Wacky Races Starring Dastardly & Muttley","Wacky Races Dastardly"],
+        ["Ready 2 Rumble Boxing: Round 2","Ready 2 Rumble Round 2"],
+        ["18 Wheeler: American Pro Trucker","18 Wheeler Pro Trucker"],
+        ["Midnight Club 3: DUB Edition Remix","Midnight Club 3 DUB Remix"],
+        ["The Lord of the Rings: The Two Towers","LOTR The Two Towers"],
+        ["The Lord of the Rings: The Return of the King","LOTR Return of the King"],
+        ["Teenage Mutant Ninja Turtles 3: Mutant Nightmare","TMNT 3 Mutant Nightmare"],
+        ["Pinball Hall of Fame: The Williams Collection","Pinball HoF Williams"],
+        ["Spider-Man: Web of Shadows: Amazing Allies Edition","Spidey Web of Shadows AA"]]
+    for title, expected in cases:
+        assert module.compact_title(title) == expected
+        assert len(expected) <= module.TITLE_LIMIT
+
+
+def test_existing_short_titles_remain_intact():
+    assert module.compact_title("Guitar Hero: Metallica") == "Guitar Hero Metallica"
+    assert module.compact_title("Guitar Hero: Van Halen") == "Guitar Hero Van Halen"
