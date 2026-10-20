@@ -162,3 +162,19 @@ def test_backyard_wrestling_and_arc_pilot_titles():
         row = module.propose([sample(path, serial, "Long game title")])[0]
         assert row["Display preview with RA"] == title + " [RA]"
         assert len(row["Display preview with RA"]) <= 32
+
+
+def test_second_twenty_title_identity():
+    cases = [
+        ("SLES-50541", "Capcom vs SNK 2"),
+        ("SLUS-21168", "Castlevania Curse Darkness"),
+        ("SLUS-21329", "Karaoke Revolution Country"),
+    ]
+    for serial, expected in cases:
+        letters, digits = serial.split("-")
+        row = module.propose([sample(
+            f"DVD/{letters}_{digits[:3]}.{digits[3:]}.Old.iso",
+            serial, "Long verbose catalogue game title"
+        )])[0]
+        assert row["Display preview with RA"] == expected + " [RA]"
+        assert len(row["Display preview with RA"]) <= 32
