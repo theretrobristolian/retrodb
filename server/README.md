@@ -344,3 +344,30 @@ there is a supported downloadable release where no official RA hash is known.
 
 To reevaluate identities and hash metadata, deploy the updated backend and
 run manager **Full Audit**. Export-only does not rerun the matching logic.
+
+### OPL old-format naming proposal (read-only)
+
+The manager's export option now also generates
+`~/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv` from the latest audit,
+without requiring an additional ISO hash pass. It **never renames anything**
+on the read-only RetroNAS mount.
+
+The export preserves each disc's OPL old-style
+`SLES_123.45.Game Name.iso` serial (so region variants stay distinct);
+uses GameDB's serial-specific canonical title; sanitises unsupported
+punctuation; and limits the title part to **27 characters** to leave
+five display characters for the OPL-RA ` [RA]` marker under OPL's
+32-character game-title budget.
+
+Columns include source relative path and filename, disc serial, original
+GameDB title, proposed filename and relative path, display preview,
+truncation warning, proposed/unchanged/review/collision state and notes.
+Missing GameDB identities, unusual disc IDs, case-only path changes and
+colliding destinations are flagged for human review.
+
+Renaming an ISO changes neither its content hash nor its genuine
+RetroAchievements compatibility. A consistent GameDB title may improve
+the filename-only fallback matcher, but RetroDB already prioritises
+GameDB identification and verified RA hashes. Before any future rename
+executor, validate SMB target behaviour, backup, stale scan paths,
+cover-art and per-game OPL configuration effects.
