@@ -160,12 +160,12 @@ pilot_with_write_mount() {
   if [[ "$action" == apply ]]; then
     [[ ! -e "$PILOT_JOURNAL" ]] || { echo "Existing pilot journal found: $PILOT_JOURNAL. Roll back/review before a new pilot."; return 1; }
     pilot_preview || return 1
-    read -rp 'Type APPLY20 to mount temporary RW and rename up to 20 files: ' answer
-    [[ "$answer" == APPLY20 ]] || { echo 'Cancelled'; return 0; }
+    read -rp 'Type APPLY40 to mount temporary RW and rename up to 40 files: ' answer
+    [[ "$answer" == APPLY40 ]] || { echo 'Cancelled'; return 0; }
   else
     [[ -r "$PILOT_JOURNAL" ]] || { echo 'No pilot rollback record found.'; return 1; }
-    read -rp 'Type ROLLBACK20 to restore the original names: ' answer
-    [[ "$answer" == ROLLBACK20 ]] || { echo 'Cancelled'; return 0; }
+    read -rp 'Type ROLLBACK40 to restore the original names: ' answer
+    [[ "$answer" == ROLLBACK40 ]] || { echo 'Cancelled'; return 0; }
   fi
   source="$(findmnt -n -o SOURCE --target "$MOUNT")"
   [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
@@ -197,8 +197,8 @@ menu() {
     echo '  3) Apply verified patches LOCALLY (confirmation required)'
     echo '  4) Export latest Excel workbook (no new audit)'
     echo '  5) Service / integration details'
-    echo '  6) Preview first 20 alphabetical OPL renames (read-only)'
-    echo '  7) APPLY first 20 OPL renames (temporary RW mount, rollback saved)'
+    echo '  6) Preview first 40 alphabetical OPL renames (read-only)'
+    echo '  7) APPLY first 40 OPL renames (temporary RW mount, rollback saved)'
     echo '  8) ROLLBACK pilot OPL renames (temporary RW mount)'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
