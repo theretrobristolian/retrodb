@@ -69,7 +69,7 @@ export_csv() {
   echo ' Mac / Linux (recommended Excel workbook):'
   printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Compatibility.xlsx"
   echo ' Mac / Linux (read-only OPL rename proposals):'
-  printf '   scp "%s" ~/Downloads/\\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
+  printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   echo ' Mac / Linux (raw CSV):'
   printf '   scp "%s" ~/Downloads/\n' "$remote"
   echo ' Windows PowerShell (recommended Excel workbook):'
