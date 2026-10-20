@@ -39,10 +39,10 @@ def compact_title(value):
     value = clean_title(value)
     # Shorten known verbose branding, retaining meaningful edition information.
     if len(value) > TITLE_LIMIT:
-        value = re.sub(r"\\bAnniversary\\b", "Anniv", value, flags=re.I)
-        value = re.sub(r"\\bRevenge of Jesse James\\b", "Jesse James", value, flags=re.I)
-        value = re.sub(r"\\bThe King of Fighters\\b", "KOF", value, flags=re.I)
-        value = re.sub(r"\\bExtreme Offroad Edition\\b", "Offroad Ed", value, flags=re.I)
+        value = re.sub(r"\bAnniversary\b", "Anniv", value, flags=re.I)
+        value = re.sub(r"\bRevenge of Jesse James\b", "Jesse James", value, flags=re.I)
+        value = re.sub(r"\bThe King of Fighters\b", "KOF", value, flags=re.I)
+        value = re.sub(r"\bExtreme Offroad Edition\b", "Offroad Ed", value, flags=re.I)
     # Prefer complete words, but retain a full series volume or sequel marker.
     if len(value) <= TITLE_LIMIT:
         return value
