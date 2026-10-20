@@ -58,7 +58,9 @@ export_csv() {
     echo '[INFO] Patchable verification unavailable; run patch-plan, patch-download and patch-prepare to identify verified patch sources.'
   fi
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
-  ( umask 077; python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
+  ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
+  chmod 0600 "$rename_report" || return 1
   echo "[OK] OPL rename proposals: $rename_report"
   echo "[OK] CSV copied to $EXPORT"
   echo "[OK] Excel workbook: $excel"
