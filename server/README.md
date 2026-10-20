@@ -416,3 +416,16 @@ After manually deleting old duplicate images, **run the FULL AUDIT** so
 the cached inventory and underlying CSV reflect the revised collection.
 Export-only reuses the previous inventory and can show stale duplicate
 rows after files have been removed.
+
+### OPL display-name quality pass
+
+GameDB remains the full identity source, but the rename exporter applies a
+small, reviewed display-title dictionary where naive 27-character truncation
+would erase a sequel, edition, subtitle, collection identity or main game
+name. Examples include Ready 2 Rumble Round 2, Midnight Club 3 DUB Remix,
+Pinball HoF Williams / Gottlieb, LOTR's distinguishable releases, and TMNT
+sequels. Short titles such as Guitar Hero Metallica remain untouched.
+
+These abbreviations affect only the *proposed filename and OPL display
+preview*, never GameDB's stored identity or RA matching. Proposed renames
+are still read-only and must be reviewed before any future write workflow.
