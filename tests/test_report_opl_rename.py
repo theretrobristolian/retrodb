@@ -84,3 +84,50 @@ def test_different_collision_files_must_not_be_deleted(tmp_path):
         sample("DVD/B.iso", title="Same Game"),
     ], verify_root=tmp_path)
     assert all("DIFFERENT SHA256" in r["Duplicate recommendation"] for r in rows)
+
+def test_hyper_street_fighter_keeps_anniversary():
+    assert module.compact_title("Hyper Street Fighter II: The Anniversary Edition") == (
+        "Hyper Street Fighter II Anniv"
+    )
+
+def test_csv_export_uses_excel_utf8_bom(tmp_path):
+    import csv
+    path = tmp_path / "audit.csv"
+    with path.open("w", encoding="utf-8", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=[
+            "platform", "path", "local_serial", "gamedb_title"])
+        writer.writeheader()
+        writer.writerow(sample("DVD/SLES_123.45.A.iso"))
+    output = tmp_path / "export.csv"
+    import sys
+    original = sys.argv
+    try:
+        sys.argv = ["report_opl_rename", str(path), str(output)]
+        module.main()
+    finally:
+        sys.argv = original
+    assert output.read_bytes().startswith(b"\xef\xbb\xbf")
+
+def test_disc_inspection_reads_system_cnf(tmp_path):
+    iso = bytearray(22 * 2048)
+    pvd = 16 * 2048
+    iso[pvd] = 1
+    iso[pvd + 1:pvd + 6] = b"CD001"
+    root = pvd + 156
+    iso[root + 2:root + 6] = (20).to_bytes(4, "little")
+    iso[root + 10:root + 14] = (2048).to_bytes(4, "little")
+    directory = 20 * 2048
+    name = b"SYSTEM.CNF;1"
+    length = 33 + len(name) + (len(name) % 2 == 0)
+    iso[directory] = length
+    iso[directory + 2:directory + 6] = (21).to_bytes(4, "little")
+    payload = b"BOOT2 = cdrom0:\\SLUS_123.45;1\r\n"
+    iso[directory + 10:directory + 14] = len(payload).to_bytes(4, "little")
+    iso[directory + 32] = len(name)
+    iso[directory + 33:directory + 33 + len(name)] = name
+    iso[21 * 2048:21 * 2048 + len(payload)] = payload
+    path = tmp_path / "Mystery.iso"
+    path.write_bytes(iso)
+    assert module.inspect_iso(tmp_path, "Mystery.iso") == (
+        "SYSTEM.CNF BOOT ID: SLUS_123.45"
+    )
