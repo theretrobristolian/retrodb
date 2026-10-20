@@ -37,6 +37,9 @@ def compact_title(value):
             value = re.sub(r"\bIII\b", "3", value)
             value = re.sub(r"\bII\b", "2", value)
     value = clean_title(value)
+    # Prefer a meaningful edition over a dangling article after truncation.
+    if re.match(r"^Hyper Street Fighter II The Anniversary Edition$", value, re.I):
+        return "Hyper Street Fighter II Anniv"
     # Shorten known verbose branding, retaining meaningful edition information.
     if len(value) > TITLE_LIMIT:
         value = re.sub(r"\bAnniversary\b", "Anniv", value, flags=re.I)
@@ -71,6 +74,35 @@ def sha256_file(path):
     return digest.hexdigest()
 
 
+def inspect_iso(root, relative):
+    """Read a bounded first 8 MiB looking for SYSTEM.CNF/BOOT2 metadata.
+
+    This is a heuristic preliminary inspection, not a full ISO9660 parser.
+    Never trust filename/serial alone and never label a disc positively.
+    """
+    try:
+        base = root.resolve()
+        file = (base / relative).resolve(strict=True)
+        if not file.is_relative_to(base):
+            return "ERROR: source escaped read-only mount"
+        with file.open("rb") as stream:
+            data = stream.read(8 * 1024 * 1024)
+        if len(data) < 32774 or data[32769:32774] != b"CD001":
+            return "INCONCLUSIVE: ISO9660 primary descriptor not at standard sector"
+        boot_ids = sorted(set(re.findall(
+            rb"BOOT2?\s*=\s*(?:cdrom0?:)?[\\\\/]*([A-Z]{4}[_\\.-][0-9]{3}[_\\.-][0-9]{2})",
+            data, flags=re.I,
+        )))
+        if boot_ids:
+            ids = ", ".join(value.decode("ascii", "replace") for value in boot_ids)
+            return "BOOT ID CANDIDATE: " + ids + " — confirm from SYSTEM.CNF"
+        if b"SYSTEM.CNF" in data.upper():
+            return "SYSTEM.CNF referenced; boot ID not recovered in bounded scan"
+        return "INCONCLUSIVE: no boot metadata located in first 8 MiB"
+    except (OSError, ValueError) as exc:
+        return f"ERROR: {type(exc).__name__}: {exc}"
+
+
 def propose(rows, verify_root=None):
     results = []
     for row in rows:
@@ -93,6 +125,7 @@ def propose(rows, verify_root=None):
             "Notes": "",
             "Duplicate recommendation": "",
             "SHA256": "",
+            "Disc inspection": "",
         }
         match = SERIAL.fullmatch(serial)
         if current.stem.casefold().endswith("no disc"):
@@ -141,6 +174,9 @@ def propose(rows, verify_root=None):
             record["Status"] = "PROPOSED"
             record["Notes"] = "Case-only rename; eventual executor should use temporary intermediate name"
     if verify_root:
+        for row in results:
+            if row["Status"] == "REVIEW" and row["Current filename"].lower().endswith(".no disc.iso"):
+                row["Disc inspection"] = inspect_iso(verify_root, row["Current relative path"])
         groups = {}
         for row in results:
             if row["Status"] == "COLLISION":
@@ -176,11 +212,11 @@ def main():
         parser.error("Expected a current RetroDB compatibility audit CSV")
     proposals = propose(rows, args.verify_root)
     args.output_csv.parent.mkdir(parents=True, exist_ok=True)
-    with args.output_csv.open("w", newline="", encoding="utf-8") as handle:
+    with args.output_csv.open("w", newline="", encoding="utf-8-sig") as handle:
         writer = csv.DictWriter(handle, fieldnames=[
             "Current relative path", "Current filename", "Disc ID", "GameDB title",
             "Proposed filename", "Proposed relative path", "Display preview with RA",
-            "Title truncated", "Status", "Notes", "Duplicate recommendation", "SHA256"])
+            "Title truncated", "Status", "Notes", "Duplicate recommendation", "SHA256", "Disc inspection"])
         writer.writeheader()
         writer.writerows(proposals)
     counts = Counter(row["Status"] for row in proposals)
