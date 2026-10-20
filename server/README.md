@@ -493,3 +493,19 @@ Recovery is possible using `python3 server/opl_pilot.py rollback
 --journal <exact-journal-path>`, after explicitly mounting a writable
 connection. Rollback uses the original manifest (not the current CSV)
 to restore exact names, and never overwrites an existing file.
+
+### Case-only OPL filename changes
+
+The Update All action now includes case-only proposals such as
+`7 SINS.iso` -> `7 Sins.iso`. Because an SMB share may treat these
+as the same name, RetroDB first renames to a unique temporary filename
+in the same directory, journals this intermediate state, and then
+renames to the desired case. Each step checks exact directory-entry
+spelling and file size. Rollback understands both completed and
+interrupted temporary states. Non-case changes continue to use direct
+same-directory renames. The existing temporary-RW mount and a NEW
+timestamped journal are used; old bulk/pilot manifests are preserved.
+
+Regenerate the proposal CSV from a current inventory first. Do not
+rerun the bulk action on an existing incomplete journal; inspect and
+recover that run before a new batch.
