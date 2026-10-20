@@ -437,7 +437,7 @@ web_ui_settings() {
   sudo systemctl restart xerabora.service
   if [[ "$choice" == 2 ]]; then
     if ! configure_lan_proxy enable; then
-      printf "0\\n" > "$cfg/lan"
+      printf "0\n" > "$cfg/lan"
       echo "LAN exposure failed; the shared LAN preference was reset to disabled." >&2
       return 1
     fi
