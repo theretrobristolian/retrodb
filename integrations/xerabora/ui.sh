@@ -32,7 +32,7 @@ xr_web_enabled() {
     ! grep -Eq '^ExecStart=.*--no-ui([[:space:]]|$)' /etc/systemd/system/xerabora.service
 }
 xr_web_lan_enabled() {
-  [[ "$(cat "$(xr_config_dir)/lan" 2>/dev/null || true)" == 1 ]]
+  [[ "$(cat "$HOME/.config/xerabora-server/lan" 2>/dev/null || true)" == 1 ]]
 }
 xr_web_urls() {
   local ip host
