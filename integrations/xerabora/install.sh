@@ -384,11 +384,17 @@ web_ui_settings() {
   chmod 700 "$cfg"
   if [[ "$choice" == 2 ]]; then printf '1\n' > "$cfg/lan"; else printf '0\n' > "$cfg/lan"; fi
   chmod 600 "$cfg/lan"
+  # Upstream xeRAbora loads its native LAN flag from each account's config.
+  # Synchronise the single server preference to every installed profile.
+  local profile_cfg
+  for profile_cfg in "$HOME_PATH"/.config/xerabora-profiles/*/xerabora "$HOME_PATH"/.config/xerabora; do
+    [[ -d "$profile_cfg" ]] || continue
+    printf '%s\\n' "$([[ "$choice" == 2 ]] && echo 1 || echo 0)" > "$profile_cfg/lan"
+    chmod 600 "$profile_cfg/lan"
+  done
+  sudo systemctl disable --now xerabora-lan.service 2>/dev/null || true
   sudo systemctl daemon-reload
   sudo systemctl restart xerabora.service
-  # The upstream xeRAbora binary serves the Web UI natively.
-  # Ensure the retired proxy cannot occupy port 18280.
-  sudo systemctl disable --now xerabora-lan.service 2>/dev/null || true
   echo "Web UI setting saved; xeRAbora service restarted."
   xr_web_urls
   echo "Exit and relaunch OPL-RA if a PS2 session was interrupted."
