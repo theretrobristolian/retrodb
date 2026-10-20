@@ -395,3 +395,24 @@ renames occur. The report includes two additional fields:
 The operation may take longer for large duplicate ISOs because it
 reads each colliding source end-to-end. Do not assume identical disc IDs
 or RA hashes imply byte-for-byte duplicate files.
+
+### Excel encoding and suspect ISO inspection
+
+The OPL rename CSV is now written as UTF-8 with a BOM, improving Excel
+recognition of punctuation and non-ASCII notes. Hyper Street Fighter II:
+The Anniversary Edition gets the 27-character display title
+`Hyper Street Fighter II Anniv` (before the OPL-RA ` [RA]` suffix).
+
+For a suspect `No Disc` ISO, the report now includes **Disc inspection**.
+It reads the image's ISO9660 primary volume descriptor, the root-directory
+`SYSTEM.CNF` file and its `BOOT`/`BOOT2` disc executable ID through the
+read-only RetroNAS mount. The result may establish that the boot ID differs
+from the filename serial, or it may be inconclusive for unusual layouts.
+A boot ID alone does not authenticate the disc's commercial identity;
+confirm against appropriate catalogues and boot content before renaming.
+The original image is never changed.
+
+After manually deleting old duplicate images, **run the FULL AUDIT** so
+the cached inventory and underlying CSV reflect the revised collection.
+Export-only reuses the previous inventory and can show stale duplicate
+rows after files have been removed.
