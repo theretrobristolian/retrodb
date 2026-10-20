@@ -158,7 +158,7 @@ opl_update_all() {
   journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$$.json"
   echo 'OPL full-library rename — proposed changes (read-only):'
   python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
-  echo 'Only PROPOSED, non-case-only titles are eligible. REVIEW/COLLISION and case-only titles are skipped.'
+  echo 'All PROPOSED titles, including case-only changes, are eligible. REVIEW/COLLISION entries are skipped.'
   echo 'Original filenames are recorded in a NEW rollback manifest before any rename.'
   read -rp 'Type RENAMEALL to proceed (anything else cancels): ' answer
   [[ "$answer" == RENAMEALL ]] || { echo 'Cancelled'; return 0; }
