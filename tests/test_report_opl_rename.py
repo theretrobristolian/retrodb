@@ -178,3 +178,25 @@ def test_second_twenty_title_identity():
         )])[0]
         assert row["Display preview with RA"] == expected + " [RA]"
         assert len(row["Display preview with RA"]) <= 32
+
+
+def test_curated_identity_fixes_for_opl_titles():
+    cases = [
+        ("Grand Theft Auto: Vice City Stories", "GTA VCS"),
+        ("Grand Theft Auto: San Andreas", "GTA San Andreas"),
+        ("Lara Croft Tomb Raider: Legend", "Tomb Raider Legend"),
+        ("Lara Croft Tomb Raider: Anniversary", "Tomb Raider Anniversary"),
+        ("Harry Potter and the Prisoner of Azkaban", "Harry Potter Azkaban"),
+        ("Legacy of Kain: Soul Reaver 2", "Soul Reaver 2"),
+        ("Resident Evil: Outbreak: File #2", "Resident Evil Outbreak 2"),
+        ("WWE SmackDown! Shut Your Mouth", "WWE SmackDown SYM"),
+        ("Return to Castle Wolfenstein: Operation Resurrection", "Return Castle Wolfenstein"),
+        ("The Suffering: Ties That Bind", "The Suffering 2"),
+        ("Tony Hawk's American Wasteland", "Tony Hawks Amer Wasteland"),
+    ]
+    for source, expected in cases:
+        row = module.propose([sample("dvd/SLES_123.45.Old.iso", title=source)])[0]
+        assert row["Display preview with RA"] == expected + " [RA]"
+        assert len(row["Display preview with RA"]) <= 32
+    assert module.compact_title("Hitman 2: Silent Assassin") == "Hitman 2 Silent Assassin"
+    assert module.compact_title("Hitman: Blood Money") == "Hitman Blood Money"
