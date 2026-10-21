@@ -315,17 +315,31 @@ def _cue_data_file(cue_path: Path) -> Path | None:
 
 
 def _raw_checksum(path: Path, algorithm: str) -> str:
-    if algorithm == "md5":
-        digest = hashlib.md5(usedforsecurity=False)
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(4 * 1024 * 1024), b""):
-                digest.update(chunk)
-        return digest.hexdigest()
+    """Checksum the raw disc, reporting invalid SMB/file reads with context."""
+    if algorithm not in {"md5", "crc32"}:
+        raise PatchError(f"Unsupported checksum algorithm: {algorithm}")
+    digest = hashlib.md5(usedforsecurity=False) if algorithm == "md5" else None
     value = 0
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(4 * 1024 * 1024), b""):
-            value = zlib.crc32(chunk, value)
-    return f"{value & 0xffffffff:08x}"
+    offset = 0
+    try:
+        with path.open("rb") as handle:
+            while True:
+                chunk = handle.read(4 * 1024 * 1024)
+                if chunk == b"":
+                    break
+                if not isinstance(chunk, (bytes, bytearray, memoryview)):
+                    raise PatchError(
+                        f"Invalid read result for {path} at offset {offset}: "
+                        f"{type(chunk).__name__} (expected bytes)"
+                    )
+                if digest is not None:
+                    digest.update(chunk)
+                else:
+                    value = zlib.crc32(chunk, value)
+                offset += len(chunk)
+    except OSError as exc:
+        raise PatchError(f"Cannot read patch source {path} at offset {offset}: {exc}") from exc
+    return digest.hexdigest() if digest is not None else f"{value & 0xffffffff:08x}"
 
 
 def _validate_source(
@@ -470,9 +484,15 @@ def prepare_patch_sources(
             if not console_id:
                 continue
             found = str(path)
-            valid, checksum_type, actual_hash = _validate_source(
-                path, requirements, hasher, console_id
-            )
+            try:
+                valid, checksum_type, actual_hash = _validate_source(
+                    path, requirements, hasher, console_id
+                )
+            except (PatchError, TypeError, ValueError) as exc:
+                state = "source-validation-error"
+                checksum_type = "error"
+                actual_hash = f"{type(exc).__name__}: {exc}"
+                break
             if valid:
                 state = "clean-base-verified-ready-to-patch"
                 candidate_count += 1
