@@ -78,7 +78,9 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     elif r['alternative_candidates']: status, reason = 'UNKNOWN', 'Potential RA titles found; review candidates manually (not verified)'
     elif r.get('gamedb_title'): status, reason = 'UNKNOWN', 'GameDB identified disc; RA identity still needs evidence, not an assumed unsupported release'
     else: status, reason = 'UNKNOWN', 'No confident match; possibly unsupported'
-    if warning and not yes:\n        reason += ' — ' + warning\n    return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
+    if warning and not yes:
+        reason += ' — ' + warning
+    return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             r['ra_game_id'] or r['recommended_ra_game_id'], r['preferred_release_name'],
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning]
 def apply_collection_dedup(entries):
@@ -118,7 +120,7 @@ def xml_sheet(rows):
         xml.append('<row r="%d">' % n)
         for i,val in enumerate(row):
             style = 1 if n == 1 else (2 if n%2 == 0 else 0)
-            if n > 1 and len(row) == 18 and i == 3:
+            if n > 1 and len(row) in (18, 21) and i == 3:
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6,'NO SET':5}.get(val,style)
             if n > 1 and len(row) == 16 and i == 4 and val == 'YES': style = 3
             xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
