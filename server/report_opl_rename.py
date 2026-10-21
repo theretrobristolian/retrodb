@@ -25,6 +25,18 @@ def clean_title(value):
 
 
 CURATED_DISPLAY_TITLES = {
+    # Preserve distinct game identities within OPL's 27-character display budget.
+    "grand theft auto vice city stories": "GTA VCS",
+    "grand theft auto san andreas": "GTA San Andreas",
+    "lara croft tomb raider legend": "Tomb Raider Legend",
+    "lara croft tomb raider anniversary": "Tomb Raider Anniversary",
+    "harry potter and the prisoner of azkaban": "Harry Potter Azkaban",
+    "legacy of kain soul reaver 2": "Soul Reaver 2",
+    "resident evil outbreak file 2": "Resident Evil Outbreak 2",
+    "wwe smackdown shut your mouth": "WWE SmackDown SYM",
+    "return to castle wolfenstein operation resurrection": "Return Castle Wolfenstein",
+    "the suffering ties that bind": "The Suffering 2",
+    "tony hawks american wasteland": "Tony Hawks Amer Wasteland",
     "wacky races starring dastardly and muttley": "Wacky Races Dastardly",
     "ready 2 rumble boxing round 2": "Ready 2 Rumble Round 2",
     "18 wheeler american pro trucker": "18 Wheeler Pro Trucker",
