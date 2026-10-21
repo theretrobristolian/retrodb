@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
+import time
 from typing import Any
 
 import httpx
@@ -28,6 +29,7 @@ class SyncResult:
     hashes: int
     cache_path: Path
     from_cache: bool
+    stale_fallback: bool = False
 
 
 class RetroAchievementsClient:
@@ -50,19 +52,30 @@ class RetroAchievementsClient:
 
     def _request(self, endpoint: str, parameters: dict[str, Any]) -> Any:
         params = {"z": self.username, "y": self.api_key, **parameters}
-        try:
-            with httpx.Client(
-                timeout=httpx.Timeout(120.0),
-                follow_redirects=True,
-                transport=self.transport,
-                headers={"User-Agent": "RetroDB/0.1"},
-            ) as client:
-                response = client.get(f"{API_BASE_URL}/{endpoint}", params=params)
-        except httpx.HTTPError as exc:
-            raise RetroAchievementsError(
-                f"RetroAchievements request failed ({type(exc).__name__})."
-            ) from None
-
+        for attempt in range(3):
+            try:
+                with httpx.Client(
+                    timeout=httpx.Timeout(120.0),
+                    follow_redirects=True,
+                    transport=self.transport,
+                    headers={"User-Agent": "RetroDB/0.1"},
+                ) as client:
+                    response = client.get(f"{API_BASE_URL}/{endpoint}", params=params)
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                if attempt < 2:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise RetroAchievementsError(
+                    f"RetroAchievements request failed ({type(exc).__name__})."
+                ) from None
+            except httpx.HTTPError as exc:
+                raise RetroAchievementsError(
+                    f"RetroAchievements request failed ({type(exc).__name__})."
+                ) from None
+            if response.status_code in {429, 500, 502, 503, 504} and attempt < 2:
+                time.sleep(2 ** attempt)
+                continue
+            break
         if response.status_code != 200:
             raise RetroAchievementsError(
                 f"RetroAchievements returned HTTP {response.status_code}."
@@ -97,7 +110,7 @@ class RetroAchievementsClient:
         force: bool = False,
     ) -> SyncResult:
         cache_path = self.cache_dir / f"{cache_slug}.json"
-        payload, from_cache = self._cached_game_list(cache_path, system_id, force)
+        payload, from_cache, stale_fallback = self._cached_game_list(cache_path, system_id, force)
         game_count = len(payload)
         hash_count = sum(
             len(game.get("Hashes", []))
@@ -111,32 +124,53 @@ class RetroAchievementsClient:
             hashes=hash_count,
             cache_path=cache_path,
             from_cache=from_cache,
+            stale_fallback=stale_fallback,
         )
+
+    @staticmethod
+    def _read_game_list(path: Path) -> list[dict[str, Any]] | None:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            # An old filtered catalogue does not contain zero-achievement games.
+            if (
+                isinstance(payload, list)
+                and bool(payload)
+                and all(isinstance(game, dict) and "NumAchievements" in game
+                        and isinstance(game.get("Hashes"), list) for game in payload)
+                and any(int(game["NumAchievements"]) == 0 for game in payload)
+            ):
+                return payload
+        except (OSError, ValueError, TypeError):
+            pass
+        return None
 
     def _cached_game_list(
         self, cache_path: Path, system_id: int, force: bool
-    ) -> tuple[list[dict[str, Any]], bool]:
-        if not force and self._cache_is_fresh(cache_path):
-            try:
-                payload = json.loads(cache_path.read_text(encoding="utf-8"))
-                # Old filtered catalogues (f=1) must be refreshed once.
-                if isinstance(payload, list) and all(
-                    isinstance(game, dict) and "NumAchievements" in game
-                    for game in payload
-                ) and any(int(game.get("NumAchievements", 0)) == 0 for game in payload):
-                    return payload, True
-            except (OSError, ValueError):
-                pass
+    ) -> tuple[list[dict[str, Any]], bool, bool]:
+        cached = self._read_game_list(cache_path)
+        if not force and cached is not None and self._cache_is_fresh(cache_path):
+            return cached, True, False
 
-        payload = self._request(
-            "API_GetGameList.php", {"i": system_id, "f": 0, "h": 1}
-        )
+        try:
+            payload = self._request(
+                "API_GetGameList.php", {"i": system_id, "f": 0, "h": 1}
+            )
+        except RetroAchievementsError as exc:
+            # Never disguise auth/configuration errors as transient outages.
+            transient = any(text in str(exc) for text in (
+                "HTTP 429", "HTTP 500", "HTTP 502", "HTTP 503", "HTTP 504",
+                "TimeoutException", "NetworkError", "ConnectError", "ReadTimeout",
+                "ConnectTimeout", "RemoteProtocolError",
+            ))
+            if not force and transient and cached is not None:
+                return cached, True, True
+            raise
         if not isinstance(payload, list):
             raise RetroAchievementsError(
                 "RetroAchievements returned an unexpected game-list response."
             )
         self._write_cache(cache_path, payload)
-        return payload, False
+        return payload, False, False
 
     def get_game_hashes(
         self, game_id: int, *, force: bool = False
