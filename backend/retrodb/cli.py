@@ -205,14 +205,24 @@ def main() -> int:
             print(f"[OK] RetroAchievements connection successful ({systems} systems).")
             return 0
 
-        systems = client.get_systems()
-        print("[+] Synchronising RetroAchievements catalogues...")
-        for slug, names in TARGET_SYSTEMS:
-            system_id, system_name = find_system(systems, names)
+        # These are stable official RetroAchievements console IDs; there is
+        # no need to call API_GetConsoleIDs before reading a valid cache.
+        print("[+] Synchronising RetroAchievements catalogues (cache-first)...")
+        for slug, system_id, system_name in (
+            ("playstation", 12, "PlayStation"),
+            ("playstation-2", 21, "PlayStation 2"),
+        ):
             result = client.sync_system(
                 system_id, system_name, slug, force=args.force
             )
-            source = "cache" if result.from_cache else "downloaded"
+            if result.stale_fallback:
+                print(
+                    f"[WARNING] {system_name}: RetroAchievements is temporarily unavailable; "
+                    "using previously cached catalogue (may be outdated)."
+                )
+            source = "stale-cache fallback" if result.stale_fallback else (
+                "cache" if result.from_cache else "downloaded"
+            )
             print(
                 f"[OK] {system_name}: {result.games} games, "
                 f"{result.hashes} hashes ({source})."
