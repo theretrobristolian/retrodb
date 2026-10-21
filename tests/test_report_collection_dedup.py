@@ -59,3 +59,38 @@ def test_no_set_rows_stay_in_effective_denominator():
     no_set = entry("Endgame", "", "NO SET")
     rows = report.apply_collection_dedup([good, no_set])
     assert len([r for r in rows if not r[13].startswith("EXCLUDE")]) == 2
+
+
+def test_patch_availability_does_not_imply_source_compatibility():
+    data = {
+        "status": "unmatched", "path": "PS2/SCES_524.60.Jak 3.iso",
+        "local_serial": "SCES-52460", "local_region": "Europe",
+        "gamedb_title": "Jak 3", "recommended_ra_title": "Jak 3 (USA)",
+        "recommended_ra_game_id": "3065", "ra_game_id": "",
+        "preferred_release_name": "Jak 3 (USA) (Debug Patch)",
+        "preferred_region": "USA",
+        "preferred_patch_url": "https://github.com/RetroAchievements/RAPatches/",
+        "ra_set_status": "HAS_SET", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    row = report.row_for(data)
+    assert row[4] == "NO"
+    assert row[18] == "AVAILABLE"
+    assert "REGION MISMATCH" in row[20]
+    assert "do not apply" in row[5]
+    assert row[19].startswith("Debug")
+
+
+def test_source_verified_changes_patch_to_ready_but_not_ra_compatible():
+    data = {
+        "status": "unmatched", "path": "PS2/SLUS_211.20.Psychonauts.iso",
+        "local_serial": "SLUS-21120", "local_region": "USA",
+        "gamedb_title": "Psychonauts", "recommended_ra_title": "Psychonauts (USA)",
+        "recommended_ra_game_id": "3100", "ra_game_id": "",
+        "preferred_release_name": "Psychonauts (USA) (Anti-Cheat)",
+        "preferred_region": "USA", "preferred_patch_url": "https://github.com/RetroAchievements/RAPatches/",
+        "ra_set_status": "HAS_SET", "release_guidance": "", "alternative_candidates": "",
+    }
+    source = "/mnt/retrodb-retronas/PS2/SLUS_211.20.Psychonauts.iso"
+    row = report.row_for(data, {(source, data["recommended_ra_title"])})
+    assert (row[3], row[4], row[18], row[19]) == ("NO", "YES", "READY", "Anti-cheat")
