@@ -132,7 +132,22 @@ def create_patch_plan(report_path: Path, cache_dir: Path, workspace: Path) -> Pa
         title = row.get("recommended_ra_title", "Unknown game")
         game_dir = workspace / "downloads" / f"{game_id}-{_safe_slug(title)}"
         game_dir.mkdir(exist_ok=True)
+        local_region = row.get("local_region", "").strip()
+        required_region = row.get("preferred_region", "").strip()
+        region_mismatch = bool(
+            local_region and required_region
+            and local_region.casefold() != required_region.casefold()
+        )
+        release_name = row.get("preferred_release_name", "").casefold()
+        patch_type = (
+            "anti-cheat" if "anti-cheat" in release_name or "anti cheat" in release_name
+            else "debug restriction" if "debug patch" in release_name
+            else "other / inspect official instructions"
+        )
         entry = {
+            "region_mismatch": region_mismatch,
+            "patch_type": patch_type,
+            "source_verification": "AVAILABLE — checksum not yet verified",
             "ra_game_id": game_id,
             "title": title,
             "platform": row.get("platform", ""),
@@ -157,12 +172,16 @@ def create_patch_plan(report_path: Path, cache_dir: Path, workspace: Path) -> Pa
 - Platform: {entry['platform']}
 - Release: {entry['required_release']}
 - Region: {entry['required_region']}
+- Local collection region: {entry['local_region']}
+- Patch type: {entry['patch_type']}
+- Patch status: AVAILABLE ONLY — not source-verified
+- Region mismatch: {'YES — this is NOT evidence of region conversion; use only a checksum-matched clean source' if entry['region_mismatch'] else 'no apparent region mismatch'}
 - Expected RetroAchievements hash after patching: `{entry['expected_ra_hash']}`
 - Official patch: {patch_line}
 
 ## Safe workflow
 
-1. Obtain the exact clean release named above from your own media.
+1. Obtain the exact clean release named above from your own media. A different region is not interchangeable without matching the patch's explicit source checksum.
 2. Put it in `{workspace / 'incoming'}`. Do not alter the RetroNAS original.
 3. Run `sudo bash server/retronas.sh patch-prepare`.
 4. Only apply the patch after its README/source checksum agrees with the clean image.
