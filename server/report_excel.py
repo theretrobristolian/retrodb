@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail']
+COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning']
 VERIFIED = 'clean-base-verified-ready-to-patch'
 def patch_sources(path):
     if not path or not Path(path).is_file(): return set()
@@ -17,23 +17,56 @@ def patch_sources(path):
             if row.get('state') == VERIFIED and row.get('candidate_path') == row.get('collection_source')
             and row.get('candidate_path')}
 
-def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
+def patched_outputs(path):
+    """Only report VERIFIED when the saved patched output still exists."""
+    if not path or not Path(path).is_file():
+        return set()
+    try:
+        with open(path, encoding='utf-8') as handle:
+            records = json.load(handle)
+        return {(str(row.get('ra_game_id', '')), str(row.get('title', '')))
+                for row in records if row.get('status') == 'patched-and-verified'
+                and row.get('ra_hash') and row.get('output')
+                and Path(row['output']).is_file()}
+    except (OSError, ValueError, TypeError):
+        return set()
+
+
+def patch_kind(r):
+    label = (r.get('preferred_release_name') or '').casefold()
+    if 'anti-cheat' in label or 'anti cheat' in label:
+        return 'Anti-cheat'
+    if 'debug patch' in label:
+        return 'Debug restriction (verify instructions)'
+    if 'region conversion' in label:
+        return 'Region conversion (verify instructions)'
+    return 'Other / review patch notes'
+
+
+def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verified_outputs=frozenset()):
     yes = r['status'] == 'matched' and r.get('ra_set_status', 'HAS_SET') == 'HAS_SET'
     title = r.get('ra_game_title') or r.get('recommended_ra_title') or r.get('gamedb_title') or r.get('local_friendly_title') or Path(r['path']).stem
     patch = r['preferred_patch_url']
     suggested = bool(r['recommended_ra_title'])
     source = str(Path(root) / r['path'])
-    patchable = (not yes and suggested and
+    patchable = (not yes and suggested and bool(patch) and
                  (source, r['recommended_ra_title']) in verified_sources)
+    verified_output = (str(r.get('recommended_ra_game_id', '')), r.get('recommended_ra_title', '')) in verified_outputs
+    mismatch = (bool(r.get('local_region')) and bool(r.get('preferred_region'))
+                and r['local_region'].casefold() != r['preferred_region'].casefold())
+    warning = ('LOCAL REGION MISMATCH: ' + r['local_region'] + ' disc; patch targets '
+               + r['preferred_region'] + '. No region conversion is implied.' if mismatch and patch else '')
+    patch_state = ('VERIFIED' if verified_output else 'READY' if patchable else
+                   'AVAILABLE' if patch else 'NONE')
     patch_status = 'YES' if patchable else 'NO'
     if yes: status, reason = 'YES', 'Verified RA hash; ready to play'
-    elif patchable: status, reason = 'NO', 'PATCHABLE: source checksum verified in patch-prepare; apply official patch and reverify RA hash'
+    elif patchable: status, reason = 'NO', 'READY: exact local source checksum verified; apply patch to a separate copy, then verify output RA hash'
     elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
     elif suggested:
         status = 'NO'
         if r.get('recommendation_confidence') == 'verified-serial-alias':
             reason = 'Game identified via verified disc serial; current ISO hash not RA supported'
-        elif patch: reason = 'Official patch available; verify required source before applying'
+        elif patch: reason = 'AVAILABLE ONLY: official patch exists, but required clean source is not checksum-verified; do not apply to this ISO'
         elif r['local_region'] and r['preferred_region'] and r['local_region'] != r['preferred_region']:
             reason = 'Different region recommended: ' + r['preferred_region']
         else: reason = 'Different ISO release or revision recommended'
@@ -45,9 +78,9 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas'):
     elif r['alternative_candidates']: status, reason = 'UNKNOWN', 'Potential RA titles found; review candidates manually (not verified)'
     elif r.get('gamedb_title'): status, reason = 'UNKNOWN', 'GameDB identified disc; RA identity still needs evidence, not an assumed unsupported release'
     else: status, reason = 'UNKNOWN', 'No confident match; possibly unsupported'
-    return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
+    if warning and not yes:\n        reason += ' — ' + warning\n    return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             r['ra_game_id'] or r['recommended_ra_game_id'], r['preferred_release_name'],
-            r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', '')]
+            r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning]
 def apply_collection_dedup(entries):
     """Discount only demonstrably redundant noncompatible copies.
 
@@ -78,7 +111,7 @@ def xml_sheet(rows):
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
          '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
          '<cols>']
-    for i,width in enumerate(([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28,64]),1):
+    for i,width in enumerate(([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28,64,18,32,65]),1):
         xml.append('<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i,i,width))
     xml.append('</cols><sheetData>')
     for n,row in enumerate(rows,1):
@@ -97,10 +130,11 @@ def main(source,destination,preparation=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     assert entries and 'preferred_patch_url' in entries[0], 'Invalid RetroDB audit CSV'
     sources = patch_sources(preparation)
+    outputs = patched_outputs(str(Path(preparation).with_name('patch-apply.json')) if preparation else None)
     sheets=[]
     summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','Eligible RA-ready %','RA eligible images','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors','Patchable %','No-set %','Unresolved %','RA identified %']]
     for platform,name in [('Sony PlayStation','PlayStation 1'),('Sony PlayStation 2','PlayStation 2')]:
-        entries_console=sorted((row_for(r, sources) for r in entries if r['platform']==platform),
+        entries_console=sorted((row_for(r, sources, verified_outputs=outputs) for r in entries if r['platform']==platform),
                                key=lambda r:(r[0].casefold(),r[1].casefold()))
         apply_collection_dedup(entries_console)
         active=[r for r in entries_console if not r[13].startswith('EXCLUDE')]
