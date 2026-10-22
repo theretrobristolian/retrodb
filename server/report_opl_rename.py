@@ -47,6 +47,10 @@ CURATED_DISPLAY_TITLES = {
     "singstar pop (scus-97580)": "SingStar Pop",
     "blood omen 2 the legacy of kain series": "Blood Omen 2",
     "midnight club 3 dub edition remix": "Midnight Club 3 DUB Remix",
+    # Keep each Prince of Persia subtitle identifiable within OPL’s display limit.
+    "prince of persia warrior within": "PoP Warrior Within",
+    "prince of persia the two thrones": "PoP The Two Thrones",
+    "prince of persia the sands of time": "PoP Sands of Time",
     "gunvari collection time crisis": "Gunvari and Time Crisis",
     "walt disneys the jungle book rhythm n groove": "Jungle Book Rhythm n Groove",
     "the lord of the rings the fellowship of the ring": "LOTR Fellowship of the Ring",
