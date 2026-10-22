@@ -200,3 +200,14 @@ def test_curated_identity_fixes_for_opl_titles():
         assert len(row["Display preview with RA"]) <= 32
     assert module.compact_title("Hitman 2: Silent Assassin") == "Hitman 2 Silent Assassin"
     assert module.compact_title("Hitman: Blood Money") == "Hitman Blood Money"
+
+def test_old_backups_not_present_in_rename_proposals():
+    rows = [
+        sample("roms/sony/playstation2/dvd/OLD_SCUS_972.65.Jak II.iso",
+               "SCUS-97265", "Jak II"),
+        sample("roms/sony/playstation2/dvd/SCUS_972.65.Jak II.iso",
+               "SCUS-97265", "Jak II"),
+    ]
+    result = module.propose(rows)
+    assert len(result) == 1
+    assert not result[0]["Current filename"].startswith("OLD_")
