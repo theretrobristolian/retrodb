@@ -37,15 +37,33 @@ def deploy(args):
     workspace, mount, read_mount = (p.resolve(strict=True) for p in (args.workspace, args.mount, args.read_mount))
     plan = json.loads((workspace / "patch-plan.json").read_text())
     prepared = json.loads((workspace / "patch-prepare.json").read_text())
-    selected = [e for e in plan if str(e.get("ra_game_id")) == args.game_id and e.get("platform") == "Sony PlayStation 2"]
-    if len(selected) != 1:
-        raise PatchError("Select exactly one planned PS2 patch by RA game ID")
-    item = selected[0]
-    matching = [e for e in prepared if e.get("title") == item["title"]
-                and e.get("state") == "clean-base-verified-ready-to-patch"
-                and e.get("candidate_path") == e.get("collection_source")]
-    if len(matching) != 1:
-        raise PatchError("Exact RetroNAS source is not READY; no network file will be changed")
+    selected = [e for e in plan
+                if str(e.get("ra_game_id")) == args.game_id
+                and e.get("platform") == "Sony PlayStation 2"]
+    if not selected:
+        raise PatchError(f"No PS2 patch manifest entries for RA game ID {args.game_id}")
+    # Multiple region/revision entries may share the same RA game ID.
+    # Only the precise source that was checksum-verified may be deployed.
+    ready_pairs = []
+    for candidate in selected:
+        for verified_source in prepared:
+            if (verified_source.get("title") == candidate.get("title")
+                    and verified_source.get("state") == "clean-base-verified-ready-to-patch"
+                    and verified_source.get("candidate_path") == verified_source.get("collection_source")
+                    and verified_source.get("collection_source")
+                    and Path(verified_source["collection_source"]).resolve()
+                       == read_mount.joinpath(candidate.get("local_path", "")).resolve()):
+                ready_pairs.append((candidate, verified_source))
+    if len(ready_pairs) != 1:
+        if not ready_pairs:
+            raise PatchError(
+                f"RA game ID {args.game_id} has no exactly matching checksum-verified RetroNAS ISO"
+            )
+        raise PatchError(
+            f"RA game ID {args.game_id} has {len(ready_pairs)} verified source entries; "
+            "ambiguous selection, refusing to patch"
+        )
+    item, source_entry = ready_pairs[0]
     if item.get("local_region", "").casefold() != item.get("required_region", "").casefold():
         raise PatchError("Source/patch region mismatch; refusing network replacement")
     relative = Path(item["local_path"])
