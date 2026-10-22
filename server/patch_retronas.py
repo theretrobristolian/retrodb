@@ -112,7 +112,14 @@ def deploy(args):
             record["state"] = "replaced-pending-final-check"
             write_json(journal, record)
             if hash_file(args.hasher, 21, src) != expected:
-                raise PatchError("Final RetroNAS ISO hash mismatch; restore from OLD_ manually")
+                restore = src.with_name(".retrodb-restore-" + uuid.uuid4().hex + ".iso")
+                shutil.copyfile(backup, restore)
+                if file_sha256(restore) != file_sha256(backup):
+                    raise PatchError("Final NAS hash failed and restoration was not verified; inspect journal")
+                os.replace(restore, src)
+                record["state"] = "restored-original-after-final-hash-failure"
+                write_json(journal, record)
+                raise PatchError("Final NAS hash failed; original restored from OLD_ (backup retained)")
             record["state"] = "verified-on-retronas"
             write_json(journal, record)
             print(f"[OK] RA-verified patched ISO: {src}")
