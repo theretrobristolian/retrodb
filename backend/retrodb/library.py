@@ -99,6 +99,9 @@ def scan_retronas(session: Session, root: Path) -> ScanSummary:
             directory_path = Path(directory)
             directory_names[:] = [name for name in directory_names if not (directory_path / name).is_symlink()]
             for filename in filenames:
+                if filename.casefold().startswith('old_'):
+                    summary.skipped_other += 1
+                    continue
                 path = directory_path / filename
                 extension = path.suffix.casefold() or "(none)"
                 if extension not in GAME_EXTENSIONS:
