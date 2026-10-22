@@ -211,3 +211,34 @@ def test_old_backups_not_present_in_rename_proposals():
     result = module.propose(rows)
     assert len(result) == 1
     assert not result[0]["Current filename"].startswith("OLD_")
+
+
+def test_code_veronica_names_preserve_identity_and_region():
+    cases = [
+        ("SLES-50306", "Resident Evil: Code: Veronica X",
+         "SLES_503.06.RE Code Veronica X.iso"),
+        ("SLUS-20184", "Resident Evil: Code: Veronica X",
+         "SLUS_201.84.RE Code Veronica X.iso"),
+        ("SLES-50650", "Resident Evil: Survivor 2: Code: Veronica",
+         "SLES_506.50.RE Survivor 2 Code Veronica.iso"),
+    ]
+    for serial, title, expected in cases:
+        row = module.propose([sample("DVD/Original.iso", serial, title)])[0]
+        assert row["Proposed filename"] == expected
+        assert row["Status"] == "PROPOSED"
+        assert len(row["Display preview with RA"]) <= 32
+
+
+def test_burnout_series_unchanged():
+    cases = [
+        ("SLES-50445", "Burnout", "Burnout"),
+        ("SLES-51044", "Burnout 2: Point of Impact", "Burnout 2 Point of Impact"),
+        ("SLES-52584", "Burnout 3: Takedown", "Burnout 3 Takedown"),
+        ("SLUS-21242", "Burnout Revenge", "Burnout Revenge"),
+        ("SLES-54627", "Burnout Dominator", "Burnout Dominator"),
+    ]
+    for serial, title, name in cases:
+        prefix = serial[:4] + "_" + serial[5:8] + "." + serial[8:]
+        filename = f"{prefix}.{name}.iso"
+        row = module.propose([sample("DVD/" + filename, serial, title)])[0]
+        assert row["Status"] == "UNCHANGED"
