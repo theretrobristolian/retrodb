@@ -77,6 +77,16 @@ CURATED_DISPLAY_TITLES = {
 }
 
 PILOT_DISPLAY_OVERRIDES = {
+    # Regional Ratchet & Clank titles. Preserve subtitles and local numbering.
+    # Avoid colons in filenames for compatibility with SMB/Windows tooling.
+    "SCUS-97199": "Ratchet & Clank",
+    "SCES-51607": "Ratchet & Clank 2",
+    "SCUS-97268": "R&C Going Commando",
+    "SCES-52456": "Ratchet & Clank 3",
+    "SCUS-97353": "R&C Up Your Arsenal",
+    "SCES-53285": "Ratchet Gladiator",
+    "SCES-55019": "R&C Size Matters",
+    "SCUS-97615": "R&C Size Matters",
     "SLUS-20152": "Ace Combat 04 Shat Skies",
     "SLES-54617": "Action Man ATOM",
     "SLES-50282": "Age of Empires II",
