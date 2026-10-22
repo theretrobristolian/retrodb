@@ -239,6 +239,24 @@ PYREADY
   return "$result"
 }
 
+patch_journal_status() {
+  local latest
+  latest="$(find "$OPL_JOURNAL_DIR" -maxdepth 1 -type f -name 'patch-*.json' -printf '%T@ %p\n' 2>/dev/null | sort -nr | head -1 | cut -d' ' -f2-)"
+  if [[ -z "$latest" ]]; then
+    echo '[INFO] No patch deployment journals found.'
+    return 0
+  fi
+  python3 - "$latest" <<'PY'
+import json,sys
+from pathlib import Path
+path=Path(sys.argv[1])
+record=json.loads(path.read_text())
+print(f"Patch journal: {path}")
+for key in ("game_id","source","backup","state","expected_ra_hash","actual_ra_hash","error"):
+    if record.get(key):
+        print(f"  {key}: {record[key]}")
+PY
+}
 opl_recover() {
   local selected source result=0 answer
   mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
@@ -275,6 +293,7 @@ menu() {
     echo '  5) Service / integration details'
     echo '  6) UPDATE ALL eligible OPL titles (confirmation + rollback journal)'
     echo '  7) INSPECT / RESUME interrupted OPL rename journal'
+    echo '  8) SHOW latest PS2 patch deployment journal'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -290,6 +309,7 @@ menu() {
          echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
       6) run opl_update_all; pause ;;
       7) run opl_recover; pause ;;
+      8) run patch_journal_status; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
