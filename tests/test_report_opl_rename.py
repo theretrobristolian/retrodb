@@ -245,14 +245,14 @@ def test_burnout_series_unchanged():
 
 def test_ratchet_and_clank_regional_editions_keep_full_identity():
     cases = {
-        "SCUS-97199": ("Ratchet & Clank", "Ratchet & Clank"),
-        "SCES-51607": ("Ratchet & Clank 2", "Ratchet & Clank 2"),
-        "SCUS-97268": ("Ratchet & Clank: Going Commando", "R&C Going Commando"),
-        "SCES-52456": ("Ratchet & Clank 3", "Ratchet & Clank 3"),
-        "SCUS-97353": ("Ratchet & Clank: Up Your Arsenal", "R&C Up Your Arsenal"),
+        "SCUS-97199": ("Ratchet & Clank", "Ratchet and Clank"),
+        "SCES-51607": ("Ratchet & Clank 2", "Ratchet and Clank 2"),
+        "SCUS-97268": ("Ratchet & Clank: Going Commando", "RC Going Commando"),
+        "SCES-52456": ("Ratchet & Clank 3", "Ratchet and Clank 3"),
+        "SCUS-97353": ("Ratchet & Clank: Up Your Arsenal", "RC Up Your Arsenal"),
         "SCES-53285": ("Ratchet: Gladiator", "Ratchet Gladiator"),
-        "SCES-55019": ("Ratchet & Clank: Size Matters", "R&C Size Matters"),
-        "SCUS-97615": ("Ratchet & Clank: Size Matters", "R&C Size Matters"),
+        "SCES-55019": ("Ratchet & Clank: Size Matters", "RC Size Matters"),
+        "SCUS-97615": ("Ratchet & Clank: Size Matters", "RC Size Matters"),
     }
     rows = []
     for serial, (title, expected) in cases.items():
@@ -264,3 +264,10 @@ def test_ratchet_and_clank_regional_editions_keep_full_identity():
         assert row["Status"] == "PROPOSED"
         rows.append(row)
     assert len({r["Proposed relative path"] for r in rows}) == 8
+
+
+def test_override_names_are_sanitised_even_if_override_contains_ampersand(monkeypatch):
+    monkeypatch.setitem(module.PILOT_DISPLAY_OVERRIDES, "SCUS-99999", "Test & Game")
+    row = module.propose([sample("DVD/Original.iso", "SCUS-99999", "Test and Game")])[0]
+    assert row["Proposed filename"] == "SCUS_999.99.Test and Game.iso"
+    assert "&" not in row["Proposed filename"]
