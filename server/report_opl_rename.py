@@ -79,14 +79,14 @@ CURATED_DISPLAY_TITLES = {
 PILOT_DISPLAY_OVERRIDES = {
     # Regional Ratchet & Clank titles. Preserve subtitles and local numbering.
     # Avoid colons in filenames for compatibility with SMB/Windows tooling.
-    "SCUS-97199": "Ratchet & Clank",
-    "SCES-51607": "Ratchet & Clank 2",
-    "SCUS-97268": "R&C Going Commando",
-    "SCES-52456": "Ratchet & Clank 3",
-    "SCUS-97353": "R&C Up Your Arsenal",
+    "SCUS-97199": "Ratchet and Clank",
+    "SCES-51607": "Ratchet and Clank 2",
+    "SCUS-97268": "RC Going Commando",
+    "SCES-52456": "Ratchet and Clank 3",
+    "SCUS-97353": "RC Up Your Arsenal",
     "SCES-53285": "Ratchet Gladiator",
-    "SCES-55019": "R&C Size Matters",
-    "SCUS-97615": "R&C Size Matters",
+    "SCES-55019": "RC Size Matters",
+    "SCUS-97615": "RC Size Matters",
     "SLUS-20152": "Ace Combat 04 Shat Skies",
     "SLES-54617": "Action Man ATOM",
     "SLES-50282": "Age of Empires II",
@@ -257,7 +257,9 @@ def propose(rows, verify_root=None):
                 record["Status"] = "REVIEW"
                 record["Notes"] = "GameDB title became empty after sanitisation"
             else:
-                trimmed = PILOT_DISPLAY_OVERRIDES.get(serial, compact_title(title))
+                trimmed = clean_title(PILOT_DISPLAY_OVERRIDES.get(serial, compact_title(title)))
+                if len(trimmed) > TITLE_LIMIT:
+                    trimmed = compact_title(trimmed)
                 record["Title truncated"] = "YES" if trimmed != cleaned else "NO"
                 proposed = f"{prefix}.{trimmed}.iso"
                 target = str(current.with_name(proposed))
