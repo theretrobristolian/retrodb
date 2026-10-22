@@ -102,6 +102,7 @@ def deploy(args):
                               capture_output=True, text=True, check=False)
         if done.returncode:
             raise PatchError("Patch failed: " + done.stderr.strip()[-500:])
+        print("[+] Local xdelta completed; checking patched RA hash...", flush=True)
         verified = hash_file(args.hasher, 21, staged)
         if verified != expected:
             raise PatchError(f"Patched RA hash mismatch: expected {expected}, got {verified}")
@@ -112,23 +113,37 @@ def deploy(args):
             return
 
         # Preserve the original BEFORE replacing the live filename.
-        print("[+] Copying original to OLD_ backup on RetroNAS...")
+        record["state"] = "copying-original-backup"
+        write_json(journal, record)
+        print(f"[+] Copying original ({src.stat().st_size / 1024**3:.2f} GiB) to OLD_ backup on RetroNAS...", flush=True)
         shutil.copy2(src, backup)
+        print("[+] Backup copy complete; verifying size and both SHA256 checksums...", flush=True)
+        record["state"] = "verifying-backup-checksums"
+        write_json(journal, record)
         if backup.stat().st_size != src.stat().st_size or file_sha256(backup) != file_sha256(src):
             raise PatchError("OLD_ backup integrity check failed")
         record["state"] = "backup-verified"
         write_json(journal, record)
+        print("[OK] Original backup verified by SHA256.", flush=True)
         transient = src.with_name(".retrodb-patch-" + uuid.uuid4().hex + ".iso")
         try:
+            record["state"] = "copying-patched-output-to-network"
+            write_json(journal, record)
+            print(f"[+] Copying patched image ({staged.stat().st_size / 1024**3:.2f} GiB) to temporary NAS filename...", flush=True)
             shutil.copyfile(staged, transient)
+            record["state"] = "verifying-network-patched-hash"
+            write_json(journal, record)
+            print("[+] NAS copy complete; checking patched RA hash...", flush=True)
             if hash_file(args.hasher, 21, transient) != expected:
                 raise PatchError("Patched copy on RetroNAS failed RA hash verification")
             record["state"] = "network-copy-verified"
             write_json(journal, record)
+            print("[OK] NAS patched image RA hash verified; replacing active filename...", flush=True)
             # Same-directory atomic rename; OLD_ remains untouched.
             os.replace(transient, src)
             record["state"] = "replaced-pending-final-check"
             write_json(journal, record)
+            print("[+] Performing final RA hash verification on active NAS ISO...", flush=True)
             if hash_file(args.hasher, 21, src) != expected:
                 restore = src.with_name(".retrodb-restore-" + uuid.uuid4().hex + ".iso")
                 shutil.copyfile(backup, restore)
