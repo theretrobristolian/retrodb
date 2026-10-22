@@ -41,9 +41,10 @@ def fixture(tmp_path, monkeypatch, region="USA"):
     monkeypatch.setattr(deploy, "hash_file", lambda hasher, console, path: (
         "a" * 32 if Path(path).read_bytes() == b"patched source" else "b" * 32
     ))
-    monkeypatch.setattr(deploy.subprocess, "run", lambda command, **kwargs: (
-        Path(command[-1]).write_bytes(b"patched source") or SimpleNamespace(returncode=0, stderr="")
-    ))
+    def fake_xdelta(command, **kwargs):
+        Path(command[-1]).write_bytes(b"patched source")
+        return SimpleNamespace(returncode=0, stderr="")
+    monkeypatch.setattr(deploy.subprocess, "run", fake_xdelta)
     args = SimpleNamespace(workspace=work, mount=nas, read_mount=nas,
                            game_id="3062", journal=tmp_path / "journal.json",
                            hasher=tmp_path / "hasher", dry_run=False)
