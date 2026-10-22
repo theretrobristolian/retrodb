@@ -61,24 +61,33 @@ export_csv() {
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
   chmod 0600 "$rename_report" || return 1
-  echo "[OK] OPL rename proposals: $rename_report"
-  echo "[OK] CSV copied to $EXPORT"
-  echo "[OK] Excel workbook: $excel"
-  ls -lh "$EXPORT"
+  local rename_xlsx="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.xlsx"
+  ( umask 077; python3 "$HERE/report_opl_excel.py" "$rename_report" "$rename_xlsx" ) || return 1
+  echo
+  echo '------------------------------------------------------------'
+  echo ' EXPORT SUMMARY'
+  echo '------------------------------------------------------------'
+  printf ' Compatibility Excel : %s\n' "$excel"
+  printf ' OPL proposals Excel  : %s\n' "$rename_xlsx"
+  printf ' OPL proposals CSV    : %s (rename-engine input)\n' "$rename_report"
+  printf ' Raw audit CSV        : %s\n' "$EXPORT"
+  echo '------------------------------------------------------------'
   local remote
   remote="$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/retroachievements-compatibility.csv"
   echo 'Run on your own computer, not inside SSH:'
   echo ' Mac / Linux (recommended Excel workbook):'
   printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Compatibility.xlsx"
-  echo ' Mac / Linux (read-only OPL rename proposals):'
-  printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
+  echo ' Mac / Linux (OPL rename proposals Excel):'
+  printf '   scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-OPL-Rename-Proposals.xlsx"
   echo ' Mac / Linux (raw CSV):'
   printf '   scp "%s" ~/Downloads/\n' "$remote"
   echo ' Windows PowerShell (recommended Excel workbook):'
   printf '   scp "%s" "%s"\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Compatibility.xlsx" '$env:USERPROFILE\Downloads\RetroDB-Compatibility.xlsx'
+  echo ' Windows PowerShell (OPL rename proposals Excel):'
+  printf '   scp "%s" "%s"\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-OPL-Rename-Proposals.xlsx" '$env:USERPROFILE\Downloads\RetroDB-OPL-Rename-Proposals.xlsx'
   echo ' Windows PowerShell (raw CSV):'
   printf '   scp "%s" "%s"\n' "$remote" '$env:USERPROFILE\Downloads\retroachievements-compatibility.csv'
-  echo 'Excel includes Summary, PlayStation 1 and PlayStation 2 tabs; the CSV remains available for technical diagnosis.'
+  echo '[INFO] Both reports now have Excel versions with filters and frozen headers; the OPL CSV remains the rename engine source.'
 }
 stage() {
   printf '\n================================================================\n'
