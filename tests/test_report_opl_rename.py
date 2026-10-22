@@ -242,3 +242,25 @@ def test_burnout_series_unchanged():
         filename = f"{prefix}.{name}.iso"
         row = module.propose([sample("DVD/" + filename, serial, title)])[0]
         assert row["Status"] == "UNCHANGED"
+
+def test_ratchet_and_clank_regional_editions_keep_full_identity():
+    cases = {
+        "SCUS-97199": ("Ratchet & Clank", "Ratchet & Clank"),
+        "SCES-51607": ("Ratchet & Clank 2", "Ratchet & Clank 2"),
+        "SCUS-97268": ("Ratchet & Clank: Going Commando", "R&C Going Commando"),
+        "SCES-52456": ("Ratchet & Clank 3", "Ratchet & Clank 3"),
+        "SCUS-97353": ("Ratchet & Clank: Up Your Arsenal", "R&C Up Your Arsenal"),
+        "SCES-53285": ("Ratchet: Gladiator", "Ratchet Gladiator"),
+        "SCES-55019": ("Ratchet & Clank: Size Matters", "R&C Size Matters"),
+        "SCUS-97615": ("Ratchet & Clank: Size Matters", "R&C Size Matters"),
+    }
+    rows = []
+    for serial, (title, expected) in cases.items():
+        row = module.propose([sample("DVD/Old.iso", serial, title)])[0]
+        prefix = serial[:4] + "_" + serial[5:8] + "." + serial[8:]
+        assert row["Proposed filename"] == f"{prefix}.{expected}.iso"
+        assert row["Display preview with RA"] == expected + " [RA]"
+        assert len(row["Display preview with RA"]) <= 32
+        assert row["Status"] == "PROPOSED"
+        rows.append(row)
+    assert len({r["Proposed relative path"] for r in rows}) == 8
