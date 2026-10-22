@@ -82,3 +82,15 @@ def test_existing_backup_is_never_overwritten(tmp_path, monkeypatch):
         deploy.deploy(args)
     assert iso.read_bytes() == b"clean source"
     assert iso.with_name("OLD_" + iso.name).read_bytes() == b"existing archive"
+
+def test_duplicate_game_id_uses_only_verified_matching_source(tmp_path, monkeypatch):
+    args, iso = fixture(tmp_path, monkeypatch)
+    data = json.loads((args.workspace / "patch-plan.json").read_text())
+    other = dict(data[0], local_path="roms/dvd/OTHER.iso", local_region="Europe")
+    data.insert(0, other)
+    (args.workspace / "patch-plan.json").write_text(json.dumps(data))
+    args.dry_run = True
+    deploy.deploy(args)
+    assert iso.read_bytes() == b"clean source"
+    assert not iso.with_name("OLD_" + iso.name).exists()
+
