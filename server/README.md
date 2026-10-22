@@ -126,21 +126,37 @@ bash server/manager.sh
 
 Its header shows RetroDB/PostgreSQL status, the RetroNAS mount, RAHasher, report availability and the xeRAbora service/Web UI. RetroDB currently provides a local API health endpoint at `http://127.0.0.1:8000/health`, **not a complete RetroDB browser frontend**.
 
-The simplified menu focuses on three workflows:
+The current terminal menu provides:
 
-- **1 — FULL AUDIT:** Eight labelled stages: check the read-only RetroNAS mount and RAHasher; sync the RA catalogue; fetch/cache GameDB's PS2 serial/title catalogue; inventory PS1/PS2; hash and match against RA; prepare patch manifest; download official patches and verify candidate sources; export Excel and raw CSV. The workflow stops on an error and never modifies ROMs on RetroNAS. Downloaded GameDB data is cached for 180 days. The GameDB lookup uses the **filename serial**; disc internal ID inspection is future work.
-- **2 — Download official patch packages:** Create/update the patch manifest and download/reuse official patch packages locally. No ROM patching occurs.
-- **3 — Apply verified patches locally:** Requires typing `APPLY`, refreshes source checksum verification, and only applies patches to eligible clean images. Patched outputs are placed in `/var/lib/retrodb/patches/verified/` and validated using RAHasher. Review those outputs and copy them back to RetroNAS yourself; the original share remains read-only.
-- **4 — Export latest Excel:** Rebuild Excel and copy raw CSV from the existing audit without scanning or downloading patches.
-- **5 — Service/integration details:** Show RetroDB, xeRAbora and RetroNAS systemd status.
+1. **FULL AUDIT:** eight stages covering preflight, cached RA and GameDB catalogues, read-only inventory and hashing, patch manifest/download/source checks and report exports.
+2. **Download/update official patches:** refresh official patch packages locally; no ISO changes.
+3. **PATCH verified PS2 ISO on RetroNAS:** choose a verified RA game ID, run a local patch/hash-verified dry run, then explicitly type `PATCH-<RA_GAME_ID>` to authorise a temporary RW connection. The original file is backed up as `OLD_<filename>`, checked with SHA-256, and the replacement is RA-hash-verified on the NAS. Keep backups until real-console testing is complete.
+4. **Export latest Excel workbooks:** rebuild both compatibility and OPL proposal workbooks from the existing audit without rehashing.
+5. **Service/integration details.**
+6. **UPDATE ALL eligible OPL titles:** preview eligible changes, require `RENAMEALL`, and use a temporary writable mount and a rollback journal; collision/review cases are not renamed.
+7. **INSPECT/RESUME interrupted OPL rename journal.**
+8. **SHOW latest PS2 patch deployment journal.**
 
-Run `bash server/manager.sh` for the menu, or `bash server/manager.sh audit`, `export`, `patches` or `patch-apply` directly.
+Exports in `~/retrodb-exports/`:
 
-The manager exports `~/retrodb-exports/RetroDB-Compatibility.xlsx` alongside the raw `retroachievements-compatibility.csv`. The Excel report has a **Summary** tab and separate **PlayStation 1** and **PlayStation 2** tabs. Console tabs are sorted by friendly game name and show the filename, disc ID, RA compatibility, a separate **Patchable** YES/NO field, clear issue/recommendation, RA game ID, recommended release, region and patch reference. The Summary tab separately totals verified RA-compatible games, confirmed patchable sources, other suggested ISO replacements, unknown games and hash errors. **RA compatible YES** means the existing ISO/disc image hash matches RA. **Patchable YES** requires a matching source entry in `/var/lib/retrodb/patches/patch-prepare.json` with state `clean-base-verified-ready-to-patch`, and the verified candidate must be the actual RetroNAS collection file, not a separately supplied incoming image. A mere patch URL or `rapatches` label does *not* qualify. Generate that verification with `sudo bash server/retronas.sh patch-plan`, `patch-download`, then `patch-prepare`. Re-run `patch-prepare` after changing any source files; the report reflects the *last preparation run*, not a new checksum test during Excel export. Patchability does not mean RA compatibility until the patched output passes RAHasher verification. It uses Python's standard library (no additional package installation). The export directory and files are private to the Linux account (directory `700`, files `600`), leaving the protected original in `/var/lib/retrodb/reports/` unchanged. It displays macOS/Linux and Windows PowerShell `scp` commands for downloading the CSV **from your computer**, outside the SSH session. The Excel workbook is the recommended download; the CSV is available when deeper technical troubleshooting is needed. Neither the audit nor the export modifies ROMs on RetroNAS.
+| File | Purpose |
+| --- | --- |
+| `RetroDB-Compatibility.xlsx` | Filterable Summary / PlayStation 1 / PlayStation 2 workbook with RA status, patchability, eligible coverage and recommendations |
+| `RetroDB-OPL-Rename-Proposals.xlsx` | Filterable/frozen-header review workbook with proposed/current filenames, statuses, collisions and notes |
+| `RetroDB-OPL-Rename-Proposals.csv` | **Authoritative input** to the OPL rename executor, not merely a spreadsheet export |
+| `retroachievements-compatibility.csv` | Raw diagnostic audit data |
 
-Direct commands: `bash server/manager.sh status`, `bash server/manager.sh audit`, `bash server/manager.sh export`, `bash server/manager.sh patches`, `bash server/manager.sh patch-apply`.
+Example: download both current Excel reports **from your Mac terminal**, not from an SSH session on RetroDB:
 
+```bash
+scp david@retrodb.it.gattaca.house:retrodb-exports/{RetroDB-Compatibility.xlsx,RetroDB-OPL-Rename-Proposals.xlsx} ~/Downloads/
+```
 
+A new **full audit** is required after any ISO patch or OPL rename so that the database and raw audit reflect the new files. Export-only uses the last audit. Backups prefixed `OLD_` are excluded from scanning, RA matching, compatibility workbooks and rename proposals; they are **not deleted**.
+
+RetroNAS is read-only during audits and reporting. Only explicit patch/rename operations use the separate temporary `/mnt/retrodb-retronas-pilot-rw` mount. Patch journals are written in `~/retrodb-exports/opl-rename-journals/`. If a NAS copy or rename fails, **inspect the journal and both source/backup files before retrying**. Do not assume an incomplete `OLD_` is a valid backup.
+
+The terminal manager is the current supported operational interface; the polished RetroDB catalogue web UI remains planned.
 
 ### Safer regional aliases and unusual PS2 discs
 
@@ -426,17 +442,11 @@ name. Examples include Ready 2 Rumble Round 2, Midnight Club 3 DUB Remix,
 Pinball HoF Williams / Gottlieb, LOTR's distinguishable releases, and TMNT
 sequels. Short titles such as Guitar Hero Metallica remain untouched.
 
-These abbreviations affect only the *proposed filename and OPL display
-preview*, never GameDB's stored identity or RA matching. Proposed renames
-are still read-only and must be reviewed before any future write workflow.
+These abbreviations affect only the *proposed filename and OPL display preview*, never GameDB's stored identity or RA matching. The proposal export is read-only; the separate, explicitly confirmed menu option 6 performs actual renames.
 
-### First-40 OPL rename pilot (explicit opt-in write access)
+### Historical first-40 OPL rename pilot (superseded)
 
-`bash server/manager.sh` now offers:
-
-- **6 — Preview** first 40 eligible PS2 games, alphabetically by GameDB title.
-- **7 — Apply** only those 40 after an `APPLY40` confirmation.
-- **8 — Rollback** their exact original filenames after `ROLLBACK40` confirmation.
+The earlier first-40 pilot documented below is historical. Current menu **6** is the bulk confirmed rename operation, menu **7** is journal inspection/recovery, and menu **8** is patch journal inspection. Do not use pilot menu numbers from older documentation.
 
 The default systemd RetroNAS mount remains **read-only at all times**.
 The manager briefly creates a **second**, separately mounted CIFS connection
@@ -473,8 +483,7 @@ manually inspect and unmount it before another operation.
 Use menu **6 — UPDATE ALL eligible OPL titles** after menu **4 — Export**
 has regenerated the latest rename proposals from a current FULL AUDIT.
 It previews every proposed rename, then requires typing `RENAMEALL`.
-Eligible entries must have status PROPOSED and have a non-case-only name
-change. REVIEW, COLLISION, UNCHANGED and case-only changes are skipped
+Eligible entries must have status PROPOSED. REVIEW, COLLISION and UNCHANGED are skipped
 and the skipped totals are shown before confirmation. There is no fixed
 batch size. The existing read-only mount is unchanged. Only the temporary
 second SMB mount is read/write, and it is unmounted afterward.
