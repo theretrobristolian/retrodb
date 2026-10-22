@@ -214,7 +214,7 @@ PYREADY
   read -rp 'Enter the RA game ID to test (Enter cancels): ' game_id
   [[ "$game_id" =~ ^[0-9]{1,8}$ ]] || { echo 'Cancelled / invalid ID.'; return 0; }
   mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
-  journal="$OPL_JOURNAL_DIR/patch-$(date -u +%Y%m%dT%H%M%SZ)-$game_id-$BASHPID.json"
+  journal="$OPL_JOURNAL_DIR/patch-$(date -u +%Y%m%dT%H%M%SZ)-$game_id-$BASHPID-$RANDOM.json"
   echo '[+] First patching locally and checking the resulting RA hash (no RetroNAS writes).'
   sudo env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
     "$HERE/patch_retronas.py" --game-id "$game_id" --mount "$MOUNT" \
