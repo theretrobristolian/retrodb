@@ -491,6 +491,7 @@ def match_collection(
                         for g in records if isinstance(g, dict) and "ID" in g}
         with_sets = tuple(g for g in games if counts_by_id.get(g.game_id, 0) > 0)
         no_sets = tuple(g for g in games if counts_by_id.get(g.game_id, 0) == 0)
+        print(f"[INFO] {platform.name}: {len(with_sets)} RA catalogue games with achievements; {len(no_sets)} without achievements.")
         try:
             gamedb_titles = load_gamedb(gamedb_cache, slug)
         except (OSError, ValueError) as exc:
@@ -501,8 +502,10 @@ def match_collection(
             LibraryItem.platform_id == platform.id,
             LibraryItem.extension.in_(extensions),
             LibraryItem.is_missing.is_(False),
+            ~LibraryItem.filename.ilike("OLD\\_%", escape="\\"),
         ).order_by(LibraryItem.relative_path)))
         counts = Counter()
+        no_set_evidence = Counter()
         total = len(items)
         print(f"[+] {platform.name}: {total} disc images to check.")
 
@@ -591,6 +594,7 @@ def match_collection(
                 )
                 if candidate:
                     no_set_game = candidate
+                    no_set_evidence[method] += 1
                     confidence = confidence or method
                 elif review and not alternatives:
                     alternatives = review
@@ -690,6 +694,8 @@ def match_collection(
             if number % 25 == 0 or number == total:
                 print(f"[RUN] {platform.name}: {number}/{total} checked.")
 
+        if no_set_evidence:
+            print(f"[INFO] {platform.name}: NO_SET identity evidence: " + ", ".join(f"{method}={count}" for method, count in sorted(no_set_evidence.items())))
         summaries.append(MatchSummary(
             platform.name, total, counts["matched"], counts["unmatched"],
             counts["failed"], counts["cached"], counts["recommended"],
