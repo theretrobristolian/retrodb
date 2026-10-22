@@ -47,6 +47,7 @@ CURATED_DISPLAY_TITLES = {
     "singstar pop (scus-97580)": "SingStar Pop",
     "blood omen 2 the legacy of kain series": "Blood Omen 2",
     "midnight club 3 dub edition remix": "Midnight Club 3 DUB Remix",
+    "midnight club 3 dub edition remix greatest hits": "Midnight Club 3 DUB Remix",
     # Keep each Prince of Persia subtitle identifiable within OPL’s display limit.
     "prince of persia warrior within": "PoP Warrior Within",
     "prince of persia the two thrones": "PoP The Two Thrones",
