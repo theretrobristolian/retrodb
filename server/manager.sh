@@ -197,6 +197,48 @@ PYJOURNAL
   [[ $result -eq 0 ]] || echo '[WARNING] Rename was interrupted/failed. Keep the journal; inspect it before retrying.'
   return "$result"
 }
+patch_retronas_one() {
+  local game_id confirm source result=0 journal
+  mount_ready || return 1
+  echo 'READY PS2 patch sources (checksum-verified from the existing audit):'
+  sudo python3 - <<'PYREADY'
+import json
+from pathlib import Path
+w=Path('/var/lib/retrodb/patches')
+plans={str(x.get('ra_game_id')):x for x in json.loads((w/'patch-plan.json').read_text())}
+for r in json.loads((w/'patch-prepare.json').read_text()):
+    p=next((x for x in plans.values() if x.get('title')==r.get('title')),None)
+    if p and p.get('platform')=='Sony PlayStation 2' and r.get('state')=='clean-base-verified-ready-to-patch' and r.get('candidate_path')==r.get('collection_source'):
+        print(f"  RA ID {p['ra_game_id']}: {p['title']} -- {p['local_path']}")
+PYREADY
+  read -rp 'Enter the RA game ID to test (Enter cancels): ' game_id
+  [[ "$game_id" =~ ^[0-9]{1,8}$ ]] || { echo 'Cancelled / invalid ID.'; return 0; }
+  mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
+  journal="$OPL_JOURNAL_DIR/patch-$(date -u +%Y%m%dT%H%M%SZ)-$game_id-$BASHPID.json"
+  echo '[+] First patching locally and checking the resulting RA hash (no RetroNAS writes).'
+  sudo env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    "$HERE/patch_retronas.py" --game-id "$game_id" --mount "$MOUNT" \
+    --read-mount "$MOUNT" --journal "$journal" --dry-run || return 1
+  echo
+  echo 'Next: copy current ISO to OLD_<filename>, verify its SHA256,'
+  echo 'copy the patched ISO to a temporary file, verify its RA hash,'
+  echo 'and atomically replace the original filename. OLD_ is NEVER deleted.'
+  read -rp "Type PATCH-$game_id to proceed, or Enter to cancel: " confirm
+  [[ "$confirm" == "PATCH-$game_id" ]] || { echo 'Cancelled: dry-run journal retained.'; return 0; }
+  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
+  mountpoint -q "$PILOT_ROOT" && { echo '[STOP] Temporary RW mount already active.'; return 1; }
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  journal="$OPL_JOURNAL_DIR/patch-$(date -u +%Y%m%dT%H%M%SZ)-$game_id-$BASHPID.json"
+  sudo env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    "$HERE/patch_retronas.py" --game-id "$game_id" --mount "$PILOT_ROOT" \
+    --read-mount "$MOUNT" --journal "$journal" || result=$?
+  sudo umount "$PILOT_ROOT" || { echo '[WARNING] RW mount still active!'; return 1; }
+  echo "Patch operation journal: $journal"
+  return "$result"
+}
+
 opl_recover() {
   local selected source result=0 answer
   mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
@@ -233,6 +275,7 @@ menu() {
     echo '  5) Service / integration details'
     echo '  6) UPDATE ALL eligible OPL titles (confirmation + rollback journal)'
     echo '  7) INSPECT / RESUME interrupted OPL rename journal'
+    echo '  8) PATCH one verified PS2 ISO on RetroNAS (OLD_ backup + hash checks)'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -248,6 +291,7 @@ menu() {
          echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
       6) run opl_update_all; pause ;;
       7) run opl_recover; pause ;;
+      8) run patch_retronas_one; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
