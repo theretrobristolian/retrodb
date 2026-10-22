@@ -32,6 +32,8 @@ CURATED_DISPLAY_TITLES = {
     "lara croft tomb raider anniversary": "Tomb Raider Anniversary",
     "harry potter and the prisoner of azkaban": "Harry Potter Azkaban",
     "legacy of kain soul reaver 2": "Soul Reaver 2",
+    "resident evil code veronica x": "RE Code Veronica X",
+    "resident evil survivor 2 code veronica": "RE Survivor 2 Code Veronica",
     "resident evil outbreak file 2": "Resident Evil Outbreak 2",
     "wwe smackdown shut your mouth": "WWE SmackDown SYM",
     "return to castle wolfenstein operation resurrection": "Return Castle Wolfenstein",
