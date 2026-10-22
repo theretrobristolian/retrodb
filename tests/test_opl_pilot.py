@@ -123,3 +123,22 @@ def test_resume_from_intermediate_case_name(tmp_path):
     pilot.do_resume(tmp_path, journal)
     assert (tmp_path / op["new"]).read_bytes() == b"payload"
     assert not (tmp_path / op["temp"]).exists()
+
+
+def test_empty_plan_is_safe_noop(tmp_path, monkeypatch):
+    import sys
+    (tmp_path / "games").mkdir()
+    csv_path = tmp_path / "proposals.csv"
+    with csv_path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=[
+            "GameDB title", "Current relative path", "Proposed relative path", "Status"])
+        writer.writeheader()
+        writer.writerow(row("Already done", "games/Same.iso", "games/Same.iso", "UNCHANGED"))
+    journal = tmp_path / "would-not-be-created.json"
+    monkeypatch.setattr(sys, "argv", ["opl_pilot.py", "apply", "--csv", str(csv_path),
+                                     "--root", str(tmp_path), "--journal", str(journal)])
+    pilot.main()
+    assert not journal.exists()
+    monkeypatch.setattr(sys, "argv", ["opl_pilot.py", "count", "--csv", str(csv_path),
+                                     "--root", str(tmp_path), "--journal", str(journal)])
+    pilot.main()
