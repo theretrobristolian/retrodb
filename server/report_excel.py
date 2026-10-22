@@ -130,6 +130,9 @@ def xml_sheet(rows):
     return ''.join(xml)
 def main(source,destination,preparation=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
+    backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
+    entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
+    if backups: print(f'[INFO] Excluded {len(backups)} OLD_ backup images from compatibility workbook.')
     assert entries and 'preferred_patch_url' in entries[0], 'Invalid RetroDB audit CSV'
     sources = patch_sources(preparation)
     outputs = patched_outputs(str(Path(preparation).with_name('patch-apply.json')) if preparation else None)
