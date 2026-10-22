@@ -204,6 +204,8 @@ def propose(rows, verify_root=None):
         if row.get("platform") != "Sony PlayStation 2" or not path.lower().endswith(".iso"):
             continue
         current = Path(path)
+        if current.name.casefold().startswith("old_"):
+            continue  # Preserved source ISO backup, never an OPL rename candidate.
         serial = row.get("local_serial", "").upper().strip()
         title = (row.get("gamedb_title") or "").strip()
         record = {
