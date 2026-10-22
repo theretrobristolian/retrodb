@@ -169,9 +169,16 @@ PYJOURNAL
       return 1
     fi
   done < <(find "$OPL_JOURNAL_DIR" -maxdepth 1 -type f -name 'opl-rename-*.json' | sort)
-  journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$.json"
+  journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
   echo 'OPL full-library rename — proposed changes (read-only):'
   python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
+  local eligible
+  eligible="$(python3 "$HERE/opl_pilot.py" count --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal")" || return 1
+  if [[ "$eligible" == 0 ]]; then
+    echo '[INFO] No eligible OPL renames. Nothing was changed; no rollback journal was created.'
+    echo '[INFO] If you expected changes, regenerate proposals using option 4 and inspect Status values in the CSV.'
+    return 0
+  fi
   echo 'All PROPOSED titles, including case-only changes, are eligible. REVIEW/COLLISION entries are skipped.'
   echo 'Original filenames are recorded in a NEW rollback manifest before any rename.'
   read -rp 'Type RENAMEALL to proceed (anything else cancels): ' answer
