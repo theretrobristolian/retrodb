@@ -198,7 +198,7 @@ def do_rollback(root, journal):
 
 def main():
     a=argparse.ArgumentParser()
-    a.add_argument("command",choices=["preview","apply","rollback","resume","status"])
+    a.add_argument("command",choices=["preview","count","apply","rollback","resume","status"])
     a.add_argument("--csv",type=Path,required=True)
     a.add_argument("--root",type=Path,required=True)
     a.add_argument("--journal",type=Path,required=True)
@@ -207,6 +207,9 @@ def main():
     with args.csv.open(encoding="utf-8-sig",newline="") as f:
         entries=list(csv.DictReader(f))
     rows=plan(entries)
+    if args.command=="count":
+        print(len(rows))
+        return
     if args.command=="preview":
         print(f"All {len(rows)} eligible alphabetical proposed PS2 renames:")
         for i,row in enumerate(rows,1):
@@ -218,7 +221,9 @@ def main():
         return
     args.journal.parent.mkdir(parents=True,exist_ok=True)
     if args.command=="apply":
-        if not rows: raise ValueError("No eligible proposals")
+        if not rows:
+            print("[INFO] No eligible OPL rename proposals; no journal created and no files changed.")
+            return
         do_apply(root,rows,args.journal)
     else:
         if not args.journal.is_file(): raise ValueError("No rollback journal")
