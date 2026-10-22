@@ -4,7 +4,7 @@ RetroDB is an open-source, self-hosted catalogue and browser for retro-game coll
 
 The long-term aim is a fast, secure web front end for a physical game room or private collection: closer to **Plex for locally stored games** than a launcher or ROM-distribution service. It will catalogue what is available, explain how to use each console, and present curated game lists through tablets, phones and QR codes.
 
-> **Project status:** very early design and scaffolding. RetroDB is not yet a usable application.
+> **Project status (October 2026):** working self-hosted backend, PostgreSQL/API health endpoints, read-only PS1/PS2 RetroNAS inventory, RetroAchievements hash audits, GameDB title matching, formatted Excel reports, OPL filename management, and checksum-verified official PS2 patch deployment. The planned polished browsing/guest web application is **not yet complete**.
 
 ## Vision
 
@@ -217,7 +217,25 @@ Do not put a real API key in Git, screenshots, issues or support messages.
 
 ## Connect a RetroNAS collection
 
-RetroDB can mount the standard RetroNAS SMB share read-only and inventory the canonical PS1 and PS2 folders. Follow the [RetroNAS scanning guide](docs/retronas-scanning.md). Credentials remain root-only and collection files are never modified.
+RetroDB mounts the standard RetroNAS SMB share read-only for PS1/PS2 inventory and RetroAchievements audits. Explicitly confirmed OPL renames and PS2 patch deployment use a **separate temporary writable SMB mount**, never changing the default read-only audit mount. Follow the [RetroNAS scanning guide](docs/retronas-scanning.md). Credentials remain root-only and collection files are never modified.
+
+## Current collection-management workflow
+
+On a configured Debian host, update and launch the interactive manager:
+
+```bash
+cd ~/retrodb
+git pull --ff-only origin main
+bash server/manager.sh
+```
+
+Menu **1** performs the full eight-stage audit. Menu **4** regenerates reports from the existing audit (no new scan): `~/retrodb-exports/RetroDB-Compatibility.xlsx`, `RetroDB-OPL-Rename-Proposals.xlsx`, the machine-readable OPL rename CSV, and the raw compatibility CSV. Both Excel reports include frozen/filterable headers; the compatibility workbook has Summary, PS1 and PS2 tabs.
+
+Menu **3** tests a single checksum-verified PS2 official patch locally, confirms its RetroAchievements hash, and requires typing `PATCH-<RA_GAME_ID>` before writing to RetroNAS. It retains the original under `OLD_<filename>`, checks the backup using SHA-256, verifies the patched ISO on the NAS, and journals stages under `~/retrodb-exports/opl-rename-journals/`. **Never delete OLD_ backups without separate validation.** Old backup images are excluded from active inventory, RA matching and rename proposals.
+
+Menu **6** offers confirmed OPL renames using the CSV proposal manifest and a temporary writable share; menu **7** inspects/resumes interrupted rename journals, while menu **8** inspects the latest patch journal. Renames preserve each game's disc serial, enforce filename-safe title text and retain conservative collision/review safeguards. After renaming or patching, run a fresh full audit; exporting alone cannot refresh hashes or collection paths.
+
+Full safeguards, recovery steps and notes are in [Server operations](server/README.md) and [RetroNAS scanning](docs/retronas-scanning.md). Always test games and artwork on the target PS2/OPL-RA setup before removing retained original copies.
 
 ## PS2 RetroAchievements and xeRAbora
 
