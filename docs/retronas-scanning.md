@@ -51,9 +51,9 @@ sudo bash server/retronas.sh unmount
 sudo bash server/retronas.sh mount
 ```
 
-## Next identification stage
+## Identification and hash matching
 
-A later scanner stage will calculate the platform-specific RetroAchievements hashes and compare them with the cached provider catalogue. Whole-file SHA/MD5 values are not a substitute for RetroAchievements disc hashing, so this inventory deliberately does not claim compatibility yet.
+The inventory itself counts and records files; the subsequent **implemented** matching stage calculates platform-specific RetroAchievements hashes and compares them with the cached provider catalogue. Whole-file SHA/MD5 values are not a substitute for RetroAchievements disc hashing.
 
 ## Check RetroAchievements compatibility
 
@@ -160,3 +160,14 @@ under `Old Patch`. It creates one temporary output at a time, verifies the
 result with RAHasher and retains only successful results under
 `/var/lib/retrodb/patches/verified`. Failed outputs are deleted and recorded in
 `patch-apply.json`. RetroNAS originals remain read-only and unchanged.
+
+
+## Current end-to-end audit and controlled NAS writes
+
+The current recommended entry point is `bash server/manager.sh` as your ordinary Linux user. Menu **1** refreshes inventory and RA/PS2 GameDB matching, verifies official patch sources, then exports both a formatted compatibility Excel workbook and a filterable OPL rename Excel workbook. Menu **4** re-exports the existing audit without scanning. The machine-readable OPL proposal CSV remains the input used by menu **6** (confirmed bulk renames).
+
+Menus **3** and **6** are exceptional **writable** workflows: they mount a second temporary SMB connection at `/mnt/retrodb-retronas-pilot-rw`; the normal `/mnt/retrodb-retronas` auditing mount remains read-only. The PS2 patch workflow validates a clean original against official patch requirements, builds and RA-verifies the patched ISO locally, requires the exact confirmation `PATCH-<RA_GAME_ID>`, backs up the original as `OLD_<filename>`, SHA-256-verifies that backup, copies and RA-verifies the patched output on RetroNAS, then checks the final active ISO. Stage information and failure states are recorded under `~/retrodb-exports/opl-rename-journals/`; menu **8** displays the latest patch journal.
+
+**Do not remove a failed or partial `OLD_` backup or blindly rerun a failed operation.** Check the deployment journal and the two files first. Backups are deliberately omitted from new active scans, RA checks, Excel reporting and OPL rename proposals, but retained on disk. Explicit rename operations have their own recovery journal (menu **7**). After any patch or rename, perform a new full audit before trusting the reports.
+
+The older command `sudo bash server/retronas.sh patch-apply` still describes a **local verified-output workflow**, not menu 3's direct-on-NAS deployment. Keep these two paths distinct.
