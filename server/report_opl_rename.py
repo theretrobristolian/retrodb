@@ -317,7 +317,7 @@ def main():
         writer.writerows(proposals)
     counts = Counter(row["Status"] for row in proposals)
     print(f"[OK] Read-only OPL rename proposals: {args.output_csv}")
-    print(" ".join(f"{key}={value}" for key, value in sorted(counts.items())))
+    print("[INFO] OPL proposals: " + " | ".join(f"{key}: {counts[key]}" for key in ("PROPOSED", "UNCHANGED", "REVIEW", "COLLISION")))
     print("[SAFE] No RetroNAS files were renamed, moved or modified.")
 
 if __name__ == "__main__":
