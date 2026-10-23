@@ -219,6 +219,18 @@ Do not put a real API key in Git, screenshots, issues or support messages.
 
 RetroDB mounts the standard RetroNAS SMB share read-only for PS1/PS2 inventory and RetroAchievements audits. Explicitly confirmed OPL renames and PS2 patch deployment use a **separate temporary writable SMB mount**, never changing the default read-only audit mount. Follow the [RetroNAS scanning guide](docs/retronas-scanning.md). Credentials remain root-only and collection files are never modified.
 
+### Launch the menus from anywhere
+
+Run this **once** from your checkout as your normal user (it asks for sudo only to write into `/usr/local/bin`):
+
+```bash
+cd ~/retrodb
+git pull --ff-only origin main
+bash server/install-launchers.sh
+```
+
+Then from any directory, type `retrodb` for the collection manager or `xerabora` / `xeRAbora` for the xeRAbora installer/profile manager. Arguments are forwarded to the underlying scripts (e.g. `retrodb audit`, `xerabora status`). Both commands use your **current shell user's profile and HOME**, not root's; don't prefix them with `sudo`. The wrappers target this checkout and stay current as you `git pull`. If you move the checkout to a new path, rerun the installer.
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
