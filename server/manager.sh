@@ -353,6 +353,8 @@ more_menu() {
     echo '  3) Service status            - RetroDB, xeRAbora and RetroNAS'
     echo '  4) Recover OPL renames       - Inspect or resume rename journal'
     echo '  5) View patch journal        - Inspect latest patch operation'
+    echo '  6) Update RetroDB            - Redeploy backend, migrations and service'
+    echo '  7) Upgrade Debian            - Preview and apply system package upgrades'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -363,6 +365,8 @@ more_menu() {
       3) run service_details; pause ;;
       4) run opl_recover; pause ;;
       5) run patch_journal_status; pause ;;
+      6) run bash "$HERE/maintenance.sh" retrodb; pause ;;
+      7) run bash "$HERE/maintenance.sh" system; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
