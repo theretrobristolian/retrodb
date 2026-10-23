@@ -185,7 +185,7 @@ PYJOURNAL
   eligible="$(python3 "$HERE/opl_pilot.py" count --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal")" || return 1
   if [[ "$eligible" == 0 ]]; then
     echo '[INFO] No eligible OPL renames. Nothing was changed; no rollback journal was created.'
-    echo '[INFO] If you expected changes, regenerate proposals using option 4 and inspect Status values in the CSV.'
+    echo '[INFO] If you expected changes, regenerate proposals using More options > Export reports and inspect Status values in the CSV.'
     return 0
   fi
   echo 'All PROPOSED titles, including case-only changes, are eligible. REVIEW/COLLISION entries are skipped.'
@@ -291,18 +291,47 @@ opl_recover() {
 }
 
 run() { if "$@"; then echo '[OK] Operation completed.'; else echo '[ERROR] Operation failed.' >&2; fi; }
+service_details() {
+  echo
+  systemctl --no-pager --full status retrodb.service xerabora.service || true
+  echo
+  sudo bash "$HERE/retronas.sh" status || true
+}
+more_menu() {
+  local choice
+  while true; do
+    header
+    echo ' MORE OPTIONS'
+    echo '----------------------------------------------------------------'
+    echo '  1) Export reports            - Rebuild Excel from last audit'
+    echo '  2) Download official patches - Refresh local patch packages'
+    echo '  3) Service status            - RetroDB, xeRAbora and RetroNAS'
+    echo '  4) Recover OPL renames       - Inspect or resume rename journal'
+    echo '  5) View patch journal        - Inspect latest patch operation'
+    echo
+    echo '  0) Back to main menu'
+    echo '----------------------------------------------------------------'
+    read -rp 'Choose an option: ' choice || return 0
+    case "$choice" in
+      1) run export_csv; pause ;;
+      2) run patch_download; pause ;;
+      3) run service_details; pause ;;
+      4) run opl_recover; pause ;;
+      5) run patch_journal_status; pause ;;
+      0|q|Q) return 0 ;;
+      *) echo 'Invalid option.'; pause ;;
+    esac
+  done
+}
 menu() {
   local choice
   while true; do
     header
-    echo '  1) FULL AUDIT — refresh, scan, verify patches, export Excel'
-    echo '  2) Download / update official patch packages'
-    echo '  3) PATCH verified PS2 ISO on RetroNAS (OLD_ backup + RA verification)'
-    echo '  4) Export latest Excel workbook (no new audit)'
-    echo '  5) Service / integration details'
-    echo '  6) UPDATE ALL eligible OPL titles (confirmation + rollback journal)'
-    echo '  7) INSPECT / RESUME interrupted OPL rename journal'
-    echo '  8) SHOW latest PS2 patch deployment journal'
+    echo '  1) Audit game collection  - Scan, check RA support and export reports'
+    echo '  2) Patch a PS2 game       - Test, verify and preserve original'
+    echo '  3) Rename PS2 games       - Preview changes and confirm renames'
+    echo
+    echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
@@ -311,14 +340,9 @@ menu() {
     read -rp 'Choose an option: ' choice || break
     case "$choice" in
       1) run audit; pause ;;
-      2) run patch_download; pause ;;
-      3) run patch_retronas_one; pause ;;
-      4) run export_csv; pause ;;
-      5) echo; systemctl --no-pager --full status retrodb.service xerabora.service || true
-         echo; sudo bash "$HERE/retronas.sh" status || true; pause ;;
-      6) run opl_update_all; pause ;;
-      7) run opl_recover; pause ;;
-      8) run patch_journal_status; pause ;;
+      2) run patch_retronas_one; pause ;;
+      3) run opl_update_all; pause ;;
+      4) more_menu ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
