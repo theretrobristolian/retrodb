@@ -4,6 +4,8 @@ Community installer, updater and multi-account manager for [xeRAbora](https://gi
 
 **Status:** The xeRAbora client has been exercised successfully on a Debian 13 VM connected to a real UK PAL PS2 Slim, including game identification and achievement notifications for *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Multi-account switching has now been tested on the existing Debian VM: two separate RetroAchievements profiles were activated successfully, and the browser dashboard displayed the selected account while tracking live PS2 gameplay and achievement progress. Service auto-start and the 20-second pre-start delay have also been observed running on that VM. A clean, fresh-machine end-to-end install has **not** yet been tested. Upstream xeRAbora remains alpha software.
 
+The full-repository xeRAbora installer now registers `xerabora` and `xeRAbora` automatically after a successful installation or when confirming the installed version is already current. The confirmation tells you the command to type. Copying only the standalone xeRAbora scripts remains supported, but that minimal layout omits the shared launcher helper.
+
 ## Optional global terminal command
 
 From a full RetroDB checkout, run `bash server/install-launchers.sh` as your normal Linux user. It installs `/usr/local/bin/xerabora` and an equivalent mixed-case `xeRAbora` command. You can then type `xerabora` anywhere to open the same installer/profile management menu. The launchers refer to the current checkout, so `git pull` updates their behaviour; do not move or delete the checkout without rerunning the launcher installer.
