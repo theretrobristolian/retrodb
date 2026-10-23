@@ -124,7 +124,9 @@ install_client() {
   echo "Installed: $old | Newest: $version"
   if [[ "$old" == "$version" && -x /opt/xerabora/xerabora-linux-x86_64 ]]; then
     echo "Already current; no changes needed."
-    bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || return 1
+    if [[ -f "$SCRIPT_DIR/../../server/install-launchers.sh" ]]; then
+      bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || echo "[WARN] xeRAbora launcher could not be installed."
+    fi
     prompt_api_key
     return
   fi
@@ -190,8 +192,13 @@ EOF
       return 1
     fi
   fi
-  bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || return 1
-  echo "[OK] To open the xeRAbora menu next time, type: xerabora"
+  if [[ -f "$SCRIPT_DIR/../../server/install-launchers.sh" ]]; then
+    if bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora; then
+      echo "[OK] To open the xeRAbora menu next time, type: xerabora"
+    else
+      echo "[WARN] xeRAbora installed, but launcher setup failed. Use bash integrations/xerabora/install.sh."
+    fi
+  fi
   echo "Matching PS2 ELF: /opt/xerabora/OPL-RA.ELF (copy to your PS2 when upgrading)"
   show_elf_download
   prompt_api_key
