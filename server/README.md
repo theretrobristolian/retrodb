@@ -125,6 +125,10 @@ bash server/install-launchers.sh
 
 Then from any directory, type `retrodb` for the collection manager or `xerabora` / `xeRAbora` for the xeRAbora installer/profile manager. Arguments are forwarded to the underlying scripts (e.g. `retrodb audit`, `xerabora status`). Both commands use your **current shell user's profile and HOME**, not root's; don't prefix them with `sudo`. The wrappers target this checkout and stay current as you `git pull`. If you move the checkout to a new path, rerun the installer.
 
+**Updated menu layout:** The main menu has `1) Audit game collection`, `2) Patch a PS2 game`, `3) Rename PS2 games` and `4) More options`. The submenu contains `1) Export reports`, `2) Download official patches`, `3) Service status`, `4) Recover OPL renames` and `5) View patch journal`. Export-only refreshes **formatting and proposals from an existing audit**; it does **not** rescan, rehash or refresh RA catalogue data. Run the full audit after changing actual game files.
+
+Fresh RetroDB deployment automatically installs `/usr/local/bin/retrodb` and prints the command to open the menu. Fresh xeRAbora installation similarly offers `xerabora`. The separate `server/install-launchers.sh` can be rerun manually to repair or change shortcuts.
+
 ## RetroDB terminal manager
 
 Run the standalone ASCII dashboard as your normal Debian user:
@@ -138,16 +142,16 @@ bash server/manager.sh
 
 Its header shows RetroDB/PostgreSQL status, the RetroNAS mount, RAHasher, report availability and the xeRAbora service/Web UI. RetroDB currently provides a local API health endpoint at `http://127.0.0.1:8000/health`, **not a complete RetroDB browser frontend**.
 
-The current terminal menu provides:
+The operational workflows are:
 
-1. **FULL AUDIT:** eight stages covering preflight, cached RA and GameDB catalogues, read-only inventory and hashing, patch manifest/download/source checks and report exports.
-2. **Download/update official patches:** refresh official patch packages locally; no ISO changes.
-3. **PATCH verified PS2 ISO on RetroNAS:** choose a verified RA game ID, run a local patch/hash-verified dry run, then explicitly type `PATCH-<RA_GAME_ID>` to authorise a temporary RW connection. The original file is backed up as `OLD_<filename>`, checked with SHA-256, and the replacement is RA-hash-verified on the NAS. Keep backups until real-console testing is complete.
-4. **Export latest Excel workbooks:** rebuild both compatibility and OPL proposal workbooks from the existing audit without rehashing.
-5. **Service/integration details.**
-6. **UPDATE ALL eligible OPL titles:** preview eligible changes, require `RENAMEALL`, and use a temporary writable mount and a rollback journal; collision/review cases are not renamed.
-7. **INSPECT/RESUME interrupted OPL rename journal.**
-8. **SHOW latest PS2 patch deployment journal.**
+1. **Audit game collection (main 1):** eight stages covering preflight, cached RA and GameDB catalogues, read-only inventory and hashing, patch manifest/download/source checks and report exports.
+2. **Download/update official patches (More options 2):** refresh official patch packages locally; no ISO changes.
+3. **Patch a PS2 game (main 2):** choose a verified RA game ID, run a local patch/hash-verified dry run, then explicitly type `PATCH-<RA_GAME_ID>` to authorise a temporary RW connection. The original file is backed up as `OLD_<filename>`, checked with SHA-256, and the replacement is RA-hash-verified on the NAS. Keep backups until real-console testing is complete.
+4. **Export latest Excel workbooks (More options 1):** rebuild both compatibility and OPL proposal workbooks from the existing audit without rehashing.
+5. **Service/integration details (More options 3).**
+6. **Rename PS2 games (main 3):** preview eligible changes, require `RENAMEALL`, and use a temporary writable mount and a rollback journal; collision/review cases are not renamed.
+7. **Inspect/resume interrupted OPL rename journal (More options 4).**
+8. **Show latest PS2 patch deployment journal (More options 5).**
 
 Exports in `~/retrodb-exports/`:
 
