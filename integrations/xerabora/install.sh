@@ -124,6 +124,7 @@ install_client() {
   echo "Installed: $old | Newest: $version"
   if [[ "$old" == "$version" && -x /opt/xerabora/xerabora-linux-x86_64 ]]; then
     echo "Already current; no changes needed."
+    bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || return 1
     prompt_api_key
     return
   fi
@@ -189,6 +190,8 @@ EOF
       return 1
     fi
   fi
+  bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || return 1
+  echo "[OK] To open the xeRAbora menu next time, type: xerabora"
   echo "Matching PS2 ELF: /opt/xerabora/OPL-RA.ELF (copy to your PS2 when upgrading)"
   show_elf_download
   prompt_api_key
