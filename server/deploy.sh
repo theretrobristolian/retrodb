@@ -136,9 +136,12 @@ run_step 'Enabling RetroDB at boot' systemctl enable retrodb.service
 run_step 'Restarting RetroDB' systemctl restart retrodb.service
 run_step 'Checking RetroDB service' systemctl is-active --quiet retrodb.service
 run_step 'Waiting for application health' wait_for_health
+run_step 'Installing retrodb terminal command' bash "$SOURCE_ROOT/server/install-launchers.sh" retrodb
 
 printf '\n'
 log 'RetroDB application deployment is healthy.'
 printf '  Local health endpoint: http://127.0.0.1:8000/health\n'
 printf '  Service status       : systemctl status retrodb\n'
 printf '  Service logs         : journalctl -u retrodb\n'
+
+printf '  Open management menu : retrodb\n'
