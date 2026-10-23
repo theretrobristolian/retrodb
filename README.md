@@ -231,6 +231,10 @@ bash server/install-launchers.sh
 
 Then from any directory, type `retrodb` for the collection manager or `xerabora` / `xeRAbora` for the xeRAbora installer/profile manager. Arguments are forwarded to the underlying scripts (e.g. `retrodb audit`, `xerabora status`). Both commands use your **current shell user's profile and HOME**, not root's; don't prefix them with `sudo`. The wrappers target this checkout and stay current as you `git pull`. If you move the checkout to a new path, rerun the installer.
 
+Fresh installs now register command-line shortcuts automatically: the RetroDB deployment installs `retrodb` and prints how to launch the menu, while the xeRAbora installer registers `xerabora` / `xeRAbora`. You can still rerun `bash server/install-launchers.sh` manually.
+
+The streamlined RetroDB main menu includes **Audit game collection**, **Patch a PS2 game**, **Rename PS2 games**, and **More options**. The submenu houses export-only reports, local patch downloads, service status and operation journals. Export-only is useful to regenerate a workbook or proposals from an existing audit; it never scans or refreshes hashes. 
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
