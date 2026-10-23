@@ -1,6 +1,51 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Refresh the checkout before opening the interactive manager. No sudo or
+# background updates: clean main, trusted origin and fast-forward only.
+auto_update_menu() {
+  local root remote current target
+  root="$(cd "$HERE/.." && pwd -P)"
+  command -v git >/dev/null || { echo '[INFO] Git unavailable; opening installed menu.'; return 0; }
+  [[ -d "$root/.git" ]] || { echo '[INFO] No Git checkout; opening installed menu.'; return 0; }
+  [[ "$(git -C "$root" branch --show-current 2>/dev/null)" == main ]] || {
+    echo '[INFO] Not on main; skipping automatic update.'; return 0;
+  }
+  remote="$(git -C "$root" remote get-url origin 2>/dev/null || true)"
+  case "$remote" in
+    https://github.com/theretrobristolian/retrodb|https://github.com/theretrobristolian/retrodb.git|git@github.com:theretrobristolian/retrodb.git)
+      ;;
+    *) echo '[WARN] Unexpected origin URL; skipping automatic update.'; return 0 ;;
+  esac
+  if [[ -n "$(git -C "$root" status --porcelain --untracked-files=no 2>/dev/null)" ]]; then
+    echo '[WARN] Local tracked modifications found; skipping update to protect your changes.'
+    return 0
+  fi
+  echo '[INFO] Checking GitHub for RetroDB updates...'
+  if ! timeout 20 git -C "$root" -c credential.interactive=never fetch --quiet origin main; then
+    echo '[WARN] Update check unavailable; opening existing menu.'
+    return 0
+  fi
+  current="$(git -C "$root" rev-parse HEAD)"
+  target="$(git -C "$root" rev-parse FETCH_HEAD)"
+  [[ "$current" != "$target" ]] || { echo '[OK] RetroDB menu is up to date.'; return 0; }
+  if ! git -C "$root" merge-base --is-ancestor "$current" "$target"; then
+    echo '[WARN] Branch has diverged; refusing to overwrite local commits.'
+    return 0
+  fi
+  # Fast-forward can fail if new tracked paths conflict with untracked files.
+  if git -C "$root" merge --ff-only --quiet "$target"; then
+    echo '[OK] RetroDB updated to the latest main commit.'
+    exec /bin/bash "$root/server/manager.sh" "${ORIGINAL_MENU_ARGS[@]}"
+  else
+    echo '[WARN] Could not fast-forward; opening existing menu.'
+  fi
+}
+ORIGINAL_MENU_ARGS=("$@")
+if [[ "${1:-menu}" == menu && "${RETRODB_AUTOUPDATED:-0}" != 1 ]]; then
+  export RETRODB_AUTOUPDATED=1
+  auto_update_menu
+fi
 REPORT=/var/lib/retrodb/reports/retroachievements-compatibility.csv
 MOUNT=/mnt/retrodb-retronas
 EXPORT="$HOME/retrodb-exports/retroachievements-compatibility.csv"
