@@ -237,6 +237,14 @@ The streamlined RetroDB main menu includes **Audit game collection**, **Patch a 
 
 **Automatic updates on menu launch:** Typing `retrodb` checks the trusted project's `origin/main` and fast-forwards the repository before showing the menu, if the tracked working tree is clean and the checkout is on `main`. A timeout, offline GitHub connection, local modifications or diverged branch **never causes a forced reset**; RetroDB opens the already-installed menu and prints a warning. Only the interactive menu triggers this check; `retrodb audit` and other non-menu commands do not. This updates checked-out menu/scripts, **not** the deployed backend service under `/opt/retrodb`, which still requires `sudo bash server/deploy.sh` after backend changes. For existing installations, first run `cd ~/retrodb && git pull --ff-only origin main` once to install the new auto-update logic.
 
+### Maintenance from the RetroDB menu
+
+In **More options**, select **6 — Update RetroDB** for a complete, explicitly confirmed application update. It validates the trusted GitHub checkout, pulls clean `main` changes via fast-forward, checks/repairs the required host dependencies when necessary, runs `server/deploy.sh` (including database migrations and a controlled service restart), and validates the health endpoint. The updater does not patch game images, rename ROMs or update xeRAbora itself. The launch-time updater still refreshes only menu/source scripts and never restarts services without confirmation.
+
+Select **7 — Upgrade Debian** for host operating-system maintenance. This refreshes APT metadata, displays a `full-upgrade` **simulation**, requires typing `UPGRADE SYSTEM`, and then runs the actual package upgrade. It does not reboot or autoremove automatically; a required reboot is reported for manual scheduling. System upgrades can interrupt other services, so review the preview and perform them during a maintenance window.
+
+These actions are distinct: the first updates the RetroDB application and its service; the second updates the Debian/Ubuntu host's packages. Both are implemented in `server/maintenance.sh`, and neither runs just because you opened the menu.
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
