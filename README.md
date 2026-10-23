@@ -235,6 +235,8 @@ Fresh installs now register command-line shortcuts automatically: the RetroDB de
 
 The streamlined RetroDB main menu includes **Audit game collection**, **Patch a PS2 game**, **Rename PS2 games**, and **More options**. The submenu houses export-only reports, local patch downloads, service status and operation journals. Export-only is useful to regenerate a workbook or proposals from an existing audit; it never scans or refreshes hashes. 
 
+**Automatic updates on menu launch:** Typing `retrodb` checks the trusted project's `origin/main` and fast-forwards the repository before showing the menu, if the tracked working tree is clean and the checkout is on `main`. A timeout, offline GitHub connection, local modifications or diverged branch **never causes a forced reset**; RetroDB opens the already-installed menu and prints a warning. Only the interactive menu triggers this check; `retrodb audit` and other non-menu commands do not. This updates checked-out menu/scripts, **not** the deployed backend service under `/opt/retrodb`, which still requires `sudo bash server/deploy.sh` after backend changes. For existing installations, first run `cd ~/retrodb && git pull --ff-only origin main` once to install the new auto-update logic.
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
