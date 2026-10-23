@@ -129,6 +129,8 @@ Then from any directory, type `retrodb` for the collection manager or `xerabora`
 
 Fresh RetroDB deployment automatically installs `/usr/local/bin/retrodb` and prints the command to open the menu. Fresh xeRAbora installation similarly offers `xerabora`. The separate `server/install-launchers.sh` can be rerun manually to repair or change shortcuts.
 
+**Automatic updates on menu launch:** Typing `retrodb` checks the trusted project's `origin/main` and fast-forwards the repository before showing the menu, if the tracked working tree is clean and the checkout is on `main`. A timeout, offline GitHub connection, local modifications or diverged branch **never causes a forced reset**; RetroDB opens the already-installed menu and prints a warning. Only the interactive menu triggers this check; `retrodb audit` and other non-menu commands do not. This updates checked-out menu/scripts, **not** the deployed backend service under `/opt/retrodb`, which still requires `sudo bash server/deploy.sh` after backend changes. For existing installations, first run `cd ~/retrodb && git pull --ff-only origin main` once to install the new auto-update logic.
+
 ## RetroDB terminal manager
 
 Run the standalone ASCII dashboard as your normal Debian user:
