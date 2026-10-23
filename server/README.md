@@ -113,6 +113,18 @@ sudo systemctl status retrodb
 
 The service deliberately binds only to loopback. LAN or guest access will be added later through a separately hardened HTTPS reverse proxy.
 
+### Launch the menus from anywhere
+
+Run this **once** from your checkout as your normal user (it asks for sudo only to write into `/usr/local/bin`):
+
+```bash
+cd ~/retrodb
+git pull --ff-only origin main
+bash server/install-launchers.sh
+```
+
+Then from any directory, type `retrodb` for the collection manager or `xerabora` / `xeRAbora` for the xeRAbora installer/profile manager. Arguments are forwarded to the underlying scripts (e.g. `retrodb audit`, `xerabora status`). Both commands use your **current shell user's profile and HOME**, not root's; don't prefix them with `sudo`. The wrappers target this checkout and stay current as you `git pull`. If you move the checkout to a new path, rerun the installer.
+
 ## RetroDB terminal manager
 
 Run the standalone ASCII dashboard as your normal Debian user:
