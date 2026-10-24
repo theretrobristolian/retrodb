@@ -577,6 +577,9 @@ def prepare_patch_sources(
             missing += 1
         results.append({
             "title": title,
+            "ra_game_id": game_id,
+            "patch_url": row.get("preferred_patch_url", ""),
+            "required_release": row.get("preferred_release_name", ""),
             "state": state,
             "candidate_path": found,
             "source_checksum_type": checksum_type,
