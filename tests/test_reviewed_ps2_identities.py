@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from retrodb.retroachievements_match import load_reviewed_ps2_identities, load_reviewed_ps2_no_listings
+from retrodb.retroachievements_match import load_reviewed_ps2_identities, load_reviewed_ps2_no_listings, load_reviewed_ps2_alternatives
 
 
 def test_reviewed_disc_ids_are_available():
@@ -36,3 +36,11 @@ def test_new_confirmed_regional_identifications():
     unlisted = load_reviewed_ps2_no_listings()
     assert "SCES-52154" in unlisted
     assert "SCES-50612" in unlisted
+
+
+def test_pal_tokyo_racer_and_nfs_alternative_are_distinct():
+    reviewed = load_reviewed_ps2_identities()
+    alternatives = load_reviewed_ps2_alternatives()
+    assert reviewed["SLES-50115"] == 20774
+    assert "SLES-53557" not in reviewed
+    assert alternatives["SLES-53557"] == 7788
