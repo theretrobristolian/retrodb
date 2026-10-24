@@ -170,7 +170,9 @@ audit() {
   echo 'NOTE: No original RetroNAS game images were changed.'
 }
 patch_audit() {
-  sudo bash "$HERE/retronas.sh" patch-download || return 1
+  # Individual patch download failures must not block source verification
+  # for successfully downloaded variants (e.g. Max Payne Bartis1989).
+  sudo bash "$HERE/retronas.sh" patch-download || echo "[WARN] Some patch downloads failed; checking available packages anyway."
   sudo bash "$HERE/retronas.sh" patch-prepare
 }
 patch_download() {
