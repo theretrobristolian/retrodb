@@ -461,6 +461,20 @@ def hash_file(hasher: Path, console_id: int, path: Path) -> str:
         raise MatchError(detail) from None
 
 
+def load_reviewed_ps2_no_listings() -> set[str]:
+    """Manual RA search results; not proof the upstream catalogue cannot change."""
+    path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-no-listing.csv"
+    if not path.is_file():
+        return set()
+    with path.open(encoding="utf-8-sig", newline="") as source:
+        return {
+            str(row.get("disc_serial", "")).strip().upper()
+            for row in csv.DictReader(source)
+            if row.get("review_status") == "no-listing"
+            and re.fullmatch(r"[A-Z]{4}-[0-9]{5}", str(row.get("disc_serial", "")).strip().upper())
+        }
+
+
 def load_reviewed_ps2_identities() -> dict[str, int]:
     """Disc-specific crosswalk; never treat manual identity as a verified hash."""
     path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-ra-identities.csv"
@@ -499,6 +513,7 @@ def match_collection(
     detail_cache: dict[int, list[dict[str, object]]] = {}
     serial_aliases = load_serial_aliases()
     reviewed_ps2 = load_reviewed_ps2_identities()
+    reviewed_no_listing = load_reviewed_ps2_no_listings()
     gamedb_cache = Path('/var/cache/retrodb/providers/gamedb')
 
     for slug, extensions in HASH_TARGET_EXTENSIONS.items():
@@ -671,6 +686,16 @@ def match_collection(
                     except RetroAchievementsError:
                         confidence += "-metadata-unavailable"
 
+            manually_unlisted = (
+                slug == "playstation-2"
+                and serial in reviewed_no_listing
+                and item.ra_match_status == "unmatched"
+                and recommendation is None and no_set_game is None
+            )
+            if manually_unlisted:
+                confidence = "manual-no-ra-listing"
+                alternatives = ""
+
             report_rows.append({
                 "platform": platform.name,
                 "status": item.ra_match_status,
@@ -683,13 +708,14 @@ def match_collection(
                     alternatives, special_disc
                 ) if not recommendation and not no_set_game and not match else "",
                 "identity_resolution": (
+                    "manual-no-ra-listing" if manually_unlisted else
                     "verified-ra-hash" if match else
                     confidence if recommendation or no_set_game else
                     "special-disc" if special_disc else
                     "review-candidates" if alternatives else
                     "no-catalogue-crosswalk"
                 ),
-                "ra_set_status": ("HAS_SET" if (recommendation or match) and
+                "ra_set_status": ("NOT_LISTED" if manually_unlisted else "HAS_SET" if (recommendation or match) and
                     counts_by_id.get(recommendation.game_id if recommendation else match[0], 0) > 0
                     else "NO_SET" if (no_set_game or match) else "UNRESOLVED"),
                 "no_set_ra_game_id": (
