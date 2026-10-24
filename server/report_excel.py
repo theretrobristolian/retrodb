@@ -64,7 +64,9 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
     elif suggested:
         status = 'NO'
-        if r.get('recommendation_confidence') == 'verified-serial-alias':
+        if r.get('recommendation_confidence') == 'supported-alternative-edition':
+            reason = 'Different edition required for RA: use the recommended supported release; current ISO is not verified'
+        elif r.get('recommendation_confidence') == 'verified-serial-alias':
             reason = 'Game identified via verified disc serial; current ISO hash not RA supported'
         elif patch: reason = 'AVAILABLE ONLY: official patch exists, but required clean source is not checksum-verified; do not apply to this ISO'
         elif r['local_region'] and r['preferred_region'] and r['local_region'] != r['preferred_region']:
