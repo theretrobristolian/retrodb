@@ -9,10 +9,11 @@ SLES-52620,25838,reviewed,User RA triage - no set
 SCES-53286,19239,reviewed,User RA triage - set available
 SLES-52446,20090,reviewed,User RA triage - set available
 SLES-50383,2787,needs-edition-review,Sons of Liberty is not Substance
-SLES-53557,7788,needs-edition-review,Standard Most Wanted vs Black Edition
+SLES-53557,7788,supported-alternative,Standard Most Wanted is not supported Black Edition; recommend RA 7788 release only
 SLES-52238,19211,reviewed,User RA triage - set available
 SLES-54782,19267,reviewed,User RA triage - set available
 SLES-53138,19930,reviewed,User confirmed RA lists Outlaw Volleyball without Remixed; no achievements
 SLES-52118,2679,reviewed,European Castlevania is Lament of Innocence; RA has achievements
 SLES-53501,3143,reviewed,User RA triage - Platinum edition; hash must verify
 SLES-53492,20815,reviewed,User RA triage - set available
+SLES-50115,20774,reviewed,Tokyo Xtreme Racer PAL is Tokyo Xtreme Racer Zero; not Dreamcast Tokyo Xtreme Racer
