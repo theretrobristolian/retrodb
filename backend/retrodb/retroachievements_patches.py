@@ -102,21 +102,54 @@ def _patch_url_from_cache(cache_dir: Path, game_id: str, target_hash: str) -> st
 
 
 def _patch_rows(report_path: Path, cache_dir: Path) -> list[dict[str, str]]:
+    """Find every officially labelled RA patch variant, not only the preferred hash.
+
+    Keep each variant uniquely named for existing download/preparation paths.
+    Candidate sources are always checked by their actual source checksum.
+    """
     result = []
-    for row in _load_rows(report_path):
-        labels = {part.strip().casefold() for part in row.get("preferred_ra_labels", "").split(";")}
-        if "rapatches" not in labels:
+    for original in _load_rows(report_path):
+        game_id = str(original.get("recommended_ra_game_id", ""))
+        if not game_id:
             continue
-        target_hash = row.get("preferred_ra_hash", "").casefold()
-        if not HASH_PATTERN.fullmatch(target_hash):
+        variants = []
+        details_path = cache_dir / "games" / f"{game_id}.json"
+        try:
+            details = json.loads(details_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            details = []
+        for entry in details if isinstance(details, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            labels = entry.get("Labels", [])
+            label_set = {str(label).casefold() for label in labels} if isinstance(labels, list) else set()
+            target_hash = str(entry.get("MD5", "")).casefold()
+            url = _official_patch_url(str(entry.get("PatchUrl", "") or "").strip())
+            if "rapatches" not in label_set or not HASH_PATTERN.fullmatch(target_hash) or not url:
+                continue
+            row = dict(original)
+            row["preferred_ra_hash"] = target_hash
+            row["preferred_release_name"] = str(entry.get("Name", "")).strip()
+            row["preferred_patch_url"] = url
+            # Separate workspaces, even if two variants have identical names.
+            row["recommended_ra_title"] = (
+                str(original.get("recommended_ra_title", "")) + " [patch " + target_hash[:12] + "]"
+            )
+            variants.append(row)
+        if variants:
+            result.extend(variants)
             continue
-        row = dict(row)
-        row["preferred_patch_url"] = _official_patch_url(
-            row.get("preferred_patch_url", "")
-        ) or _patch_url_from_cache(
-            cache_dir, row.get("recommended_ra_game_id", ""), target_hash
+        # Preserve original single-variant fallback for metadata unavailable
+        # on older cache snapshots; this still requires an official patch URL.
+        labels = {part.strip().casefold() for part in original.get("preferred_ra_labels", "").split(";")}
+        target_hash = original.get("preferred_ra_hash", "").casefold()
+        url = _official_patch_url(original.get("preferred_patch_url", "")) or _patch_url_from_cache(
+            cache_dir, game_id, target_hash
         )
-        result.append(row)
+        if "rapatches" in labels and HASH_PATTERN.fullmatch(target_hash) and url:
+            row = dict(original)
+            row["preferred_patch_url"] = url
+            result.append(row)
     return result
 
 
