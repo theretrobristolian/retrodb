@@ -461,6 +461,26 @@ def hash_file(hasher: Path, console_id: int, path: Path) -> str:
         raise MatchError(detail) from None
 
 
+def load_reviewed_ps2_identities() -> dict[str, int]:
+    """Disc-specific crosswalk; never treat manual identity as a verified hash."""
+    path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-ra-identities.csv"
+    if not path.is_file():
+        return {}
+    result: dict[str, int] = {}
+    with path.open(encoding="utf-8-sig", newline="") as source:
+        for row in csv.DictReader(source):
+            if row.get("review_status") != "reviewed":
+                continue
+            serial = (row.get("disc_serial") or "").strip().upper()
+            if not re.fullmatch(r"[A-Z]{4}-[0-9]{5}", serial):
+                continue
+            try:
+                result[serial] = int(row["ra_game_id"])
+            except (ValueError, KeyError, TypeError):
+                continue
+    return result
+
+
 def match_collection(
     session: Session,
     root: Path,
@@ -478,6 +498,7 @@ def match_collection(
     summaries: list[MatchSummary] = []
     detail_cache: dict[int, list[dict[str, object]]] = {}
     serial_aliases = load_serial_aliases()
+    reviewed_ps2 = load_reviewed_ps2_identities()
     gamedb_cache = Path('/var/cache/retrodb/providers/gamedb')
 
     for slug, extensions in HASH_TARGET_EXTENSIONS.items():
@@ -551,7 +572,20 @@ def match_collection(
             confidence = ""
             score = 0.0
             alternatives = ""
-            if item.ra_match_status == "unmatched" and not special_disc:
+            if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc:
+                confirmed_id = reviewed_ps2.get(serial)
+                if confirmed_id is not None:
+                    reviewed_game = next((g for g in games if g.game_id == confirmed_id), None)
+                    if reviewed_game is None:
+                        print(f"[WARN] Reviewed ID {confirmed_id} for {serial} absent from cached RA catalogue; manual review retained.")
+                    elif counts_by_id.get(confirmed_id, 0) > 0:
+                        recommendation = reviewed_game
+                        confidence = "reviewed-disc-id"
+                        score = 1.0
+                    else:
+                        no_set_game = reviewed_game
+                        confidence = "reviewed-disc-id-no-set"
+            if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
                         serial, with_sets, serial_aliases
@@ -587,7 +621,7 @@ def match_collection(
                 if recommendation:
                     counts["recommended"] += 1
 
-            if item.ra_match_status == "unmatched" and not recommendation and not special_disc:
+            if item.ra_match_status == "unmatched" and not recommendation and not no_set_game and not special_disc:
                 identity = gamedb_title or friendly_local_title(item.relative_path)
                 candidate, method, _, review = resolve_catalogue_identity(
                     identity, no_sets
