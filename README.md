@@ -245,6 +245,12 @@ Select **7 — Upgrade Debian** for host operating-system maintenance. This refr
 
 These actions are distinct: the first updates the RetroDB application and its service; the second updates the Debian/Ubuntu host's packages. Both are implemented in `server/maintenance.sh`, and neither runs just because you opened the menu.
 
+### Cross-platform Action Required report
+
+The standard `RetroDB-Compatibility.xlsx` now has an **Action Required** worksheet immediately after Summary, combining PS1, PS2 and any other platforms exported by the report generator. It includes only unresolved games, unverified RA-supported releases, checksum-verified patch opportunities and hash failures that still need action. It excludes verified games, no-set/no-listing games, and redundant entries already covered by a verified copy of the same RA game. Rows are sorted by error, patch, replacement release and identity investigation.
+
+The sheet includes platform, game name, full filename, disc ID, current status, proposed action, recommended release and region, RA ID, an existing verified copy when identifiable, reason, alternative RA candidates, local RA hash, accepted hashes and source path. The original per-platform sheets remain unchanged. Download **`RetroDB-Compatibility.xlsx`** as normal; no additional workbook or command is necessary. A **full audit** refreshes the underlying identity/hash data; export-only recreates the workbook from the previous audit.
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
