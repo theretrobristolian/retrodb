@@ -262,10 +262,17 @@ import json
 from pathlib import Path
 w=Path('/var/lib/retrodb/patches')
 plans=json.loads((w/'patch-plan.json').read_text())
+ready_count=0
 for r in json.loads((w/'patch-prepare.json').read_text()):
     p=next((x for x in plans if x.get('title')==r.get('title') and x.get('local_path') and str((Path('/mnt/retrodb-retronas') / x['local_path'])) == r.get('collection_source')),None)
     if p and p.get('platform')=='Sony PlayStation 2' and r.get('state')=='clean-base-verified-ready-to-patch' and r.get('candidate_path')==r.get('collection_source'):
-        print(f"  RA ID {p['ra_game_id']}: {p['title']} -- {p['local_path']}")
+        ready_count += 1
+        print(f"  RA ID {p['ra_game_id']}: {p['required_release']} -- {p['local_path']}")
+if not ready_count:
+    print('  None verified yet. Review /var/lib/retrodb/patches/patch-download.json')
+    print('  and /var/lib/retrodb/patches/patch-prepare.json for individual failures.')
+else:
+    print(f'  {ready_count} checksum-verified sources ready.')
 PYREADY
   read -rp 'Enter the RA game ID to test (Enter cancels): ' game_id
   [[ "$game_id" =~ ^[0-9]{1,8}$ ]] || { echo 'Cancelled / invalid ID.'; return 0; }
