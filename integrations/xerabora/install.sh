@@ -134,6 +134,25 @@ sync_service_server_mode() {
   fi
 }
 
+# Temporary denylist: confirmed broken on Intel Celeron J6412 (no AVX/AVX2).
+# Never install v1.0.0 on this CPU, regardless of the upgrade path.
+# Remove only after upstream supplies a verified compatible release.
+blocked_cpu_release() {
+  local version="${1#v}"
+  [[ "$version" == "1.0.0" ]] || return 1
+  grep -qi 'Intel(R) Celeron(R) J6412' /proc/cpuinfo 2>/dev/null ||
+    { ! grep -qw avx /proc/cpuinfo 2>/dev/null && ! grep -qw avx2 /proc/cpuinfo 2>/dev/null; }
+}
+
+enforce_release_guard() {
+  local version="$1"
+  if blocked_cpu_release "$version"; then
+    echo "[BLOCKED] xeRAbora $version is known to fail CPU ISA checks on this host." >&2
+    echo "[SAFE] Remain on the working alpha release. No download or service changes made." >&2
+    return 1
+  fi
+}
+
 installed_version() {
   if [[ -f /opt/xerabora/VERSION ]]; then cat /opt/xerabora/VERSION; else echo unknown; fi
 }
@@ -143,7 +162,11 @@ check_version() {
   echo "Installed: $installed"
   if upstream="$(latest_release)" && [[ -n "$upstream" ]]; then
     echo "Latest upstream: $upstream"
-    [[ "$installed" == "$upstream" ]] && echo "Up to date" || echo "Update available (or installation unmanaged)"
+    if blocked_cpu_release "$upstream"; then
+      echo "[BLOCKED] This upstream version is incompatible with the CPU exposed to the VM."
+    else
+      [[ "$installed" == "$upstream" ]] && echo "Up to date" || echo "Update available (or installation unmanaged)"
+    fi
   else
     echo "Cannot retrieve GitHub release information" >&2
     return 1
@@ -217,6 +240,7 @@ install_client() {
   version="$(latest_release)"
   [[ "$version" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo "Unable to validate release tag" >&2; exit 1; }
   echo "Installed: $old | Newest: $version"
+  enforce_release_guard "$version" || return 1
   if [[ "$old" == "$version" && -x /opt/xerabora/xerabora-linux-x86_64 ]]; then
     echo "Already current; checking service configuration."
     if ! cpu_binary_preflight /opt/xerabora/xerabora-linux-x86_64; then
