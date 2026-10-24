@@ -475,6 +475,19 @@ def load_reviewed_ps2_no_listings() -> set[str]:
         }
 
 
+def load_reviewed_ps2_alternatives() -> dict[str, int]:
+    """Recommend a different RA-supported edition without equating disc identities."""
+    path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-ra-identities.csv"
+    if not path.is_file():
+        return {}
+    with path.open(encoding="utf-8-sig", newline="") as source:
+        return {
+            str(row["disc_serial"]).strip().upper(): int(row["ra_game_id"])
+            for row in csv.DictReader(source)
+            if row.get("review_status") == "supported-alternative"
+        }
+
+
 def load_reviewed_ps2_identities() -> dict[str, int]:
     """Disc-specific crosswalk; never treat manual identity as a verified hash."""
     path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-ra-identities.csv"
@@ -513,6 +526,7 @@ def match_collection(
     detail_cache: dict[int, list[dict[str, object]]] = {}
     serial_aliases = load_serial_aliases()
     reviewed_ps2 = load_reviewed_ps2_identities()
+    reviewed_alternatives = load_reviewed_ps2_alternatives()
     reviewed_no_listing = load_reviewed_ps2_no_listings()
     gamedb_cache = Path('/var/cache/retrodb/providers/gamedb')
 
@@ -600,6 +614,14 @@ def match_collection(
                     else:
                         no_set_game = reviewed_game
                         confidence = "reviewed-disc-id-no-set"
+            if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc and not recommendation:
+                alternative_id = reviewed_alternatives.get(serial)
+                alternative_game = next((g for g in with_sets if g.game_id == alternative_id), None)
+                if alternative_game:
+                    recommendation = alternative_game
+                    no_set_game = None
+                    confidence = "supported-alternative-edition"
+                    score = 1.0
             if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game and serial not in reviewed_no_listing:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
