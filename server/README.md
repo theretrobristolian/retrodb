@@ -277,6 +277,14 @@ The RA catalogue determines whether the resolved ID has achievements. With a set
 
 To apply crosswalk updates, use **More options → Update RetroDB** (deploys the backend and config into `/opt/retrodb`) and then **Audit game collection**. Merely regenerating Excel exports cannot update identities from cached audit data. Local/manual findings remain inspectable in CSV without editing application code.
 
+### Multiple official patch variants (Max Payne, RA 19129)
+
+The patch planner now searches all cached RA game-hash entries carrying the official `rapatches` label and an approved patch URL, **not only the preferred hash**. Each distinct supported hash has its own patch download/preparation workspace. The preparation step prioritises the actual read-only RetroNAS collection ISO when checking source MD5/CRC32 or RA hash; an existing clean ISO is never considered ready merely because its serial or region matches.
+
+For *Max Payne* (PS2), the USA `SLUS-20230` collection source was manually verified against the official Bartis1989 patch source MD5 `10dd8182af1e4d4216be61216768f712`. RetroDB must independently repeat that check against the patch README, then pass the **patched output** RA hash `dd5f58908acd8062a13551de7a1d5fbe` before any NAS replacement. The PAL `SLES-50325` source is not interchangeable.
+
+After **More options → Update RetroDB**, run **Audit game collection** to refresh the patch plan and download all official variants. Then use **Patch a PS2 game**, select RA ID `19129`, and check the local dry-run result. Only type the patch confirmation if the exact source is shown and dry-run RA hash passes. The operation copies the original to an `OLD_` backup, SHA256-verifies it, then stages and RA-verifies the new ISO on the NAS before replacing the active filename. **Do not remove the backup until Max Payne boots and saves correctly.** The official RA forum warns that this anti-cheat patch requires a fresh game save on a memory card without existing Max Payne data.
+
 ## RetroAchievements credentials
 
 The deployment adds a labelled RetroAchievements section to the protected configuration file:
