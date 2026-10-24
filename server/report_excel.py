@@ -71,6 +71,8 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
             reason = 'Different region recommended: ' + r['preferred_region']
         else: reason = 'Different ISO release or revision recommended'
         if r['release_guidance']: reason += ' — ' + r['release_guidance']
+    elif r.get('ra_set_status') == 'NOT_LISTED':
+        status, reason = 'NO SET', 'User-reviewed: no RetroAchievements game listing found (recheck if catalogue changes)'
     elif r.get('ra_set_status') == 'NO_SET':
         status, reason = 'NO SET', 'RetroAchievements lists this game but has no achievement set'
     elif r.get('disc_classification') == 'special-disc-review':
