@@ -11,11 +11,15 @@ from xml.sax.saxutils import escape
 COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning']
 VERIFIED = 'clean-base-verified-ready-to-patch'
 def patch_sources(path):
-    if not path or not Path(path).is_file(): return set()
+    """Index precisely checksum-verified patchable collection sources by RA ID."""
+    if not path or not Path(path).is_file(): return {}
     with open(path,encoding='utf-8') as handle: records=json.load(handle)
-    return {(str(row.get('collection_source','')),str(row.get('title',''))) for row in records
-            if row.get('state') == VERIFIED and row.get('candidate_path') == row.get('collection_source')
-            and row.get('candidate_path')}
+    return {
+        (str(row.get('collection_source','')), str(row.get('ra_game_id',''))): row
+        for row in records
+        if row.get('state') == VERIFIED and row.get('candidate_path') == row.get('collection_source')
+        and row.get('candidate_path') and row.get('ra_game_id')
+    }
 
 def patched_outputs(path):
     """Only report VERIFIED when the saved patched output still exists."""
@@ -46,11 +50,12 @@ def patch_kind(r):
 def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verified_outputs=frozenset()):
     yes = r['status'] == 'matched' and r.get('ra_set_status', 'HAS_SET') == 'HAS_SET'
     title = r.get('ra_game_title') or r.get('recommended_ra_title') or r.get('gamedb_title') or r.get('local_friendly_title') or Path(r['path']).stem
-    patch = r['preferred_patch_url']
-    suggested = bool(r['recommended_ra_title'])
     source = str(Path(root) / r['path'])
-    patchable = (not yes and suggested and bool(patch) and
-                 (source, r['recommended_ra_title']) in verified_sources)
+    verified_variant = verified_sources.get((source, str(r.get('recommended_ra_game_id', '')))) if isinstance(verified_sources, dict) else None
+    patch = (verified_variant or {}).get('patch_url') or r['preferred_patch_url']
+    release = (verified_variant or {}).get('required_release') or r['preferred_release_name']
+    suggested = bool(r['recommended_ra_title'])
+    patchable = bool(not yes and suggested and verified_variant and patch)
     verified_output = (str(r.get('recommended_ra_game_id', '')), r.get('recommended_ra_title', '')) in verified_outputs
     mismatch = (bool(r.get('local_region')) and bool(r.get('preferred_region'))
                 and r['local_region'].casefold() != r['preferred_region'].casefold())
@@ -85,7 +90,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     if warning and not yes:
         reason += ' — ' + warning
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
-            r['ra_game_id'] or r['recommended_ra_game_id'], r['preferred_release_name'],
+            r['ra_game_id'] or r['recommended_ra_game_id'], release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning]
 def apply_collection_dedup(entries):
     """Discount only demonstrably redundant noncompatible copies.
