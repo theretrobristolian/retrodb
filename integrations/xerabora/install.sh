@@ -219,6 +219,10 @@ install_client() {
   echo "Installed: $old | Newest: $version"
   if [[ "$old" == "$version" && -x /opt/xerabora/xerabora-linux-x86_64 ]]; then
     echo "Already current; checking service configuration."
+    if ! cpu_binary_preflight /opt/xerabora/xerabora-linux-x86_64; then
+      echo "[ERROR] Installed binary incompatible. Use option 15 to restore the previous release." >&2
+      return 1
+    fi
     sync_service_server_mode "$version" || return 1
     if [[ -f "$SCRIPT_DIR/../../server/install-launchers.sh" ]]; then
       bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || echo "[WARN] xeRAbora launcher could not be installed."
@@ -574,6 +578,7 @@ menu() {
     echo " 12) Configure Web UI / LAN access"
     echo " 13) Service startup / automatic recovery"
     echo " 14) Show OPL-RA.ELF download commands"
+    echo " 15) Roll back xeRAbora to previous version"
     echo "  0) Exit"
     xr_draw_footer
     read -rp "Choose an option: " choice || break
@@ -592,6 +597,7 @@ menu() {
       12) web_ui_settings; xr_pause ;;
       13) configure_service_startup; xr_pause ;;
       14) show_elf_download || true; xr_pause ;;
+      15) bash "$SCRIPT_DIR/rollback.sh" || true; xr_pause ;;
       0|q|Q) break ;;
       *) echo "Invalid selection."; xr_pause ;;
     esac
@@ -614,6 +620,7 @@ case "${1:-menu}" in
   web-ui) web_ui_settings ;;
   startup) configure_service_startup ;;
   elf|download-elf) show_elf_download ;;
+  rollback) bash "$SCRIPT_DIR/rollback.sh" ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
   *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|web-ui|startup|elf|download-elf|start|stop|restart]"; exit 2 ;;
 esac
