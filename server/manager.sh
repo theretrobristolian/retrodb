@@ -259,9 +259,9 @@ patch_retronas_one() {
 import json
 from pathlib import Path
 w=Path('/var/lib/retrodb/patches')
-plans={str(x.get('ra_game_id')):x for x in json.loads((w/'patch-plan.json').read_text())}
+plans=json.loads((w/'patch-plan.json').read_text())
 for r in json.loads((w/'patch-prepare.json').read_text()):
-    p=next((x for x in plans.values() if x.get('title')==r.get('title')),None)
+    p=next((x for x in plans if x.get('title')==r.get('title') and x.get('local_path') and str((Path('/mnt/retrodb-retronas') / x['local_path'])) == r.get('collection_source')),None)
     if p and p.get('platform')=='Sony PlayStation 2' and r.get('state')=='clean-base-verified-ready-to-patch' and r.get('candidate_path')==r.get('collection_source'):
         print(f"  RA ID {p['ra_game_id']}: {p['title']} -- {p['local_path']}")
 PYREADY
