@@ -149,6 +149,66 @@ check_version() {
     return 1
   fi
 }
+cpu_binary_preflight() {
+  # Briefly exercise the freshly downloaded binary before replacing anything.
+  # Detect the dynamic loader's unsupported-ISA error and SIGILL (132).
+  # A timeout is *not* a pass/fail indication: GUI/server clients can run forever.
+  local candidate="$1" temp rc
+  temp="$(mktemp)"
+  chmod +x "$candidate"
+  set +e
+  timeout --kill-after=1s 4s "$candidate" --help >"$temp" 2>&1
+  rc=$?
+  set -e
+  if grep -Eiq 'CPU ISA level is lower than required|unsupported (CPU|instruction)|Illegal instruction' "$temp" || [[ "$rc" == 132 ]]; then
+    echo "[ERROR] New xeRAbora binary requires CPU instructions not exposed by this VM." >&2
+    cat "$temp" >&2
+    rm -f "$temp"
+    return 1
+  fi
+  rm -f "$temp"
+  # Also reject if ELF explicitly declares x86-64-v3/v4 without CPU AVX2.
+  if command -v readelf >/dev/null 2>&1 &&
+     readelf -n "$candidate" 2>/dev/null | grep -Eq 'x86-64-v[34]' &&
+     ! grep -qw avx2 /proc/cpuinfo; then
+    echo "[ERROR] Binary declares x86-64-v3/v4 but the VM exposes no AVX2." >&2
+    return 1
+  fi
+  return 0
+}
+
+rollback_failed_upgrade() {
+  # Called only after all three previous artifacts were captured.
+  # Do not modify authentication, profiles or service override drop-ins.
+  local old_unit="$1" name
+  echo "[WARN] Restoring previous working xeRAbora install." >&2
+  sudo systemctl stop xerabora.service || true
+  for name in xerabora-linux-x86_64 OPL-RA.ELF VERSION; do
+    if sudo test -f "/opt/xerabora/$name.previous"; then
+      sudo cp -a "/opt/xerabora/$name.previous" "/opt/xerabora/$name"
+    fi
+  done
+  if [[ -f "$old_unit" ]]; then
+    sudo install -m 0644 "$old_unit" /etc/systemd/system/xerabora.service
+  fi
+  sudo systemctl daemon-reload
+  sudo systemctl reset-failed xerabora.service || true
+  sudo systemctl start xerabora.service || true
+}
+
+verify_running_service() {
+  local n
+  for n in {1..45}; do
+    if systemctl is-active --quiet xerabora.service; then
+      sleep 3
+      systemctl is-active --quiet xerabora.service && return 0
+    fi
+    sleep 1
+  done
+  sudo journalctl -u xerabora.service -n 40 --no-pager >&2
+  return 1
+}
+
 install_client() {
   prerequisites || return 1
   local version old base tmp file confirm mode
@@ -178,6 +238,15 @@ install_client() {
     grep -Eq "^[a-fA-F0-9]{64} [* ]$file$" "$tmp/SHA256SUMS" || { echo "Missing checksum for $file" >&2; exit 1; }
     (cd "$tmp"; grep -E "^[a-fA-F0-9]{64} [* ]$file$" SHA256SUMS | sha256sum -c -) || { echo "Checksum failure" >&2; exit 1; }
   done
+  if ! cpu_binary_preflight "$tmp/xerabora-linux-x86_64"; then
+    echo "[SAFE] Existing xeRAbora binary and profiles were not changed." >&2
+    return 1
+  fi
+  local previous_unit
+  previous_unit="$(mktemp)"
+  if sudo test -f /etc/systemd/system/xerabora.service; then
+    sudo cp /etc/systemd/system/xerabora.service "$previous_unit"
+  fi
   sudo install -d -m 0755 /opt/xerabora
   for file in xerabora-linux-x86_64 OPL-RA.ELF VERSION; do
     [[ -f "/opt/xerabora/$file" ]] && sudo cp -p "/opt/xerabora/$file" "/opt/xerabora/$file.previous"
@@ -223,10 +292,11 @@ EOF
     echo "Service installed; manual mode preserved (not started)."
   else
     sudo systemctl restart xerabora.service
-    if systemctl is-active --quiet xerabora.service; then
+    if verify_running_service; then
       echo "Service active: $version"
     else
-      echo "Service not active. Check logs; previous binary backed up as .previous" >&2
+      rollback_failed_upgrade "$previous_unit"
+      echo "[ERROR] Upgrade failed health check; previous binary and service restored." >&2
       return 1
     fi
   fi
