@@ -528,11 +528,14 @@ def prepare_patch_sources(
     already_verified = candidate_count = mismatched = missing = 0
     results = []
     console_ids = {"Sony PlayStation": 12, "Sony PlayStation 2": 21}
+    checksum_cache = {}
+    print(f"[INFO] Verifying {len(rows)} patch source entries; large network ISOs can take time.", flush=True)
 
-    for row in rows:
+    for index, row in enumerate(rows, 1):
         title = row.get("recommended_ra_title", "")
         game_id = row.get("recommended_ra_game_id", "unknown")
         requirements = _source_requirements(workspace, game_id, title)
+        print(f"[VERIFY {index}/{len(rows)}] RA {game_id}: {row.get('preferred_release_name', title)}", flush=True)
         title_key = normalise_title(row.get("recommended_ra_title", ""))
         matching = [path for path in candidates if title_key and title_key in normalise_title(path.name)]
         collection_source = collection_root / row.get("path", "")
@@ -550,9 +553,22 @@ def prepare_patch_sources(
                 continue
             found = str(path)
             try:
-                valid, checksum_type, actual_hash = _validate_source(
-                    path, requirements, hasher, console_id
-                )
+                algorithm = next((a for a in ("md5", "crc32") if a in requirements), None)
+                raw_path = _cue_data_file(path) if path.suffix.casefold() == ".cue" else path
+                if algorithm and "ra_hash" not in requirements and raw_path:
+                    st = raw_path.stat()
+                    key = (str(raw_path.resolve()), st.st_size, st.st_mtime_ns, algorithm)
+                    if key not in checksum_cache:
+                        print(f"  [READ] {raw_path.name} ({st.st_size / (1024**3):.2f} GiB) — {algorithm.upper()}", flush=True)
+                        checksum_cache[key] = _raw_checksum(raw_path, algorithm)
+                    else:
+                        print(f"  [CACHE] {raw_path.name} — {algorithm.upper()}", flush=True)
+                    checksum_type, actual_hash = algorithm, checksum_cache[key]
+                    valid = actual_hash == requirements[algorithm]
+                else:
+                    valid, checksum_type, actual_hash = _validate_source(
+                        path, requirements, hasher, console_id
+                    )
             except (PatchError, TypeError, ValueError) as exc:
                 state = "source-validation-error"
                 checksum_type = "error"
@@ -579,6 +595,7 @@ def prepare_patch_sources(
         else:
             if not matching:
                 missing += 1
+        print(f"  [RESULT] {state} ({checksum_type}: {actual_hash[:36]})", flush=True)
         results.append({
             "title": title,
             "ra_game_id": game_id,
