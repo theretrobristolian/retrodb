@@ -369,6 +369,7 @@ def release_region(name: str) -> str:
 
 def preferred_release(
     details: list[dict[str, object]],
+    game_id: int | None = None,
 ) -> tuple[str, str, str, str, str]:
     """Choose RA's cleanest preferred TV-console release and final revision."""
     if not details:
@@ -377,9 +378,12 @@ def preferred_release(
     def sort_key(entry: dict[str, object]) -> tuple[int, int, int, int, str]:
         name = str(entry.get("Name", ""))
         region = release_region(name)
-        region_rank = {
-            "USA": 0, "World": 0, "Japan": 1, "Europe": 2,
-        }.get(region, 3)
+        # Raw Danger! (RA 5616): prefer the supported English-language PAL
+        # edition rather than the Japanese release. This is a recommendation
+        # preference, never a claim that the local USA ISO matches its hash.
+        region_rank = ({"Europe": 0, "USA": 1, "World": 1, "Japan": 2}
+                       if game_id == 5616 else
+                       {"USA": 0, "World": 0, "Japan": 1, "Europe": 2}).get(region, 3)
         labels = {
             str(label).casefold()
             for label in entry.get("Labels", [])
@@ -704,7 +708,7 @@ def match_collection(
                             preferred_hash,
                             preferred_labels,
                             preferred_patch_url,
-                        ) = preferred_release(details)
+                        ) = preferred_release(details, recommendation.game_id)
                     except RetroAchievementsError:
                         confidence += "-metadata-unavailable"
 
