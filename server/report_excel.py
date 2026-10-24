@@ -224,7 +224,7 @@ def main(source,destination,preparation=None):
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
-    summary.append(['Action Required (all platforms)', len(all_actions), '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'See Action Required tab'])
+    print(f'[INFO] Action Required (all platforms): {len(all_actions)} games need attention.')
     sheets.insert(0, ('Action Required', [ACTION_COLS] + all_actions))
     sheets.insert(0,('Summary',summary))
     destination=Path(destination)
