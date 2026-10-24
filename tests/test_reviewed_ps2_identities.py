@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from retrodb.retroachievements_match import load_reviewed_ps2_identities
+from retrodb.retroachievements_match import load_reviewed_ps2_identities, load_reviewed_ps2_no_listings
 
 
 def test_reviewed_disc_ids_are_available():
@@ -19,3 +19,11 @@ def test_different_editions_stay_manual():
     assert "SLES-53557" not in reviewed  # Normal vs Black Edition
     assert "SLES-53138" not in reviewed  # Remixed vs original
     assert "SCES-50612" not in reviewed  # Superseded identity
+
+
+def test_user_no_listing_decisions_are_preserved():
+    unlisted = load_reviewed_ps2_no_listings()
+    assert len(unlisted) == 26
+    assert "SLES-52366" in unlisted
+    assert "USGR-00036" in unlisted
+    assert "SCES-52530" not in unlisted
