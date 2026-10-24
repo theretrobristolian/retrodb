@@ -112,6 +112,58 @@ def apply_collection_dedup(entries):
     return entries
 
 
+ACTION_COLS = [
+    'Platform', 'Game name', 'File name', 'Disc ID', 'Status', 'Action',
+    'Recommended release', 'Recommended region', 'RA game ID',
+    'Existing RA-compatible copy', 'Reason / evidence', 'RA candidates',
+    'Local RA hash', 'Accepted RA hashes', 'File path',
+]
+
+
+def action_rows(entries, platform):
+    """Actionable entries only; retain evidence and avoid redundant work."""
+    rows = []
+    verified_by_id = {}
+    for r in entries:
+        if r[3] == 'YES' and str(r[6]).strip():
+            verified_by_id.setdefault(str(r[6]).strip(), []).append(r[1])
+    for r in entries:
+        if r[3] in ('YES', 'NO SET') or str(r[13]).startswith('EXCLUDE'):
+            continue
+        if r[3] == 'ERROR':
+            action = 'Fix disc hash error'
+        elif r[4] == 'YES':
+            action = 'Apply verified patch; check new RA hash'
+        elif r[3] == 'UNKNOWN':
+            action = 'Investigate RA identity or listing'
+        else:
+            action = 'Obtain supported region / edition / revision'
+        matched_copy = ' | '.join(verified_by_id.get(str(r[6]).strip(), []))
+        rows.append([
+            platform, r[0], r[1], r[2], r[3], action,
+            r[7], r[8], r[6], matched_copy, r[5], r[11],
+            '', '', '',  # populated from the original audit rows below
+        ])
+    return rows
+
+
+def action_rows_from_audit(raw_entries, platform, displayed):
+    """Join readable Excel decisions to underlying hashes and full paths."""
+    by_filename = {}
+    for raw in raw_entries:
+        if raw.get('platform') == platform:
+            by_filename.setdefault((raw.get('local_serial'), Path(raw.get('path', '')).name), []).append(raw)
+    actions = action_rows(displayed, platform)
+    for row in actions:
+        candidates = by_filename.get((row[3], row[2]), [])
+        if len(candidates) == 1:
+            raw = candidates[0]
+            row[12] = raw.get('local_ra_hash', '')
+            row[13] = raw.get('accepted_ra_hashes', '')
+            row[14] = raw.get('path', '')
+    return actions
+
+
 def xml_sheet(rows):
     xml=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
@@ -141,6 +193,7 @@ def main(source,destination,preparation=None):
     sources = patch_sources(preparation)
     outputs = patched_outputs(str(Path(preparation).with_name('patch-apply.json')) if preparation else None)
     sheets=[]
+    all_actions=[]
     summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','Eligible RA-ready %','RA eligible images','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors','Patchable %','No-set %','Unresolved %','RA identified %']]
     for platform,name in [('Sony PlayStation','PlayStation 1'),('Sony PlayStation 2','PlayStation 2')]:
         entries_console=sorted((row_for(r, sources, verified_outputs=outputs) for r in entries if r['platform']==platform),
@@ -162,6 +215,12 @@ def main(source,destination,preparation=None):
                         f'{100*counts["UNKNOWN"]/effective:.2f}%' if effective else '0.00%',
                         f'{100*(counts["YES"]+counts["NO"]+counts["NO SET"])/effective:.2f}%' if effective else '0.00%'])
         sheets.append((name,[COLS]+entries_console))
+        all_actions.extend(action_rows_from_audit(entries, platform, active))
+    priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
+                'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
+    all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
+    summary.append(['Action Required (all platforms)', len(all_actions), '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 'See Action Required tab'])
+    sheets.insert(0, ('Action Required', [ACTION_COLS] + all_actions))
     sheets.insert(0,('Summary',summary))
     destination=Path(destination)
     destination.parent.mkdir(parents=True,exist_ok=True)
@@ -173,6 +232,7 @@ def main(source,destination,preparation=None):
         z.writestr('xl/styles.xml','<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/></font><font><b/><color rgb="FFFFFFFF"/></font></fonts><fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'+''.join('<fill><patternFill patternType="solid"><fgColor rgb="%s"/></patternFill></fill>'%c for c in ('FF17365D','FFF1F5F9','FFDDF4E4','FFFFE5CC','FFFDF1C8'))+'</fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="7">'+''.join('<xf numFmtId="0" fontId="%d" fillId="%d" borderId="0" xfId="0"/>'%(1 if i==1 else 0, {0:0,1:2,2:3,3:4,4:5,5:6,6:6}[i]) for i in range(7))+'</cellXfs></styleSheet>')
         for i,(_,rows) in enumerate(sheets,1): z.writestr('xl/worksheets/sheet%d.xml'%i,xml_sheet(rows))
     print('[OK] Excel audit exported:',destination)
+    print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
     if len(sys.argv) not in (3,4): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json]')
