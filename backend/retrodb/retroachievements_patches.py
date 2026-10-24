@@ -572,9 +572,13 @@ def prepare_patch_sources(
                 else:
                     state = "source-found-but-checksum-mismatch"
                     mismatched += 1
-            break
+            if valid or state == "already-patched-and-verified":
+                break
+            # Try the next plausible source rather than stopping after one
+            # failed checksum (important for mixed USA/PAL collections).
         else:
-            missing += 1
+            if not matching:
+                missing += 1
         results.append({
             "title": title,
             "ra_game_id": game_id,
