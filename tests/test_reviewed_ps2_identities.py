@@ -23,7 +23,7 @@ def test_different_editions_stay_manual():
 
 def test_user_no_listing_decisions_are_preserved():
     unlisted = load_reviewed_ps2_no_listings()
-    assert len(unlisted) == 28
+    assert len(unlisted) == 33
     assert "SLES-52366" in unlisted
     assert "USGR-00036" in unlisted
     assert "SCES-52530" not in unlisted
@@ -44,3 +44,14 @@ def test_pal_tokyo_racer_and_nfs_alternative_are_distinct():
     assert reviewed["SLES-50115"] == 20774
     assert "SLES-53557" not in reviewed
     assert alternatives["SLES-53557"] == 7788
+
+
+def test_final_six_triage_preserves_distinct_game_editions():
+    unlisted = load_reviewed_ps2_no_listings()
+    for serial in ("SCES-54496", "SLUS-21256", "SLES-53599", "SLES-53598", "SLES-52876"):
+        assert serial in unlisted
+    alternatives = load_reviewed_ps2_alternatives()
+    reviewed = load_reviewed_ps2_identities()
+    assert alternatives["SLES-50383"] == 2787
+    assert "SLES-50383" not in reviewed
+    assert "SCES-54496" not in reviewed
