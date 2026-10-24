@@ -23,7 +23,16 @@ def test_different_editions_stay_manual():
 
 def test_user_no_listing_decisions_are_preserved():
     unlisted = load_reviewed_ps2_no_listings()
-    assert len(unlisted) == 26
+    assert len(unlisted) == 28
     assert "SLES-52366" in unlisted
     assert "USGR-00036" in unlisted
     assert "SCES-52530" not in unlisted
+
+
+def test_new_confirmed_regional_identifications():
+    reviewed = load_reviewed_ps2_identities()
+    assert reviewed["SLES-52118"] == 2679
+    assert reviewed["SLES-53138"] == 19930
+    unlisted = load_reviewed_ps2_no_listings()
+    assert "SCES-52154" in unlisted
+    assert "SCES-50612" in unlisted
