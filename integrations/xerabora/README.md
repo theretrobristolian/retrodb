@@ -1,3 +1,18 @@
+## xeRAbora v1.0.0+ persistent server mode
+
+As of upstream [v1.0.0](https://github.com/hacan359/xerabora/releases/tag/v1.0.0), xeRAbora supports `--server`. The client otherwise exits roughly 15 seconds after its last browser page closes. The RetroDB installer now adds `--server` to the **systemd service** only for stable v1.0.0 and newer versions, preserving `--no-sound`, the Web UI options, existing profiles and service recovery settings. Pre-v1 builds continue to run without the new flag.
+
+Run `xerabora` → **Install/update** after updating RetroDB. Even when the v1.x binary is already current, the installer checks and repairs the existing systemd ExecStart and restarts an active service when necessary. To inspect the setting:
+
+```bash
+systemctl cat xerabora.service
+systemctl show xerabora.service -p ExecStart
+systemctl is-active xerabora.service
+journalctl -u xerabora.service -n 40 --no-pager
+```
+
+Expected v1.x ExecStart includes `--server` alongside `--ui-port 18280` or `--no-ui`. This changes only the background service launch, not the one-off interactive login command. A PS2/OPL-RA reconnect or restart may still be needed after upgrading the binary.
+
 # xeRAbora — standalone Debian headless installation
 
 Community installer, updater and multi-account manager for [xeRAbora](https://github.com/hacan359/xerabora) and its matching PS2 `OPL-RA.ELF`. Maintained in the [RetroDB](https://github.com/theretrobristolian/retrodb) repository, but **RetroDB is not required**: no PostgreSQL, Python RetroDB application, RetroNAS, database, ROM scanner or existing VM image is involved.
