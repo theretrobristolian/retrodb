@@ -587,7 +587,7 @@ def match_collection(
             confidence = ""
             score = 0.0
             alternatives = ""
-            if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc:
+            if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc and serial not in reviewed_no_listing:
                 confirmed_id = reviewed_ps2.get(serial)
                 if confirmed_id is not None:
                     reviewed_game = next((g for g in games if g.game_id == confirmed_id), None)
@@ -600,7 +600,7 @@ def match_collection(
                     else:
                         no_set_game = reviewed_game
                         confidence = "reviewed-disc-id-no-set"
-            if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game:
+            if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game and serial not in reviewed_no_listing:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
                         serial, with_sets, serial_aliases
@@ -636,7 +636,7 @@ def match_collection(
                 if recommendation:
                     counts["recommended"] += 1
 
-            if item.ra_match_status == "unmatched" and not recommendation and not no_set_game and not special_disc:
+            if item.ra_match_status == "unmatched" and not recommendation and not no_set_game and not special_disc and serial not in reviewed_no_listing:
                 identity = gamedb_title or friendly_local_title(item.relative_path)
                 candidate, method, _, review = resolve_catalogue_identity(
                     identity, no_sets
