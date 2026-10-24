@@ -26,6 +26,16 @@ def clean_title(value):
 
 CURATED_DISPLAY_TITLES = {
     # Preserve distinct game identities within OPL's 27-character display budget.
+    # Explicit sequel/edition labels lost by generic truncation.
+    "need for speed underground 2": "NFS Underground 2",
+    "need for speed hot pursuit 2": "NFS Hot Pursuit 2",
+    "dance dance revolution supernova": "DDR SuperNova",
+    "dance dance revolution supernova 2": "DDR SuperNova 2",
+    "dance dance revolution disney channel edition": "DDR Disney Channel",
+    "metal gear solid 3 snake eater": "MGS 3 Snake Eater",
+    "grand theft auto liberty city stories": "GTA Liberty City Stories",
+    "lego star wars the video game": "LEGO Star Wars 1",
+    "lego star wars ii the original trilogy": "LEGO Star Wars 2",
     "grand theft auto vice city stories": "GTA VCS",
     "grand theft auto san andreas": "GTA San Andreas",
     "lara croft tomb raider legend": "Tomb Raider Legend",
