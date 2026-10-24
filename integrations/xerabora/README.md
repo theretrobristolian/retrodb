@@ -1,5 +1,8 @@
 ## Recovery after an incompatible Linux CPU build (October 2026)
 
+**Temporary upstream release block:** On CPUs identified as Intel Celeron J6412 or without both AVX and AVX2, the installer explicitly refuses upstream `v1.0.0` **before downloading or touching the working service**. The release-check menu reports it as blocked rather than recommending installation. This is in addition to executable ISA preflight and rollback safeguards. Later versions are not automatically blocked; they must pass the binary preflight before replacing anything. Remove or revise the v1.0.0 block only after a compatible upstream build is verified. The currently working `v0.1.0-alpha.19` and the `PoodingPower` profile should be left untouched.
+
+
 The v1.0.0 x86-64 executable failed on a Debian 13 VM with an Intel Celeron J6412, reporting `CPU ISA level is lower than required`. Host CPU passthrough did **not** add missing AVX/AVX2 instructions. The previously installed executable worked.
 
 To restore without deleting profiles:
