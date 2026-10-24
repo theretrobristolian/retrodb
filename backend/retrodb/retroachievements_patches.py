@@ -122,7 +122,8 @@ def _patch_rows(report_path: Path, cache_dir: Path) -> list[dict[str, str]]:
             if not isinstance(entry, dict):
                 continue
             labels = entry.get("Labels", [])
-            label_set = {str(label).casefold() for label in labels} if isinstance(labels, list) else set()
+            label_set = ({str(label).casefold() for label in labels} if isinstance(labels, list)
+                         else {x.strip().casefold() for x in str(labels).split(";")})
             target_hash = str(entry.get("MD5", "")).casefold()
             url = _official_patch_url(str(entry.get("PatchUrl", "") or "").strip())
             if "rapatches" not in label_set or not HASH_PATTERN.fullmatch(target_hash) or not url:
@@ -526,7 +527,9 @@ def prepare_patch_sources(
         matching = [path for path in candidates if title_key and title_key in normalise_title(path.name)]
         collection_source = collection_root / row.get("path", "")
         if collection_source.is_file():
-            matching.append(collection_source)
+            # Prefer the actual collection image; imported candidates must not
+            # mask an existing clean ROM with a matching source checksum.
+            matching.insert(0, collection_source)
         state = "missing-source"
         found = ""
         actual_hash = ""
