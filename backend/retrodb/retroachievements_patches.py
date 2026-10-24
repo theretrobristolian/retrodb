@@ -101,6 +101,14 @@ def _patch_url_from_cache(cache_dir: Path, game_id: str, target_hash: str) -> st
     return ""
 
 
+# Source: RA game 19129 Supported Game Hashes -> official RAPatches download.
+# Fallback if API_GetGameHashes metadata omits the compatibility PatchUrl.
+OFFICIAL_PATCH_URL_OVERRIDES = {
+    ("19129", "dd5f58908acd8062a13551de7a1d5fbe"):
+        "https://github.com/RetroAchievements/RAPatches/raw/main/PS2/Fix/19129-MaxPayne-AntiCheat.zip",
+}
+
+
 def _patch_rows(report_path: Path, cache_dir: Path) -> list[dict[str, str]]:
     """Find every officially labelled RA patch variant, not only the preferred hash.
 
@@ -125,7 +133,9 @@ def _patch_rows(report_path: Path, cache_dir: Path) -> list[dict[str, str]]:
             label_set = ({str(label).casefold() for label in labels} if isinstance(labels, list)
                          else {x.strip().casefold() for x in str(labels).split(";")})
             target_hash = str(entry.get("MD5", "")).casefold()
-            url = _official_patch_url(str(entry.get("PatchUrl", "") or "").strip())
+            url = _official_patch_url(str(entry.get("PatchUrl", "") or "").strip()) or _official_patch_url(
+                OFFICIAL_PATCH_URL_OVERRIDES.get((game_id, target_hash), "")
+            )
             if "rapatches" not in label_set or not HASH_PATTERN.fullmatch(target_hash) or not url:
                 continue
             row = dict(original)
