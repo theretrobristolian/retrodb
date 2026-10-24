@@ -99,6 +99,41 @@ latest_release() {
     'https://api.github.com/repos/hacan359/xerabora/releases?per_page=30' |
     python3 -c 'import json,sys; releases=json.load(sys.stdin); required={"SHA256SUMS","xerabora-linux-x86_64","OPL-RA.ELF"}; match=next((r for r in releases if not r["draft"] and required <= {a["name"] for a in r["assets"]}),None); print(match["tag_name"] if match else "")'
 }
+server_mode_supported() {
+  # Only v1.0.0 and newer implement --server. Pre-release builds must
+  # retain their original invocation, including v1.0.0-rc releases.
+  local version="${1#v}" major minor patch suffix
+  if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+    major="${BASH_REMATCH[1]}"
+    (( 10#$major >= 1 ))
+  else
+    return 1
+  fi
+}
+
+sync_service_server_mode() {
+  # Repair a previously installed v1.x service in place without overwriting
+  # startup-mode, profile and Web UI preferences.
+  local version="$1" unit=/etc/systemd/system/xerabora.service
+  [[ -f "$unit" ]] || return 0
+  if server_mode_supported "$version"; then
+    if ! grep -Eq '^ExecStart=.*[[:space:]]--server([[:space:]]|$)' "$unit"; then
+      sudo sed -i '/^ExecStart=/s/$/ --server/' "$unit" || return 1
+      sudo systemctl daemon-reload || return 1
+      echo "[OK] xeRAbora $version: systemd server mode enabled."
+      if systemctl is-active --quiet xerabora.service; then
+        sudo systemctl restart xerabora.service || return 1
+      fi
+    fi
+  elif grep -Eq '^ExecStart=.*[[:space:]]--server([[:space:]]|$)' "$unit"; then
+    sudo sed -i '/^ExecStart=/s/ --server\([[:space:]]\|$\)/\1/g' "$unit" || return 1
+    sudo systemctl daemon-reload || return 1
+    if systemctl is-active --quiet xerabora.service; then
+      sudo systemctl restart xerabora.service || return 1
+    fi
+  fi
+}
+
 installed_version() {
   if [[ -f /opt/xerabora/VERSION ]]; then cat /opt/xerabora/VERSION; else echo unknown; fi
 }
@@ -123,7 +158,8 @@ install_client() {
   [[ "$version" =~ ^[a-zA-Z0-9._-]+$ ]] || { echo "Unable to validate release tag" >&2; exit 1; }
   echo "Installed: $old | Newest: $version"
   if [[ "$old" == "$version" && -x /opt/xerabora/xerabora-linux-x86_64 ]]; then
-    echo "Already current; no changes needed."
+    echo "Already current; checking service configuration."
+    sync_service_server_mode "$version" || return 1
     if [[ -f "$SCRIPT_DIR/../../server/install-launchers.sh" ]]; then
       bash "$SCRIPT_DIR/../../server/install-launchers.sh" xerabora || echo "[WARN] xeRAbora launcher could not be installed."
     fi
@@ -149,7 +185,8 @@ install_client() {
   sudo install -m 0755 "$tmp/xerabora-linux-x86_64" /opt/xerabora/xerabora-linux-x86_64
   sudo install -m 0644 "$tmp/OPL-RA.ELF" /opt/xerabora/OPL-RA.ELF
   printf '%s\n' "$version" | sudo tee /opt/xerabora/VERSION >/dev/null
-  local unit
+  local unit server_flag=""
+  server_mode_supported "$version" && server_flag=" --server"
   unit="$(mktemp)"
   cat > "$unit" <<EOF
 [Unit]
@@ -163,7 +200,7 @@ User=$USER_NAME
 Group=$(id -gn "$USER_NAME")
 WorkingDirectory=/opt/xerabora
 Environment=HOME=$HOME_PATH
-ExecStart=/opt/xerabora/xerabora-linux-x86_64 --no-sound --ui-port 18280
+ExecStart=/opt/xerabora/xerabora-linux-x86_64 --no-sound --ui-port 18280$server_flag
 ExecStartPre=/bin/sleep 20
 Restart=always
 RestartSec=10
@@ -174,6 +211,7 @@ EOF
   sudo install -m 0644 "$unit" /etc/systemd/system/xerabora.service
   rm -f "$unit"
   sudo systemctl daemon-reload
+  if [[ -n "$server_flag" ]]; then echo "[OK] xeRAbora $version uses persistent --server mode."; fi
   if [[ "$mode" == auto ]]; then sudo systemctl enable xerabora.service; fi
   if [[ "$old" == unknown && ! -s "$HOME_PATH/.config/xerabora/credentials" ]]; then
     read -rp "Authenticate now? [Y/n] " confirm
