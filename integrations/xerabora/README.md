@@ -1,3 +1,19 @@
+## Recovery after an incompatible Linux CPU build (October 2026)
+
+The v1.0.0 x86-64 executable failed on a Debian 13 VM with an Intel Celeron J6412, reporting `CPU ISA level is lower than required`. Host CPU passthrough did **not** add missing AVX/AVX2 instructions. The previously installed executable worked.
+
+To restore without deleting profiles:
+
+```bash
+cd ~/retrodb && git pull --ff-only
+bash integrations/xerabora/rollback.sh
+# Or launch 'xerabora' and select option 15, Roll back to previous version.
+```
+
+Rollback requires all three backed-up files under `/opt/xerabora`: `xerabora-linux-x86_64.previous`, `OPL-RA.ELF.previous` and `VERSION.previous`. It confirms the old version, stops the service, saves the failed files separately, restores the previous files, removes `--server` from the previous service's ExecStart, reloads systemd, waits through ExecStartPre, then checks the active service. It does **not** touch the saved player profiles, credentials, log files or systemd profile/auto-restart drop-ins. If these previous files are absent, it refuses rather than guessing.
+
+New updates now run a bounded executable/ISA preflight *before* installing the downloaded binary. A detected unsupported ISA or illegal instruction prevents replacement. The installer also retains the old systemd unit and automatically restores previous files/unit when its post-upgrade service check fails. These checks reduce risk but aren't a guarantee against all runtime regressions; inspect `journalctl -u xerabora.service` if the service becomes unstable later.
+
 ## xeRAbora v1.0.0+ persistent server mode
 
 As of upstream [v1.0.0](https://github.com/hacan359/xerabora/releases/tag/v1.0.0), xeRAbora supports `--server`. The client otherwise exits roughly 15 seconds after its last browser page closes. The RetroDB installer now adds `--server` to the **systemd service** only for stable v1.0.0 and newer versions, preserving `--no-sound`, the Web UI options, existing profiles and service recovery settings. Pre-v1 builds continue to run without the new flag.
