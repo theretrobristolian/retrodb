@@ -263,6 +263,14 @@ sudo bash server/deploy.sh
 bash server/manager.sh
 ```
 
+### Manually reviewed PS2 RetroAchievements identities (October 2026)
+
+The review crosswalk `config/ps2-reviewed-ra-identities.csv` stores verified-by-human disc serial to RA game ID suggestions. It is ingested by the PS2 matcher after the RA catalogue loads. Only rows marked `reviewed` are eligible; entries marked `needs-edition-review` (e.g. *MGS2 Sons of Liberty* vs *Substance*, *NFS Most Wanted* vs *Black Edition*, *Outlaw Volleyball Remixed*) **are intentionally excluded**. When an ID is missing from the current cached RA catalogue, a warning is logged and normal review handling continues.
+
+The RA catalogue determines whether the resolved ID has achievements. With a set, the image gets an RA-supported **recommendation**, not a verified green state; a green RA match still requires the local RAHasher hash to equal a registered RA hash. With no set, the image can be classified `NO_SET`. Recommended release hashes and region information are fetched by the normal existing flow when available.
+
+To apply crosswalk updates, use **More options → Update RetroDB** (deploys the backend and config into `/opt/retrodb`) and then **Audit game collection**. Merely regenerating Excel exports cannot update identities from cached audit data. Local/manual findings remain inspectable in CSV without editing application code.
+
 ## RetroAchievements credentials
 
 The deployment adds a labelled RetroAchievements section to the protected configuration file:
