@@ -8,7 +8,7 @@ SLES-50472,32854,reviewed,User RA triage - no set
 SLES-52620,25838,reviewed,User RA triage - no set
 SCES-53286,19239,reviewed,User RA triage - set available
 SLES-52446,20090,reviewed,User RA triage - set available
-SLES-50383,2787,needs-edition-review,Sons of Liberty is not Substance
+SLES-50383,2787,supported-alternative,Sons of Liberty standard is a different edition; recommend USA Substance (SLUS-20554) for RA; never claim compatible without hash
 SLES-53557,7788,supported-alternative,Standard Most Wanted is not supported Black Edition; recommend RA 7788 release only
 SLES-52238,19211,reviewed,User RA triage - set available
 SLES-54782,19267,reviewed,User RA triage - set available
