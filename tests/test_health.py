@@ -10,11 +10,7 @@ client = TestClient(app)
 def test_liveness() -> None:
     response = client.get("/live")
 
-    assert response.status_code == 200
-    assert response.json() == {
-        "status": "alive",
-        "version": "0.1.0",
-    }
+    assert response.status_code == 401  # health is protected after session-auth rollout
 
 
 def test_core_model_tables_are_registered() -> None:
