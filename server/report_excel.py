@@ -171,6 +171,13 @@ def action_rows_from_audit(raw_entries, platform, displayed):
     return actions
 
 
+def excel_column(index):
+    result = ''
+    while index:
+        index, digit = divmod(index - 1, 26)
+        result = chr(65 + digit) + result
+    return result
+
 def xml_sheet(rows):
     xml=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
@@ -187,9 +194,9 @@ def xml_sheet(rows):
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6,'NO SET':5}.get(val,style)
             if n > 1 and len(row) == 16 and i == 4 and val == 'YES': style = 3
             xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
-                       (chr(65+i),n,style,escape(str(val or ''))))
+                       (excel_column(i+1),n,style,escape(str(val or ''))))
         xml.append('</row>')
-    xml.append('</sheetData><autoFilter ref="A1:%s%d"/></worksheet>' % (chr(64+len(rows[0])),len(rows)))
+    xml.append('</sheetData><autoFilter ref="A1:%s%d"/></worksheet>' % (excel_column(len(rows[0])),len(rows)))
     return ''.join(xml)
 def main(source,destination,preparation=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
@@ -232,6 +239,19 @@ def main(source,destination,preparation=None):
     print(f'[INFO] Action Required (all platforms): {len(all_actions)} games need attention.')
     sheets.insert(0, ('Action Required', [ACTION_COLS] + all_actions))
     sheets.append(('PS2 Online', [ONLINE_COLUMNS] + ps2_online))
+    known = [row for row in ps2_online if row[4] == 'YES']
+    online_summary = [
+        ['Metric', 'Count', 'Meaning'],
+        ['PS2 local disc images', len(ps2_online), 'Every PS2 image from the audit'],
+        ['Historical online documented', len(known), 'Exact regional disc ID found in imported community data'],
+        ['XLink Kai reported supported', sum(row[7] == 'YES' for row in known), 'Community source only; verify with XLink Kai'],
+        ['Community DNS reported yes', sum(row[8] == 'YES' for row in known), 'Not proof that the server is currently online'],
+        ['Native LAN unknown', sum(row[6] == 'UNKNOWN' for row in ps2_online), 'Native LAN requires separate source evidence'],
+        ['No matching source record', len(ps2_online)-len(known), 'UNKNOWN does not mean NO online support'],
+    ]
+    online_summary += [['', '', ''], ['Game', 'Disc ID', 'Connection details (community reported)']]
+    online_summary += [[row[0], row[2], f'Original: {row[5] or "unknown"}; XLink: {row[7]}; DNS: {row[8]}; {row[9]}'] for row in known]
+    sheets.append(('Online Summary', online_summary))
     print(f'[INFO] PS2 online: {len(ps2_online)} local discs; {sum(row[4] == "YES" for row in ps2_online)} with release-specific source evidence.')
     sheets.insert(0,('Summary',summary))
     destination=Path(destination)
