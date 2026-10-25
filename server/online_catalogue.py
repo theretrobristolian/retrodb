@@ -9,6 +9,7 @@ import argparse
 import csv
 import json
 import re
+import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -17,7 +18,7 @@ ONLINE_COLUMNS = [
     "Game", "File", "Disc ID", "Region", "Original online", "Original host",
     "LAN", "XLink Kai", "Community DNS reported", "DNS / service reference",
     "Community report", "Players", "Co-op", "DNAS / setup",
-    "Hardware notes", "Source", "Last source update", "Connection methods", "Currently playable",
+    "Hardware notes", "Source", "Last source update", "Connection methods", "Currently playable", "Source confidence", "XLink evidence",
 ]
 SERIAL_RE = re.compile(r"\b(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS|SCPS)[_.\s-]*([0-9]{3})[.\s_-]*([0-9]{2})\b", re.I)
 
@@ -85,6 +86,38 @@ def load(path):
     if not Path(path).is_file(): return {}
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     return {(r["platform"], r["disc_id"]): r for r in payload.get("records", [])}
+
+def normalized_title(value):
+    """Conservative title-only key; never conflate release IDs with titles."""
+    value = unicodedata.normalize("NFKD", str(value or "")).casefold()
+    value = re.sub(r"\\([^)]*\\)", " ", value)
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return " ".join(value.split())
+
+def load_xlink(path):
+    """Optional official XLink title catalogue with explicit title-level provenance."""
+    if not Path(path).is_file():
+        return {}
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return {normalized_title(item["title"]): item for item in payload.get("records", [])
+            if normalized_title(item.get("title"))}
+
+def enrich_with_xlink(row, xlink):
+    # Title-level evidence only, NOT a disc/region-tested compatibility guarantee.
+    candidate = xlink.get(normalized_title(row[0]))
+    row.extend([
+        "Release ID matched" if row[4] == "YES" else
+        ("Title-level XLink match only" if candidate else "No source match"),
+        (candidate or {}).get("source_url", ""),
+    ])
+    if candidate:
+        row[7] = "YES (title-level)"
+        row[6] = "YES (title-level)"
+        if row[17]:
+            row[17] += ", lan_tunnel"
+        else:
+            row[17] = "lan_tunnel"
+    return row
 
 def report_row(audit, catalogue):
     disc = serial(audit.get("local_serial") or audit.get("path") or "")
