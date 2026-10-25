@@ -16,7 +16,9 @@ class Database:
 def stub():
     yield Database()
 
-def test_pages_exist_without_mutation():
+def test_pages_exist_without_mutation(monkeypatch):
+    import retrodb.session_auth as auth
+    monkeypatch.setattr(auth, "user_from_cookie", lambda _: "test-player")
     app.dependency_overrides[get_session] = stub
     try:
         client = TestClient(app)
@@ -55,3 +57,27 @@ def test_web_app_branding_assets():
     manifest = client.get("/manifest.webmanifest")
     assert manifest.json()["short_name"] == "RetroDB"
     assert manifest.json()["display"] == "standalone"
+
+def test_https_session_login_persists_without_basic_auth(tmp_path, monkeypatch):
+    import bcrypt
+    import retrodb.session_auth as auth
+    users = tmp_path / "users.htpasswd"
+    users.write_text("player:" + bcrypt.hashpw(b"correct-horse", bcrypt.gensalt()).decode() + "\n")
+    monkeypatch.setattr(auth, "USERS", users)
+    monkeypatch.setenv("RETRODB_SESSION_SECRET", "secure-test-secret-" + "x"*60)
+    app.dependency_overrides[get_session] = stub
+    try:
+        with TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False) as client:
+            assert client.get("/").status_code == 303
+            assert client.get("/login").status_code == 200
+            response = client.post("/login", data={"username":"player","password":"correct-horse","next":"/"},
+                                   headers={"origin":"https://retrodb.it.gattaca.house"})
+            assert response.status_code == 303
+            assert "Secure" in response.headers["set-cookie"]
+            assert "HttpOnly" in response.headers["set-cookie"]
+            assert client.get("/").status_code == 200
+            logout = client.post("/logout", headers={"origin":"https://retrodb.it.gattaca.house"})
+            assert logout.status_code == 303
+            assert client.get("/").status_code == 303
+    finally:
+        app.dependency_overrides.clear()
