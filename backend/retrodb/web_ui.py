@@ -82,10 +82,13 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:22px}
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
-.game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:150px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:360px;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
-.detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
+.game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
+.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.detail .card{min-height:0;min-width:0}
 @media(max-width:760px){
- .detail{grid-template-columns:1fr}
+ .detail{grid-template-columns:minmax(0,1fr)}
+ .game-art-card{padding:18px 16px}
+ .game-art-card h2{margin-bottom:12px}
+ .game-cover{max-height:230px;max-width:min(100%,230px)}
  main{padding:24px 14px;min-width:0}
  th,td{padding:9px 6px}
  header{padding:12px 14px}
@@ -424,7 +427,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     body = f"""<div class="crumb"><a href="/">Consoles</a> /
 <a href="/library/{quote(platform.slug) if platform else ''}">{escape(platform.name if platform else 'Library')}</a> / {label}</div>
 <div class="game-title-row">{header_icon}<div><h1>{label}</h1><p class="muted">Library record and release information</p></div></div>
-<div class="detail"><section class="card"><h2>Cover art</h2><div class="game-art-grid">{artwork}</div></section>
+<div class="detail"><section class="card game-art-card"><h2>Cover art</h2><div class="game-art-grid">{artwork}</div></section>
 <section class="card"><h2>Game information</h2>{release}
 <p class="muted">These fields come from RetroAchievements and can describe the game generally, rather than your specific regional release.</p></section>
 <section class="card"><h2>Release and collection</h2>{info}</section>
