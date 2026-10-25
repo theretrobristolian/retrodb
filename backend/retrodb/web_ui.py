@@ -1,6 +1,9 @@
 """RetroDB v1 browser pages: read-only library, release details, and service overview."""
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
 from collections import Counter
 from html import escape
 from pathlib import PurePosixPath
@@ -45,7 +48,7 @@ def page(title: str, body: str) -> HTMLResponse:
     return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>{heading} · RetroDB</title>
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
-<nav><a href="/">Consoles</a><a href="/library">All games</a><a href="/management">Management</a>
+<nav><a href="/">Consoles</a><a href="/library">All games</a><a href="/management">Management</a><a href="/online-services">Online services</a>
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a></nav></div></header>
 <main>{body}</main></body></html>""")
 
@@ -119,6 +122,53 @@ def console_games(slug: str, db: Session = Depends(get_session), q: str = Query(
                   page_number: int = Query(1, alias="page", ge=1, le=10000)):
     return browse(db, slug, q, letter.upper(), page_number)
 
+PS2_SERIAL = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
+DATA_DIR = Path("/var/cache/retrodb/web")
+
+def online_record(item):
+    serial_match = PS2_SERIAL.search(item.filename)
+    if not serial_match:
+        serial_match = PS2_SERIAL.search(item.relative_path)
+    if not serial_match:
+        return None
+    disc = f"{serial_match.group(1).upper()}-{serial_match.group(2)}{serial_match.group(3)}"
+    try:
+        data = json.loads((DATA_DIR / "online-compatibility.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    for record in data.get("records", []):
+        if record.get("disc_id") == disc and record.get("platform") == "playstation-2":
+            return record
+    return None
+
+def online_details(record):
+    if not record:
+        return '<p class="muted">No release-specific PS2 online record published. Unknown does not mean unsupported.</p>'
+    lines = [
+        ("Historical online", record.get("historical_online", "UNKNOWN")),
+        ("Original provider", record.get("original_host", "Unknown")),
+        ("Community DNS report", record.get("dns_compatible", "UNKNOWN")),
+        ("Server / DNS reference", record.get("dns_address_or_provider", "")),
+        ("XLink (community)", record.get("xlink_kai", "UNKNOWN")),
+        ("Player count", record.get("max_players", "")),
+        ("Configuration", record.get("requirements", "")),
+        ("Current playability", "UNVERIFIED"),
+    ]
+    content = "".join(f"<p><span class='label'>{escape(k)}</span><br>{escape(str(v or 'Unknown'))}</p>" for k,v in lines)
+    return content + '<p><a href="https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/edit?gid=0" target="_blank" rel="noopener">Community compatibility source ↗</a></p>'
+
+@router.get("/online-services", response_class=HTMLResponse)
+def online_services():
+    return page("Online services", """<div class="eyebrow">Networking and RetroAchievements</div>
+<h1>Online services</h1><p class="muted">Quick launch links for your local services. Service health and secure profile switching are planned; links are not live health checks.</p>
+<div class="grid"><div class="card"><h2>xeRAbora</h2><p class="muted">Achievement relay and local web dashboard.</p>
+<a href="http://retrodb.it.gattaca.house:18280/" target="_blank" rel="noopener">Open xeRAbora ↗</a>
+<p class="label">Current player selection remains in the xeRAbora console; web switching requires authentication and a dedicated privileged helper.</p></div>
+<div class="card"><h2>XLink Kai</h2><p class="muted">System-link LAN tunnelling via RetroNAS.</p>
+<a href="http://xlinkkai:34522/" target="_blank" rel="noopener">Open XLink Kai ↗</a></div>
+<div class="card"><h2>RetroAchievements</h2><a href="https://retroachievements.org/" target="_blank" rel="noopener">Website ↗</a></div>
+<div class="card"><h2>RetroDB source</h2><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub repository ↗</a></div></div>""")
+
 @router.get("/game/{item_id}", response_class=HTMLResponse)
 def game_details(item_id: int, db: Session = Depends(get_session)):
     item = db.get(LibraryItem, item_id)
@@ -141,8 +191,7 @@ def game_details(item_id: int, db: Session = Depends(get_session)):
 <section class="card"><h2>Achievements</h2><p class="muted">Your indexed RetroAchievements data appears here.
 Live profile progress and badge artwork are planned for the next version.</p>
 {detail("RA game title", item.ra_game_title)}</section>
-<section class="card"><h2>Online play</h2><p class="muted">The community DNS and XLink evidence currently lives
-in the Excel audit. Import into the database/API is planned; this page deliberately does not guess online compatibility.</p></section>
+<section class="card"><h2>Online play</h2>{online_details(online_record(item))}</section>
 <section class="card"><h2>Artwork, manual and controls</h2><p class="muted">Metadata, manuals, controller guidance
 and cover-art indexing are planned. No external artwork is downloaded automatically.</p></section></div>""")
 
