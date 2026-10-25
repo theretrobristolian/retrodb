@@ -10,7 +10,7 @@ To restore without deleting profiles:
 ```bash
 cd ~/retrodb && git pull --ff-only
 bash integrations/xerabora/rollback.sh
-# Or launch 'xerabora' and select option 15, Roll back to previous version.
+# Or open 'xerabora' → Advanced options → Rollback.
 ```
 
 Rollback requires all three backed-up files under `/opt/xerabora`: `xerabora-linux-x86_64.previous`, `OPL-RA.ELF.previous` and `VERSION.previous`. It confirms the old version, stops the service, saves the failed files separately, restores the previous files, removes `--server` from the previous service's ExecStart, reloads systemd, waits through ExecStartPre, then checks the active service. It does **not** touch the saved player profiles, credentials, log files or systemd profile/auto-restart drop-ins. If these previous files are absent, it refuses rather than guessing.
@@ -65,9 +65,13 @@ bash integrations/xerabora/install.sh
 
 The repository is used only to distribute three shell scripts and documentation; **no other RetroDB installation step is required**. If prerequisites are missing, the script can offer to install required Debian packages through apt, using sudo; it never silently grants sudo access. If you prefer to copy only the `integrations/xerabora/` directory to another machine, `install.sh`, `profiles.sh` and `ui.sh` must remain together. You can also download those three files manually; `git` is not required after the download.
 
-The manager clears the terminal and displays a consistent ASCII xeRAbora banner, upstream project link, xeRAbora version, service state and active player, with the installer credit and Git update command in the footer. Both the installer and player-profile menus use the same header and footer. It offers installation/update, version checking, Web API key setup, API testing, service management, network diagnostics, live logs, login, numbered profile switching and uninstall. Choose **1) Install or update xeRAbora**. The installer queries the xeRAbora GitHub *releases list*, including pre-releases, downloads `xerabora-linux-x86_64`, `OPL-RA.ELF` and `SHA256SUMS`, and validates both assets against the release checksums before installation. It installs to `/opt/xerabora`, configures and enables `xerabora.service`, then offers initial RetroAchievements login. Type your password only at the hidden prompt. The client stores an account **token**, not your password.
+The manager clears the terminal and shows a consistent banner, xeRAbora version, service status, active RetroAchievements player, local/LAN/DNS dashboard URLs, CPU compatibility warning and community footer. The footer now says `Launch manager: xerabora (automatically checks for script updates)`, not a manual `git pull` command.
 
-Configure a **RetroAchievements Web API key** from https://retroachievements.org/settings (Keys) via main-menu option **2**. The key is saved as a permission-protected file. Accounts require independent keys. The main manager can test API access with option **3**.
+**Current main menu:** 1) Switch player; 2) Manage players (add/import/credentials); 3) Follow game and achievement log; 4) Service controls; 5) Check/install xeRAbora binary (may restart service); 6) Update RetroDB manager scripts (no service restart); 7) Advanced options; 0) Exit. Rarely used features such as rollback, uninstall and diagnostics are under Advanced options. Player switching is numbered, displays the active profile and asks for confirmation before restarting the service; save your PS2 game first and reconnect OPL-RA afterwards. Confirmation prompts use `[y/n]` with an explicit default.
+
+**Two independent update paths:** Opening the `xerabora` launcher from a clean trusted `main` Git checkout checks for and fast-forwards *community manager scripts only*. It does not replace the installed xeRAbora binary or restart the service. Option 5 is a separate, manual binary-install/update workflow; it checks GitHub releases, validates downloaded assets/checksums, enforces CPU/ISA preflight and maintains rollback safeguards. In particular, upstream `v1.0.0` is blocked on the Intel Celeron J6412 environment where it failed, and the working `v0.1.0-alpha.19` must not be silently upgraded.
+
+Configure a per-player RetroAchievements Web API key via **2) Manage players**. Obtain the key at https://retroachievements.org/settings (Keys) and keep it private.
 
 ## PS2 setup (manual)
 
@@ -159,7 +163,7 @@ The settings restart only the xeRAbora service, **not the Debian host**. Save an
 
 ## Multiple RetroAchievements profiles
 
-Use **10) Manage player profiles** from the main installer menu (or execute `bash integrations/xerabora/profiles.sh`). Each household account has its own login token, API key, cache and logs under `~/.config/xerabora-profiles/<profile>/xerabora/`. Profile switching uses a **numbered selection** with 0 to return, requests confirmation, stops the running service, points it at the selected configuration, then starts it again. It prints a reminder to reboot/relaunch OPL-RA and select that player's memory-card image and save. **Only one account is active at a time.**
+Use **2) Manage players** from the main installer menu (or execute `bash integrations/xerabora/profiles.sh`). Each household account has its own login token, API key, cache and logs under `~/.config/xerabora-profiles/<profile>/xerabora/`. Profile switching uses a **numbered selection** with 0 to return, requests confirmation, stops the running service, points it at the selected configuration, then starts it again. It prints a reminder to reboot/relaunch OPL-RA and select that player's memory-card image and save. **Only one account is active at a time.**
 
 On an existing installation, player-menu option **2) Import an existing xeRAbora login** copies the original `~/.config/xerabora` credentials and key without removing them. Fresh users can choose **3) Add a new player**, then add a profile API key and activate it. You do not have to use RetroDB to use the profile manager; the import menu is specifically for legacy installations.
 
@@ -190,11 +194,11 @@ The logs live in `~/.config/xerabora/xerabora.log` for the original default acco
 
 ## Terminal menu and live log
 
-Run `bash integrations/xerabora/install.sh` to open the main menu or `bash integrations/xerabora/profiles.sh` for player management. Both show the same ASCII banner, project link, service state, installed version, active profile and author/footer. The **main menu option 8** and **player menu option 7** follow the active player's log in real time; press **Ctrl+C** to stop viewing and return to the menu.
+Run `bash integrations/xerabora/install.sh` to open the main menu or `bash integrations/xerabora/profiles.sh` for player management. Both show the same ASCII banner, project link, service state, installed version, active profile and author/footer. **Main menu option 3** follows the active player's log in real time; press **Ctrl+C** to stop viewing and return to the menu.
 
 ## Service startup, reboot delay and automatic recovery
 
-The installer manages the `xerabora.service` systemd unit, including a **20-second startup delay** after network readiness and a **10-second restart interval** when automatic recovery is enabled. The main menu includes **13) Service startup / automatic recovery**:
+The installer manages the `xerabora.service` systemd unit, including a **20-second startup delay** after network readiness and a **10-second restart interval** when automatic recovery is enabled. Use **4) Service controls** (and related advanced options) to configure service startup / automatic recovery:
 
 | Mode | Boot | Unexpected exit | When selected |
 | --- | --- | --- | --- |
@@ -222,7 +226,7 @@ The installer currently runs xeRAbora as the normal Linux user who installs it; 
 
 ## Uninstalling
 
-Choose **11) Uninstall xeRAbora and delete all local data** from the main menu, or run:
+Use **7) Advanced options** for uninstall or run:
 
 ```bash
 bash integrations/xerabora/install.sh uninstall
@@ -240,6 +244,6 @@ git pull --ff-only origin main
 bash integrations/xerabora/install.sh
 ```
 
-If you copied the scripts to another directory, update those files using your original download method; the menu footer's `~/retrodb` command assumes a clone there.
+For a clean trusted Git checkout, running `xerabora` checks and updates the community scripts automatically. If you copied standalone scripts without the full Git checkout, update them using your original download method.
 
-The updater retains prior executable, OPL ELF and version files with `.previous` suffix for **manual** rollback. It does not implement automatic rollback. Releases are selected dynamically from upstream; nothing here guarantees compatibility with future xeRAbora releases.
+The updater retains prior executable, OPL ELF and version files with `.previous` suffix for **manual** rollback. It includes rollback safeguards during a failed installation and supports an explicit manual rollback using the previous files. Releases are selected dynamically from upstream; nothing guarantees compatibility with future xeRAbora releases.
