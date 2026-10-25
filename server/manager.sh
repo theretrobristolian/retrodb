@@ -72,11 +72,16 @@ ART
   echo '----------------------------------------------------------------'
   echo ' RetroDB | Community management console by The Retro Bristolian'
   echo '----------------------------------------------------------------'
-  # Fixed-width service/status columns for consistent terminal alignment.
-  printf ' %-13s %-23s %-12s %s\n' 'RetroDB:' "$(state retrodb.service)" 'Local API:' "http://127.0.0.1:8000/health ($(web http://127.0.0.1:8000/health))"
-  printf ' %-13s %-23s %-12s %s\n' 'PostgreSQL:' "$(state postgresql.service)" 'RetroNAS:' "$(mountpoint -q "$MOUNT" && echo mounted || echo unavailable)"
-  printf ' %-13s %-23s %-12s %s\n' 'RAHasher:' "$(protected_status -x /opt/retrodb-tools/RAHasher)" 'CSV report:' "$(protected_status -f "$REPORT")"
-  printf ' %-13s %-23s %-12s %s\n' 'xeRAbora:' "$(state xerabora.service)" 'Web UI:' "http://127.0.0.1:18280/ ($(web http://127.0.0.1:18280/))"
+  # Keep health rows compact; URLs remain available in service details.
+  local hasher report
+  hasher="$(protected_status -x /opt/retrodb-tools/RAHasher)"
+  report="$(protected_status -f "$REPORT")"
+  [[ "$hasher" == "protected / unavailable" ]] && hasher="unavailable"
+  [[ "$report" == "protected / unavailable" ]] && report="unavailable"
+  printf ' %-12s %-13s %-12s %s\n' 'RetroDB:' "$(state retrodb.service)" 'Local API:' "$(web http://127.0.0.1:8000/health)"
+  printf ' %-12s %-13s %-12s %s\n' 'PostgreSQL:' "$(state postgresql.service)" 'RetroNAS:' "$(mountpoint -q "$MOUNT" && echo mounted || echo unavailable)"
+  printf ' %-12s %-13s %-12s %s\n' 'RAHasher:' "$hasher" 'CSV report:' "$report"
+  printf ' %-12s %-13s %-12s %s\n' 'xeRAbora:' "$(state xerabora.service)" 'Web UI:' "$(web http://127.0.0.1:18280/)"
   echo '----------------------------------------------------------------'
 }
 pause() { read -rp 'Press Enter to return...' ignored || true; }
@@ -388,9 +393,9 @@ menu() {
     header
     echo ' Main menu'
     echo
-    echo '  1) Audit game collection  - Scan, check RA support and export reports'
-    echo '  2) Patch a PS2 game       - Test, verify and preserve original'
-    echo '  3) Rename PS2 games       - Preview changes and confirm renames'
+    echo '  1) Audit games       - Check RA support and export reports'
+    echo '  2) Patch PS2 game    - Verify and preserve original'
+    echo '  3) Rename PS2 games  - Preview and confirm changes'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
@@ -398,7 +403,7 @@ menu() {
     echo '----------------------------------------------------------------'
     echo ' Community console by The Retro Bristolian'
     echo ' Source: https://github.com/theretrobristolian/retrodb'
-    echo ' Launch manager: retrodb (automatically checks for script updates)'
+    echo ' Run: retrodb  |  Script updates checked on launch'
     echo '----------------------------------------------------------------'
     read -rp 'Choose an option: ' choice || break
     case "$choice" in
