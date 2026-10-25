@@ -126,15 +126,16 @@ ensure_web_session_secret() {
     if ! grep -q '^RETRODB_SESSION_SECRET=' "$CONFIG_FILE"; then
         local secret
         secret=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
-        printf 'RETRODB_SESSION_SECRET=%s\\n' "$secret" >> "$CONFIG_FILE"
+        printf 'RETRODB_SESSION_SECRET=%s\n' "$secret" >> "$CONFIG_FILE"
     fi
     chown root:"$APP_GROUP" "$CONFIG_FILE"
     chmod 0640 "$CONFIG_FILE"
-    # Copy bcrypt public password hashes, not private credentials, into a file
-    # readable only by the unprivileged RetroDB process.
+    # Install password hashes, not plaintext credentials, for the retrodb service.
     if [[ -s /etc/retrodb/web-users.htpasswd ]]; then
-        install -o root -g "$APP_GROUP" -m 0640 \\
-          /etc/retrodb/web-users.htpasswd /etc/retrodb/web-users-app.htpasswd
+        install -o root -g "$APP_GROUP" -m 0640 /etc/retrodb/web-users.htpasswd /etc/retrodb/web-users-app.htpasswd
+    else
+        echo '[ERROR] Existing Nginx user password file missing; refusing session deployment.' >&2
+        return 1
     fi
 }
 
