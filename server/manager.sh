@@ -51,7 +51,18 @@ MOUNT=/mnt/retrodb-retronas
 EXPORT="$HOME/retrodb-exports/retroachievements-compatibility.csv"
 [[ $EUID -ne 0 ]] || { echo 'Run as normal user, not root.' >&2; exit 1; }
 state() { systemctl is-active "$1" 2>/dev/null || true; }
-web() { curl -fsS -m 2 -o /dev/null "$1" 2>/dev/null && echo responding || echo unavailable; }
+web() {
+  local status
+  status="$(curl -sS -m 2 -o /dev/null -w '%{http_code}' "$1" 2>/dev/null)" || {
+    echo unavailable
+    return
+  }
+  case "$status" in
+    200) echo responding ;;
+    401|403) echo 'auth required' ;;
+    *) echo "HTTP $status" ;;
+  esac
+}
 retronas_mount_state() {
   if findmnt -rn -M "$MOUNT" -t cifs >/dev/null 2>&1; then
     echo mounted
