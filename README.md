@@ -1,3 +1,9 @@
+## Security and PS2 multiplayer notes (25 October 2026)
+
+**Important security change:** `server/configure-web-access.sh` now requires a browser login (created with an interactive bcrypt `htpasswd` prompt on first run). If you installed the earlier unauthenticated proxy, re-run the configuration to apply this protection. For **HTTPS**, configure a trusted certificate; HTTP Basic authentication sent over ordinary HTTP is **not secure against credential interception**. Keep the service LAN-only while upgrading to HTTPS. The web app remains bound to loopback and runs as the dedicated `retrodb` account; no browser sudo or systemd management endpoints are enabled. Existing Nginx sites are not intentionally removed. Review certificate and firewall permissions before offering access to other household users.
+
+Co-Optimus is a promising independent source for **PS2 cooperative player counts** (couch, online, split-screen and LAN). It is not a source of complete competitive multiplayer limits. Bulk import is deliberately postponed because the site's content was not reliably retrievable and provenance/licensing must be respected. See [PS2 multiplayer and least-privilege design](docs/ps2-coop-and-service-security.md).
+
 ## RetroDB LAN access and online services (preview)
 
 RetroDB still binds only to `127.0.0.1:8000` internally. For optional **LAN-only HTTP** access at `http://retrodb.it.gattaca.house`, first ensure your local DNS record resolves to the Debian VM and that its firewall only permits trusted LAN clients, then run:
@@ -8,7 +14,7 @@ sudo bash server/deploy.sh
 sudo bash server/configure-web-access.sh http
 ```
 
-This installs/enables Nginx as a reverse proxy on port 80. It does not change the RetroDB Uvicorn listener. If Nginx already hosts other sites, **review the generated virtual host and test the existing configuration first**. Do not expose port 80 or 443 to the internet: **the browser UI has no login yet**.
+This installs/enables Nginx as a reverse proxy on port 80. It does not change the RetroDB Uvicorn listener. If Nginx already hosts other sites, **review the generated virtual host and test the existing configuration first**. Do not expose port 80 or 443 to the internet: **the application itself does not yet have a role-aware login (Nginx enforces Basic authentication)**.
 
 For **HTTPS**, obtain a server certificate with DNS name `retrodb.it.gattaca.house`, full trust chain and matching private key (for example from a trusted AD CS issuing CA), then run:
 
