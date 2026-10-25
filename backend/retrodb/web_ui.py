@@ -82,7 +82,7 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:22px}
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
-.detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
+.game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}\n.detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
 @media(max-width:760px){
  .detail{grid-template-columns:1fr}
  main{padding:24px 14px;min-width:0}
@@ -390,16 +390,42 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
             + detail("RetroAchievements ID", item.ra_game_id)
             + detail("RA hash status", item.ra_match_status)
             + detail("Collection path", item.relative_path))
-    return page(name(item, platform.slug if platform else None), f"""<div class="crumb"><a href="/">Consoles</a> /
+    from retrodb.artwork import game_metadata, ra_image, serial_key
+    meta = game_metadata(item.ra_game_id)
+    serial = serial_key(item.filename) or serial_key(item.relative_path)
+    icon_url = ra_image(meta.get("ImageIcon"))
+    box_url = ra_image(meta.get("ImageBoxArt"))
+    psbbn_url = "/art/psbbn/" + serial if serial else None
+    header_icon = (f'<img class="game-ra-icon" src="{escape(icon_url, quote=True)}" '
+                   'alt="RetroAchievements game icon" loading="lazy">' if icon_url else '')
+    artwork = ""
+    if box_url:
+        artwork += (f'<figure><img class="game-cover" src="{escape(box_url, quote=True)}" '
+                    'alt="RetroAchievements box artwork" loading="lazy">'
+                    '<figcaption class="label">Box art · RetroAchievements</figcaption></figure>')
+    if psbbn_url:
+        artwork += (f'<figure><img class="game-cover" src="{escape(psbbn_url, quote=True)}" '
+                    'alt="PSBBN disc-specific artwork" loading="lazy" '
+                    'onerror="this.closest(\'figure\').hidden=true">'
+                    '<figcaption class="label">Release artwork · PSBBN Art Database</figcaption></figure>')
+    if not artwork:
+        artwork = '<p class="muted">Artwork has not been matched to this release yet.</p>'
+    release = (detail("Release date", meta.get("Released"))
+               + detail("Publisher", meta.get("Publisher"))
+               + detail("Developer", meta.get("Developer"))
+               + detail("Genre", meta.get("Genre")))
+    body = f"""<div class="crumb"><a href="/">Consoles</a> /
 <a href="/library/{quote(platform.slug) if platform else ''}">{escape(platform.name if platform else 'Library')}</a> / {label}</div>
-<h1>{label}</h1><p class="muted">Library record and release information</p>
-<div class="detail"><section class="card"><h2>Release and collection</h2>{info}</section>
-<section class="card"><h2>Achievements</h2><p class="muted">Your indexed RetroAchievements data appears here.
-Live profile progress and badge artwork are planned for the next version.</p>
-{detail("RA game title", item.ra_game_title)}</section>
+<div class="game-title-row">{header_icon}<div><h1>{label}</h1><p class="muted">Library record and release information</p></div></div>
+<div class="detail"><section class="card"><h2>Cover artwork</h2><div class="game-art-grid">{artwork}</div></section>
+<section class="card"><h2>Game information</h2>{release}
+<p class="muted">These fields come from RetroAchievements and can describe the game generally, rather than your specific regional release.</p></section>
+<section class="card"><h2>Release and collection</h2>{info}</section>
+<section class="card"><h2>Achievements</h2>{detail("RA game title", item.ra_game_title)}
+{detail("RA game ID", item.ra_game_id)}</section>
 <section class="card"><h2>Online play</h2>{online_details(online_record(item))}</section>
-<section class="card"><h2>Co-op and player counts</h2><p class="muted">Couch co-op, online co-op, split-screen and competitive multiplayer are distinct capabilities. Verified PS2 Co-Optimus records are not yet imported; no player limits are guessed.</p><p><a href="https://www.co-optimus.com/system/6/playstation-2.html" target="_blank" rel="noopener">Browse PS2 co-op listings ↗</a></p></section>\n<section class="card"><h2>Artwork, manual and controls</h2><p class="muted">Metadata, manuals, controller guidance
-and cover-art indexing are planned. No external artwork is downloaded automatically.</p></section></div>""", guest=is_guest(request))
+<section class="card"><h2>Co-op and player counts</h2><p class="muted">Verified player limits and accessories are not yet indexed. Online compatibility does not automatically mean co-op is supported.</p><p><a href="https://www.co-optimus.com/system/6/playstation-2.html" target="_blank" rel="noopener">Browse PS2 co-op listings ↗</a></p></section></div>"""
+    return page(name(item, platform.slug if platform else None), body, guest=is_guest(request))
 
 @router.get("/management", response_class=HTMLResponse)
 def management(db: Session = Depends(get_session)):
