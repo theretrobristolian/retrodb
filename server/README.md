@@ -1,3 +1,30 @@
+## iPhone standalone web app: persistent HTTPS login (October 2026)
+
+RetroDB now provides **application-managed login sessions** instead of requiring the Nginx HTTP Basic authentication dialog on every Home Screen launch. It reuses the existing bcrypt `htpasswd` usernames/passwords and signs a Secure, HttpOnly, SameSite=Lax cookie valid for up to **30 days** on that device. A login form, explicit Sign out button and application-level protection for pages and APIs are included. Login/logout POST requests enforce same-site origin or referer. Web operations remain read-only; application sessions are **not yet role-based accounts**.
+
+**Important two-phase migration** — run on Debian while retaining the current HTTPS reverse proxy:
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash server/deploy.sh
+sudo bash server/enable-web-sessions.sh
+```
+
+The deployment generates a durable signing secret in `/etc/retrodb/retrodb.env` (root + retrodb group only), copies existing bcrypt hashes into `/etc/retrodb/web-users-app.htpasswd` (root + retrodb group only), and restarts only RetroDB. It does **not** disclose passwords. The second command **fails closed** unless the localhost login returns 200 while the unauthenticated homepage redirects (303) and protected health API rejects access (401); only then does it remove Nginx's Basic authentication directives from the **HTTPS** vhost and reload Nginx. Nginx continues terminating trusted TLS. If migration fails, leave the original Nginx authentication enabled and inspect `journalctl -u retrodb -n 80 --no-pager`.
+
+Visit `https://retrodb.it.gattaca.house/` in iPhone Safari and sign in **once** via the RetroDB-branded form. Remove the old home-screen shortcut and install a new one with **Open as Web App enabled**. Home-screen apps have independent cookie storage, so you may need to log in **once more inside the new app**, then it should persist across launches for up to 30 days unless the session is cleared, expires, the signing secret changes or the account is removed. Do not reuse the old shortcut to test icon changes. The Apple touch icon and manifest are now public application assets once the Nginx Basic-auth requirement is removed, fixing the unauthenticated icon-fetch problem.
+
+**Accounts:** Password file remains managed with `sudo htpasswd -B /etc/retrodb/web-users.htpasswd USERNAME`. After adding, changing or removing accounts, sync the updated bcrypt hashes securely for the unprivileged application:
+
+```bash
+sudo install -o root -g retrodb -m 0640 /etc/retrodb/web-users.htpasswd /etc/retrodb/web-users-app.htpasswd
+```
+
+For emergency rollback of Nginx Basic authentication (without changing the certificate), re-run the existing `sudo bash server/configure-web-access.sh https /etc/retrodb/certs/fullchain.pem /etc/retrodb/certs/privkey.pem` script; this deliberately reinstates the original proxy login. Avoid exposing port 8000 or port 80 externally. Keep 443 limited to trusted LAN/VPN clients.
+
+Known limitations: session renewal currently requires signing in at expiry; changing a password does not automatically revoke a previously issued session until its 30-day expiry, though removing an account does. There is not yet per-device session revocation, account lockout, per-user permissions, or MFA; retain VLAN/firewall protections and do not enable privileged browser actions until these controls are implemented.
+
 ## iPhone home-screen / favicon branding
 
 Borrowing the *web-app metadata pattern* from [Beoremote-Pro](https://github.com/theretrobristolian/Beoremote-Pro), RetroDB now supplies its own branded favicon (`/favicon.svg`), Apple touch icon (`/apple-touch-icon.png`), Android/PWA icons (`/icons/icon-192.png`, `/icons/icon-512.png`) and manifest (`/manifest.webmanifest`). The browser title and installed home-screen name are **RetroDB**. All icons are generated locally, without external assets or extra dependencies. This is a home-screen-capable website, not an offline-capable app; browsing still requires access to your trusted network and HTTPS server.
