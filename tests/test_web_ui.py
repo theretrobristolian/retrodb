@@ -41,3 +41,17 @@ def test_online_details_never_claims_current_server_availability():
     assert "GameSpy" in shown
     assert "UNVERIFIED" in shown
     assert "DNAS setup" in shown
+
+def test_web_app_branding_assets():
+    client = TestClient(app)
+    favicon = client.get("/favicon.svg")
+    assert favicon.status_code == 200
+    assert "<svg" in favicon.text
+    for route in ("/apple-touch-icon.png", "/icons/icon-192.png", "/icons/icon-512.png"):
+        image = client.get(route)
+        assert image.status_code == 200
+        assert image.headers["content-type"] == "image/png"
+        assert image.content.startswith(bytes.fromhex("89504e470d0a1a0a"))
+    manifest = client.get("/manifest.webmanifest")
+    assert manifest.json()["short_name"] == "RetroDB"
+    assert manifest.json()["display"] == "standalone"
