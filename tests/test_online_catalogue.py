@@ -20,7 +20,7 @@ def test_serial_variants_and_no_guessing():
 def test_csv_import_and_region_specific_match():
     with TemporaryDirectory() as d:
         source, output = Path(d)/"community.csv", Path(d)/"online.json"
-        header = ["Game Tittle"] + [""] * 28
+        header = ["Game Tittle"] + [""] * 7 + ["Game ID"] + [""] * 20
         record = ["Area 51 [PAL]", "", "YES", "17/09/2026", "Cristian", "GameSpy",
                   "First Person Shooters", "PAL (EU)", "SLES_525.70", "YES",
                   "YES", "NO", "NO", "16", "NO"] + [""]*14
@@ -37,3 +37,20 @@ def test_csv_import_and_region_specific_match():
         unknown = m.report_row({"platform":"Sony PlayStation 2", "local_serial":"SLUS-20595",
                                 "path":"roms/other.iso"},catalog)
         assert unknown[4] == "UNKNOWN"
+
+def test_shifted_csv_and_zero_records_rejected():
+    import pytest
+    with TemporaryDirectory() as d:
+        file, target = Path(d)/"sheet.csv", Path(d)/"online.json"
+        header = ["", "Game Tittle"] + [""] * 7 + ["Game ID"] + [""] * 20
+        row = ["", "Area 51 [PAL]", "", "YES", "2026", "custom DNS", "GameSpy",
+               "FPS", "PAL", "SLES_525.70"] + [""] * 20
+        with file.open("w", newline="", encoding="utf-8") as fh:
+            w=csv.writer(fh)
+            w.writerows([[], [], [], header, row])
+        payload = m.import_ps2(file,target)
+        assert payload["records"][0]["disc_id"] == "SLES-52570"
+        file.write_text("Game Tittle,,,,,,,,Game ID\\nUnknown game,no disc id\\n")
+        with pytest.raises(ValueError,match="Imported 0 disc IDs"):
+            m.import_ps2(file,target)
+        assert len(m.load(target)) == 1
