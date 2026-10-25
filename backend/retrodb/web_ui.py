@@ -27,7 +27,7 @@ CSS = """
 header{position:sticky;top:0;z-index:20;border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
 header .bar{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
 .brand{font-size:24px;font-weight:800;letter-spacing:-1px;color:#f6f8ff}
-nav{display:flex;gap:18px;color:#afc0da;font-size:14px}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
+nav{display:flex;flex-wrap:wrap;gap:12px 18px;min-width:0;max-width:100%;color:#afc0da;font-size:14px}nav a,nav button{overflow-wrap:normal}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
 h1{font-size:34px;letter-spacing:-1.3px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 16px}
 p{line-height:1.6}.muted{color:#9daeca}.eyebrow{color:#7caeff;text-transform:uppercase;font-size:12px;font-weight:700;letter-spacing:1.7px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
@@ -83,7 +83,21 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
 .detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
-@media(max-width:760px){.detail{grid-template-columns:1fr}main{padding:24px 14px}th,td{padding:9px 6px}header{padding:16px}}
+@media(max-width:760px){
+ .detail{grid-template-columns:1fr}
+ main{padding:24px 14px;min-width:0}
+ th,td{padding:9px 6px}
+ header{padding:12px 14px}
+ header .bar{display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0}
+ header .brand{display:block;align-self:flex-start}
+ header nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%;font-size:13px}
+ header nav a,header nav form{min-width:0;width:100%;margin:0}
+ header nav a,header nav form button{display:flex;justify-content:center;align-items:center;text-align:center;min-height:42px;width:100%;padding:8px 6px;border:1px solid #293952!important;border-radius:9px;background:#19263e!important;color:#c4d3ee!important;line-height:1.3;white-space:normal;overflow-wrap:anywhere;font:inherit}
+ header nav a:active,header nav form button:active{background:#2b4268!important}
+}
+@media(min-width:520px) and (max-width:760px){
+ header nav{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
 """
 
 def is_guest(request: Request) -> bool:
