@@ -74,7 +74,7 @@ xr_draw_footer() {
   printf '%s\n' '--------------------------------------------------------------------'
   printf ' Community installer by The Retro Bristolian\n'
   printf ' Source: %s\n' "$XR_REPO_URL"
-  printf ' Update scripts: cd ~/retrodb && git pull --ff-only origin main\n'
+  printf ' Launch manager: xerabora (automatically checks for script updates)\n'
   printf '%s\n' '--------------------------------------------------------------------'
 }
 xr_pause() { local unused; read -rp 'Press Enter to return to the menu...' unused || true; }
