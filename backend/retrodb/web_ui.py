@@ -84,12 +84,12 @@ def homepage(request: Request, db: Session = Depends(get_session)):
         cards.append(f"""<a class="card" href="/library/{quote(platform.slug)}"><div class="eyebrow">{escape(platform.manufacturer or 'Console')}</div>
 <h2>{escape(platform.name)}</h2><div class="metric">{count:,}</div><span class="muted">indexed files · Explore →</span></a>""")
     empty = '<p class="muted">No consoles are configured in PostgreSQL yet. Run RetroDB deployment and library inventory scan first.</p>' if not cards else ""
+    management_card = "" if is_guest(request) else '<a class="card" href="/management"><h2>Library management →</h2><p class="muted">Status, inventory and safe maintenance guidance</p></a>'
     return page("Consoles", f"""<div class="eyebrow">Your personal game collection</div><h1>Choose a console</h1>
 <p class="muted">Browse your own indexed collection, explore releases, and check collection health.</p>
 <div class="grid">{''.join(cards)}</div>{empty}
 <h2>Library overview</h2><div class="grid"><div class="card"><div class="label">Indexed game files</div>
-<div class="metric">{total:,}</div></div>{"" if is_guest(request) else """<a class="card" href="/management"><h2>Library management →</h2>
-<p class="muted">Status, inventory and safe maintenance guidance</p></a>"""}</div>""", guest=is_guest(request))
+<div class="metric">{total:,}</div></div>{management_card}</div>""", guest=is_guest(request))
 
 def browse(request: Request, db: Session, slug: str | None, q: str, letter: str, page_number: int):
     platform = None
@@ -172,7 +172,7 @@ def online_details(record):
     return content + '<p><a href="https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/edit?gid=0" target="_blank" rel="noopener">Community compatibility source ↗</a></p>'
 
 @router.get("/online-services", response_class=HTMLResponse)
-def online_services():
+def online_services(request: Request):
     return page("Online services", """<div class="eyebrow">Networking and RetroAchievements</div>
 <h1>Online services</h1><p class="muted">Quick launch links for your local services. Service health and secure profile switching are planned; links are not live health checks.</p>
 <div class="grid"><div class="card"><h2>xeRAbora</h2><p class="muted">Achievement relay and local web dashboard.</p>
