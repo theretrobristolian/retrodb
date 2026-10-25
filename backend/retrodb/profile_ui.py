@@ -12,7 +12,7 @@ import socket
 from functools import lru_cache
 from html import escape
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import APIRouter, Request
@@ -100,7 +100,10 @@ async def activate_xerabora(request: Request):
         outcome = switch_xerabora(user)
     except (OSError, ValueError, RuntimeError, socket.timeout):
         return page("xeRAbora", '<h1>Switch not available</h1><p>The restricted switch helper is not running or the approved player could not be activated.</p><p>Check <code>journalctl -u retrodb-xerabora-switch.service</code> on the server.</p><a class="btn" href="/profile">Back to profile</a>')
-    return page("xeRAbora", '<h1>xeRAbora account selected</h1><p>'+escape(outcome)+'</p><p>Restart your PS2 and relaunch OPL-RA to reconnect as the new player. Select the correct MemCard Pro 2 card image.</p><a class="btn" href="/profile">Back to profile</a>')
+    # Redirect-after-POST prevents reload/back from re-submitting a service restart.
+    state = "already" if outcome.startswith("Already active") else "switched"
+    return RedirectResponse("/profile?" + urlencode({"xerabora": state}), status_code=303,
+                            headers={"Cache-Control": "no-store"})
 
 @router.get("/profile", response_class=HTMLResponse)
 def my_profile(request: Request):
@@ -110,6 +113,13 @@ def my_profile(request: Request):
         return HTMLResponse("Authentication required", status_code=403)
     # Local import prevents circularity with web_ui's layout helper.
     from retrodb.web_ui import page
+    state = request.query_params.get("xerabora", "")
+    status_html = (
+        '<div class="card" role="status" style="border-color:#638f65;margin-bottom:18px"><h2>✓ Profile switched</h2><p>xeRAbora has restarted with your selected player. Restart the PS2 / relaunch OPL-RA and check your MemCard Pro 2 card image.</p></div>'
+        if state == "switched" else
+        '<div class="card" role="status" style="margin-bottom:18px"><h2>✓ Your profile is already selected</h2><p>No service restart was necessary.</p></div>'
+        if state == "already" else ""
+    )
     ra_name = linked_user(user)
     if not ra_name:
         body = (f'<h1>My profile</h1><p>Signed in to RetroDB as <strong>{escape(user)}</strong>.</p>'
@@ -117,7 +127,7 @@ def my_profile(request: Request):
                 '<p class="muted">Your RetroAchievements account has not been linked yet. '
                 'An administrator can associate your local RetroDB account with your RA username. '
                 'No RA password is needed.</p></div>')
-        return page("My profile", body)
+        return page("My profile", status_html + body)
     key = os.environ.get("RETRODB_RA_API_KEY", "").strip()
     data = {}
     warning = ""
@@ -144,7 +154,7 @@ def my_profile(request: Request):
             return f"{int(value):,}"
         except (TypeError, ValueError):
             return "—"
-    body = (f'<div class="crumb"><a href="/">Consoles</a> / My profile</div><h1>My profile</h1>'
+    body = (status_html + f'<div class="crumb"><a href="/">Consoles</a> / My profile</div><h1>My profile</h1>'
             f'<div class="card" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">'
             f'{picture}<div><div class="eyebrow">RetroAchievements</div><h2>{escape(display)}</h2>'
             f'<p class="muted">{escape(motto[:250])}</p>'
@@ -156,12 +166,32 @@ def my_profile(request: Request):
             f'<div class="metric">{number(softcore)}</div></div></div>'
             f'{warning}<div class="card" style="margin-top:18px"><h2>xeRAbora</h2>'
             '<p>The xeRAbora server uses a shared active PS2 player. Switching can interrupt an active game.</p>'
-            + (f'<p>Approved xeRAbora profile: <strong>{escape(linked_xerabora(user) or "")}</strong></p>'
-               f'<form method="post" action="/profile/switch">'
+            + (f'<div class="player-switch"><div><div class="eyebrow">Linked player</div>'
+               f'<h3 style="margin:6px 0">{escape(linked_xerabora(user) or "")}</h3>'
+               '<p class="muted">Select this player for your connected PS2.</p></div>'
+               '<button class="btn" type="button" id="open-player-switch">Use this player</button></div>'
+               '<dialog id="player-switch-dialog" class="switch-dialog" aria-labelledby="switch-dialog-title">'
+               '<form method="post" action="/profile/switch" id="player-switch-form">'
                f'<input type="hidden" name="csrf_token" value="{csrf_token()}">'
-               '<label><input type="checkbox" name="confirm" value="SWITCH" required> '
-               'I understand this restarts xeRAbora and may disconnect the active PS2</label>'
-               '<button class="btn" type="submit">Switch xeRAbora to my profile</button></form>'
+               '<input type="hidden" name="confirm" value="SWITCH">'
+               '<div class="eyebrow">Confirm player change</div>'
+               '<h2 id="switch-dialog-title">Switch PS2 player?</h2>'
+               f'<p>Activate <strong>{escape(linked_xerabora(user) or "")}</strong> on the xeRAbora server.</p>'
+               '<p class="muted">This may disconnect an active game. Afterwards restart the PS2 or relaunch OPL-RA, and select the right memory card.</p>'
+               '<div class="switch-actions"><button type="button" class="btn" id="cancel-player-switch" style="background:transparent">Cancel</button>'
+               '<button class="btn" type="submit" id="confirm-player-switch">Switch player</button></div>'
+               '</form></dialog>'
+               '<script>(function(){'
+               'const dialog=document.getElementById("player-switch-dialog");'
+               'const open=document.getElementById("open-player-switch");'
+               'const cancel=document.getElementById("cancel-player-switch");'
+               'const form=document.getElementById("player-switch-form");'
+               'const submit=document.getElementById("confirm-player-switch");'
+               'if(!dialog||!open||!form)return;'
+               'open.addEventListener("click",()=>{if(dialog.showModal)dialog.showModal();else dialog.setAttribute("open","");});'
+               'cancel.addEventListener("click",()=>{if(dialog.close)dialog.close();else dialog.removeAttribute("open");});'
+               'form.addEventListener("submit",()=>{submit.disabled=true;submit.textContent="Switching player…";open.disabled=true;});'
+               '})();</script>'
                if linked_xerabora(user) else
                '<p class="muted">An administrator must approve a xeRAbora player mapping before web switching is available.</p>') + '</div>')
     return page("My profile", body)
