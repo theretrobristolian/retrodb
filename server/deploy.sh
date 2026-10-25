@@ -123,6 +123,8 @@ wait_for_health() {
 }
 
 ensure_web_session_secret() {
+    # Repair a literal backslash-n appended by the previous broken version.
+    sed -i '/^RETRODB_SESSION_SECRET=/s/\\n$//' "$CONFIG_FILE"
     if ! grep -q '^RETRODB_SESSION_SECRET=' "$CONFIG_FILE"; then
         local secret
         secret=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
