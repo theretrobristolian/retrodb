@@ -11,6 +11,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
   echo '[ERROR] No xeRAbora systemd service found.' >&2
   exit 1
 }
+install -d -o root -g root -m 0755 /etc/systemd/system/xerabora.service.d
 install -o root -g root -m 0644 "$ROOT/server/retrodb-xerabora-switch.socket" /etc/systemd/system/retrodb-xerabora-switch.socket
 install -o root -g root -m 0644 "$ROOT/server/retrodb-xerabora-switch.service" /etc/systemd/system/retrodb-xerabora-switch.service
 systemctl daemon-reload
