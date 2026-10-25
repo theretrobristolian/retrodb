@@ -177,6 +177,8 @@ async def enforce_session(request: Request, call_next):
     if path in PUBLIC or path.startswith("/icons/"):
         return await call_next(request)
     user = user_from_cookie(request.cookies.get(COOKIE, ""))
+    if user == "__retrodb_guest__" and path == "/logout" and request.method == "POST":
+        return await call_next(request)
     if user == "__retrodb_guest__":
         # Guest access is read-only and limited to catalogue pages.
         # No management, services, APIs, user tools or xeRAbora actions.
