@@ -7,6 +7,7 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 from xml.sax.saxutils import escape
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from online_catalogue import ONLINE_COLUMNS, load as load_online, report_row as online_report_row
 
 COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning']
