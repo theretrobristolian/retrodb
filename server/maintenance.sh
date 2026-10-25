@@ -52,7 +52,16 @@ update_retrodb() {
   }
   sudo bash "$ROOT/server/deploy.sh" || return 1
   systemctl is-active --quiet retrodb.service || return 1
-  curl --fail --silent --show-error --max-time 10 http://127.0.0.1:8000/health || return 1
+  # Session-protected endpoints intentionally return 401 without credentials.
+  # Validate that the login page is live and the private health API fails closed.
+  local login_status health_status
+  login_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 10 http://127.0.0.1:8000/login)" || return 1
+  health_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 10 http://127.0.0.1:8000/health)" || return 1
+  if [[ "$login_status" != 200 || "$health_status" != 401 ]]; then
+    printf '[ERROR] Unexpected API check: login=%s (expected 200), unauthenticated health=%s (expected 401).\\n' "$login_status" "$health_status" >&2
+    return 1
+  fi
+  echo '[OK] Local login responds (200); protected health endpoint correctly requires authentication (401).'
   echo
   echo '[OK] RetroDB deployed, service healthy, database migrations applied.'
   echo '[INFO] Restart the menu to load any new menu layout.'
