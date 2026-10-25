@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import socket
 from functools import lru_cache
 from html import escape
 from pathlib import Path
@@ -15,7 +16,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
 from retrodb.session_auth import COOKIE, user_from_cookie, csrf_token
 
@@ -56,6 +57,50 @@ def avatar_url(pic: object) -> str | None:
     if not re.fullmatch(r"/UserPic/[A-Za-z0-9_.-]{1,128}", pic):
         return None
     return "https://retroachievements.org" + pic
+
+def linked_xerabora(local_user: str) -> str | None:
+    try:
+        data = json.loads(LINKS.read_text(encoding="utf-8"))
+        row = data.get(local_user) if isinstance(data, dict) else None
+        target = row.get("xerabora_profile") if isinstance(row, dict) else None
+        return target if isinstance(target, str) and IDENTIFIER.fullmatch(target) else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+def switch_xerabora(account: str) -> str:
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+        conn.settimeout(45)
+        conn.connect("/run/retrodb-xerabora-switch.sock")
+        conn.sendall(json.dumps({"account": account}).encode("utf-8"))
+        result = json.loads(conn.recv(4096).decode("utf-8"))
+    if not isinstance(result, dict) or not result.get("ok"):
+        raise RuntimeError("xeRAbora profile switch failed. Check helper logs.")
+    return str(result.get("message", "Profile activated."))
+
+@router.post("/profile/switch", response_class=HTMLResponse)
+async def activate_xerabora(request: Request):
+    user = user_from_cookie(request.cookies.get(COOKIE, ""))
+    if not user or user == "__retrodb_guest__":
+        return HTMLResponse("Authentication required", status_code=403)
+    if not linked_xerabora(user):
+        return HTMLResponse("No approved xeRAbora profile is linked to this account.", status_code=403)
+    if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
+        return HTMLResponse("Invalid request", status_code=415)
+    data = await request.body()
+    if len(data) > 1024:
+        return HTMLResponse("Invalid request", status_code=413)
+    from urllib.parse import parse_qs
+    from retrodb.session_auth import valid_csrf
+    values = parse_qs(data.decode("utf-8", "replace"), keep_blank_values=True)
+    if not valid_csrf(values.get("csrf_token", [""])[0]) or values.get("confirm", [""])[0] != "SWITCH":
+        return HTMLResponse("Switch confirmation expired or not provided. Reload your profile and try again.",
+                            status_code=403, headers={"Cache-Control": "no-store"})
+    from retrodb.web_ui import page
+    try:
+        outcome = switch_xerabora(user)
+    except (OSError, ValueError, RuntimeError, socket.timeout):
+        return page("xeRAbora", '<h1>Switch not available</h1><p>The restricted switch helper is not running or the approved player could not be activated.</p><p>Check <code>journalctl -u retrodb-xerabora-switch.service</code> on the server.</p><a class="btn" href="/profile">Back to profile</a>')
+    return page("xeRAbora", '<h1>xeRAbora account selected</h1><p>'+escape(outcome)+'</p><p>Restart your PS2 and relaunch OPL-RA to reconnect as the new player. Select the correct MemCard Pro 2 card image.</p><a class="btn" href="/profile">Back to profile</a>')
 
 @router.get("/profile", response_class=HTMLResponse)
 def my_profile(request: Request):
@@ -110,7 +155,13 @@ def my_profile(request: Request):
             f'<div class="card"><div class="label">Softcore points</div>'
             f'<div class="metric">{number(softcore)}</div></div></div>'
             f'{warning}<div class="card" style="margin-top:18px"><h2>xeRAbora</h2>'
-            '<p>The xeRAbora server uses a shared active PS2 player. '
-            'Profile switching requires an approved service-level integration and is currently '
-            'managed through the xeRAbora terminal menu to avoid interrupting another player.</p></div>')
+            '<p>The xeRAbora server uses a shared active PS2 player. Switching can interrupt an active game.</p>'
+            + (f'<p>Approved xeRAbora profile: <strong>{escape(linked_xerabora(user) or "")}</strong></p>'
+               f'<form method="post" action="/profile/switch">'
+               f'<input type="hidden" name="csrf_token" value="{csrf_token()}">'
+               '<label><input type="checkbox" name="confirm" value="SWITCH" required> '
+               'I understand this restarts xeRAbora and may disconnect the active PS2</label>'
+               '<button class="btn" type="submit">Switch xeRAbora to my profile</button></form>'
+               if linked_xerabora(user) else
+               '<p class="muted">An administrator must approve a xeRAbora player mapping before web switching is available.</p>') + '</div>')
     return page("My profile", body)
