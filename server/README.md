@@ -1,3 +1,11 @@
+## Safari guest sign-out correction (25 October 2026)
+
+**Fixed in source:** The guest **Leave guest view** / signed-in **Sign out** form formerly submitted `POST /logout` without a CSRF form token, while the logout handler insisted on matching `Origin`/ `Referer` to the HTTPS hostname. Safari, especially installed Home Screen web apps, can send `Origin: null` or omit those headers. This could yield a bare 403 response presented as a download instead of logging out.
+
+Catalogue pages now include an **expiring, HMAC-signed logout CSRF field**. `POST /logout` verifies this token (including for guest sessions), clears the signed cookie and redirects to `/login`. Invalid/stale tokens produce a human-readable HTML error rather than an empty response. Regression tests cover Safari's null-origin guest sign-out and rejecting forged tokens. **This must still be tested on a real iPhone.** It does not change the separate, still-unverified named-user login flow.
+
+Deploy: `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. Then close/reopen the iPhone home-screen app and test **View as guest → Leave guest view**. If the form expired, reload the catalogue first.
+
 ## Terminal menu update health-check fix (25 October 2026)
 
 The application-managed web sessions deliberately protect `GET /health`: an unauthenticated request returns HTTP **401**, not 200. Earlier `retrodb → More options → 6) Update RetroDB` ran `curl --fail http://127.0.0.1:8000/health` **after** a successful deployment, producing a misleading `curl: (22) ... 401` / `[ERROR] Operation failed`. This was a post-deployment validation bug, not evidence that migrations, service restart or the actual deployment failed.
