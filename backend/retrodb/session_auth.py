@@ -76,14 +76,14 @@ main{width:min(90%,390px);padding:30px;background:#151f32;border:1px solid #3343
 h1{margin:0 0 10px}p{color:#b6c5da}input,button{box-sizing:border-box;width:100%;margin:8px 0 14px;padding:14px;border-radius:10px;font:inherit}
 input{background:#0b1020;border:1px solid #546780;color:white}button{background:#4f81d9;color:white;border:0;cursor:pointer}</style>
 </head><body><main><h1>◈ RetroDB</h1><p>Sign in to your game library. Stay signed in on this device for up to 30 days.</p>
-%s<form action="/login" method="post"><label>Username<input name="username" required autocomplete="username"></label>
+__ERROR__<form action="/login" method="post"><label>Username<input name="username" required autocomplete="username"></label>
 <label>Password<input type="password" name="password" required autocomplete="current-password"></label>
-<input type="hidden" name="next" value="%s"><button>Sign in</button></form>
+<input type="hidden" name="next" value="__NEXT__"><button>Sign in</button></form>
 <p>Only use on your trusted home network over HTTPS.</p></main></body></html>"""
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(next: str = "/"):
-    return HTMLResponse(LOGIN_HTML % ("", html.escape(safe_next(next), quote=True)), headers={"Cache-Control":"no-store"})
+    return HTMLResponse(LOGIN_HTML.replace("__ERROR__", "").replace("__NEXT__", html.escape(safe_next(next), quote=True)), headers={"Cache-Control":"no-store"})
 
 def safe_next(value):
     if not value.startswith("/") or value.startswith("//") or "\\" in value or any(ord(c)<32 for c in value):
@@ -112,7 +112,7 @@ async def login_action(request: Request):
     password = values.get("password", [""])[0]
     target = safe_next(values.get("next", ["/"])[0])
     if not verify_password(username, password):
-        return HTMLResponse(LOGIN_HTML % ('<p role="alert" style="color:#ff9b9b">Incorrect username or password.</p>', html.escape(target, quote=True)), status_code=401, headers={"Cache-Control":"no-store"})
+        return HTMLResponse(LOGIN_HTML.replace("__ERROR__", '<p role="alert" style="color:#ff9b9b">Incorrect username or password.</p>').replace("__NEXT__", html.escape(target, quote=True)), status_code=401, headers={"Cache-Control":"no-store"})
     response = RedirectResponse(target, status_code=303)
     response.set_cookie(COOKIE, issue(username), httponly=True, secure=True, samesite="lax",
                         max_age=LIFETIME, path="/")
