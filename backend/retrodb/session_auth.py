@@ -155,7 +155,7 @@ async def enter_guest(request: Request):
         return Response(status_code=413)
     from urllib.parse import parse_qs
     values = parse_qs(data.decode("utf-8", "replace"), keep_blank_values=True)
-    if not valid_origin(request) or not valid_csrf(values.get("csrf_token", [""])[0]):
+    if not valid_csrf(values.get("csrf_token", [""])[0]):
         return HTMLResponse("Invalid guest form. Reload the login page.", status_code=403)
     response = RedirectResponse("/", status_code=303)
     response.set_cookie(COOKIE, issue("__retrodb_guest__"), httponly=True, secure=True,
