@@ -36,29 +36,32 @@ def flag(value):
 def build_record(row):
     # Community sheet columns A:AC (header on row 4); source indices fixed and documented.
     def get(i): return row[i].strip() if i < len(row) else ""
-    disc = serial(get(8))
-    if not disc: return None
+    # Community CSV exports may carry an extra leading/blank column.\n    # Find the release ID anywhere in the row, then resolve the surrounding schema.\n    ids = [(i, serial(v)) for i, v in enumerate(row) if serial(v)]\n    if not ids: return None\n    # Game ID is column I in the published sheet, possibly offset in CSV export.\n    i, disc = min(ids, key=lambda item: abs(item[0] - 8))\n    offset = i - 8\n    def at(i): return get(i + offset) if i + offset >= 0 else ""
     return {
-        "platform": "playstation-2", "disc_id": disc, "title": get(0),
-        "region": get(7), "historical_online": "YES", # sheet is an online-games list
-        "original_host": get(5), "dns_compatible": flag(get(2)),
-        "dns_address_or_provider": get(4), "network_status": get(2),
-        "xlink_kai": flag(get(14)), "lan": "UNKNOWN", # XLink != definitive LAN evidence
-        "max_players": get(13), "co_op": flag(get(11)),
-        "requirements": get(18), "community_notes": get(28),
-        "console_compatibility": get(17), "last_source_update": get(3),
+        "platform": "playstation-2", "disc_id": disc, "title": at(0),
+        "region": at(7), "historical_online": "YES", # sheet is an online-games list
+        "original_host": at(5), "dns_compatible": flag(at(2)),
+        "dns_address_or_provider": at(4), "network_status": at(2),
+        "xlink_kai": flag(at(14)), "lan": "UNKNOWN", # XLink != definitive LAN evidence
+        "max_players": at(13), "co_op": flag(at(11)),
+        "requirements": at(18), "community_notes": at(28),
+        "console_compatibility": at(17), "last_source_update": at(3),
         "source_url": SOURCE_URL, "source_type": "community spreadsheet",
-        "service_methods": [{"kind":"custom_dns","value":get(4),"status":flag(get(2))}]
-            if get(4) else [],
+        "service_methods": [{"kind":"custom_dns","value":at(4),"status":flag(at(2))}]
+            if at(4) else [],
     }
 
 def import_ps2(source, destination):
     with open(source, newline="", encoding="utf-8-sig") as fh:
         rows = list(csv.reader(fh))
-    # Fail closed when given an unrelated or altered sheet.
-    if len(rows) < 5 or "Game" not in rows[3][0]:
-        raise ValueError("Expected PS2 online community CSV, with game header on row 4")
-    items = [v for row in rows[4:] if (v := build_record(row))]
+    # Detect the header instead of assuming a stable physical row position.
+    headers = [i for i, row in enumerate(rows[:25]) if any("game tittle" in cell.casefold() or "game title" in cell.casefold() for cell in row) and any("game id" in cell.casefold() for cell in row)]
+    if not headers:
+        raise ValueError("Unrecognised CSV: expected Game Tittle and Game ID column headings")
+    items = [v for row in rows[headers[0]+1:] if (v := build_record(row))]
+    if not items:
+        examples = [row[:12] for row in rows[headers[0]+1:headers[0]+4]]
+        raise ValueError(f"Imported 0 disc IDs; refusing to replace catalogue. First data rows: {examples!r}")
     payload = {"schema_version":1, "source":SOURCE_URL,
                "imported_at":datetime.now(timezone.utc).isoformat(),
                "records":items}
