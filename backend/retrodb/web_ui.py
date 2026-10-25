@@ -127,7 +127,14 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     stmt = select(LibraryItem).where(LibraryItem.is_missing.is_(False))
     if platform:
         stmt = stmt.where(LibraryItem.platform_id == platform.id)
-    display_title = func.coalesce(func.nullif(LibraryItem.ra_game_title, ""), LibraryItem.filename)
+    # Sort on the same basic cleanup used to display filename fallbacks.
+    # This avoids sorting missing-RA titles under their disc serial rather than title.
+    filename_stem = func.regexp_replace(LibraryItem.filename, r"\\.[^.]+$", "", "g")
+    no_serial = func.regexp_replace(filename_stem,
+                                    r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*[0-9]{3}[. -]*[0-9]{2}",
+                                    "", "gi")
+    fallback_title = func.btrim(func.replace(no_serial, "_", " "), " .-_")
+    display_title = func.coalesce(func.nullif(LibraryItem.ra_game_title, ""), fallback_title)
     if q:
         stmt = stmt.where(or_(LibraryItem.ra_game_title.ilike(f"%{q}%"), LibraryItem.filename.ilike(f"%{q}%")))
     if letter:
