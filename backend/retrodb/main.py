@@ -9,6 +9,7 @@ from retrodb.database import check_database, get_session
 from retrodb.models import Platform
 from retrodb.schemas import PlatformRead
 from retrodb.web_ui import router as web_router
+from retrodb.branding import router as branding_router
 
 app = FastAPI(
     title="RetroDB",
@@ -51,3 +52,4 @@ def list_platforms(session: Session = Depends(get_session)) -> list[Platform]:
 
 # Read-only v1 browser application; shares the existing database session.
 app.include_router(web_router)
+app.include_router(branding_router)
