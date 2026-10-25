@@ -1,3 +1,9 @@
+### iPhone Home Screen black screen / Nginx Basic auth
+
+If Safari works but the installed Home Screen app shows a blank screen, investigate the separate standalone web-app context and the Nginx HTTP Basic authentication challenge before altering TLS or certificates. As an immediate workaround on iOS 26, remove the existing Home Screen icon, revisit the HTTPS site in Safari, choose **Share → Add to Home Screen**, and turn **Open as Web App** **off**. This creates a Safari-launching Home Screen shortcut with the RetroDB name/icon, without weakening server authentication.
+
+A fully standalone Home Screen app should use application-managed authenticated sessions (secure cookies, CSRF protection, explicit logout), not rely solely on an HTTP Basic-auth browser challenge. Do not add an unauthenticated Nginx exception for `/` or for app administration to work around this. This behaviour is not yet verified on all iOS versions.
+
 ## iPhone home-screen / favicon branding
 
 Borrowing the *web-app metadata pattern* from [Beoremote-Pro](https://github.com/theretrobristolian/Beoremote-Pro), RetroDB now supplies its own branded favicon (`/favicon.svg`), Apple touch icon (`/apple-touch-icon.png`), Android/PWA icons (`/icons/icon-192.png`, `/icons/icon-512.png`) and manifest (`/manifest.webmanifest`). The browser title and installed home-screen name are **RetroDB**. All icons are generated locally, without external assets or extra dependencies. This is a home-screen-capable website, not an offline-capable app; browsing still requires access to your trusted network and HTTPS server.
