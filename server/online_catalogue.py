@@ -36,7 +36,14 @@ def flag(value):
 def build_record(row):
     # Community sheet columns A:AC (header on row 4); source indices fixed and documented.
     def get(i): return row[i].strip() if i < len(row) else ""
-    # Community CSV exports may carry an extra leading/blank column.\n    # Find the release ID anywhere in the row, then resolve the surrounding schema.\n    ids = [(i, serial(v)) for i, v in enumerate(row) if serial(v)]\n    if not ids: return None\n    # Game ID is column I in the published sheet, possibly offset in CSV export.\n    i, disc = min(ids, key=lambda item: abs(item[0] - 8))\n    offset = i - 8\n    def at(i): return get(i + offset) if i + offset >= 0 else ""
+    # Community CSV exports may carry an extra leading/blank column.
+    # Find the release ID anywhere in the row, then resolve the surrounding schema.
+    ids = [(i, serial(v)) for i, v in enumerate(row) if serial(v)]
+    if not ids: return None
+    # Game ID is column I in the published sheet, possibly offset in CSV export.
+    i, disc = min(ids, key=lambda item: abs(item[0] - 8))
+    offset = i - 8
+    def at(i): return get(i + offset) if i + offset >= 0 else ""
     return {
         "platform": "playstation-2", "disc_id": disc, "title": at(0),
         "region": at(7), "historical_online": "YES", # sheet is an online-games list
