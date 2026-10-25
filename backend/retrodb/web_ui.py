@@ -206,14 +206,17 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 @router.get("/library", response_class=HTMLResponse)
 def all_games(request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
               letter: str = Query("", pattern="^[A-Za-z]?$"),
-              page_number: int = Query(1, alias="page", ge=1, le=10000)):
-    return browse(request, db, None, q, letter.upper(), page_number)
+              page_number: int = Query(1, alias="page", ge=1, le=10000),
+              ra: str = Query("all", pattern="^(all|yes|other)$"),
+              sort: str = Query("title", pattern="^(title|disc|id|ra)$"),
+              order: str = Query("asc", pattern="^(asc|desc)$")):
+    return browse(request, db, None, q, letter.upper(), page_number, ra, sort, order)
 
 @router.get("/library/{slug}", response_class=HTMLResponse)
 def console_games(slug: str, request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
                   letter: str = Query("", pattern="^[A-Za-z]?$"),
                   page_number: int = Query(1, alias="page", ge=1, le=10000)):
-    return browse(request, db, slug, q, letter.upper(), page_number)
+    return browse(request, db, slug, q, letter.upper(), page_number, ra, sort, order)
 
 PS2_SERIAL = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 DATA_DIR = Path("/var/cache/retrodb/web")
