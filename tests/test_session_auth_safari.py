@@ -26,3 +26,13 @@ def test_login_rejects_missing_token_and_cross_site(monkeypatch):
     token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text).group(1)
     body["csrf_token"] = token
     assert client.post("/login", data=body, headers={"sec-fetch-site":"cross-site"}).status_code == 403
+
+def test_safari_null_origin_and_guest_form(monkeypatch):
+    monkeypatch.setattr(auth, "secret", lambda: b"test-secret-only-not-for-production")
+    client = TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False)
+    page = client.get("/login")
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+    headers = {"Origin": "null", "Sec-Fetch-Site": "cross-site"}
+    response = client.post("/guest", data={"csrf_token": token}, headers=headers)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
