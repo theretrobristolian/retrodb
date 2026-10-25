@@ -41,7 +41,8 @@ th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#
 .pill.serial{font-family:monospace;background:#263d61}
 .achievement{color:#f5ca65;font-weight:700}
 .column-picker{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin:15px 0;font-size:13px}
-.column-picker label{white-space:nowrap}
+.column-picker label{white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+.column-picker input[type=checkbox]{min-width:0;width:16px;height:16px;flex:none;margin:0;accent-color:#77a9ff}
 @media(max-width:760px){.library-scroll{max-height:65vh}}
 .panel{background:#121c2e;border:1px solid #2a3851;border-radius:14px;overflow:hidden;margin-top:22px}
 .toolbar{display:flex;gap:12px;flex-wrap:wrap;margin:23px 0}
