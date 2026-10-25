@@ -453,12 +453,13 @@ online_import_menu() {
     rm -f "$tmp"
     return 1
   fi
-  if ! sudo install -D -o retrodb -g retrodb -m 0640 "$tmp" /var/cache/retrodb/providers/online-compatibility.json; then
+  if ! install -D -m 0600 "$tmp" "$HOME/.cache/retrodb/online-compatibility.json"; then
     rm -f "$tmp"
     return 1
   fi
   rm -f "$tmp"
-  echo '[OK] Online catalogue updated. Use More options -> Export reports to rebuild Excel.'
+  echo '[OK] Online catalogue updated in ~/.cache/retrodb.'
+  echo '     Use More options -> Export reports to rebuild Excel.'
 }
 more_menu() {
   local choice
