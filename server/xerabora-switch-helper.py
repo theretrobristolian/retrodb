@@ -77,21 +77,25 @@ def execute_request(payload):
         with os.fdopen(tmp_fd, "w") as out:
             out.write(new_value)
         os.chmod(tmp_path, 0o644)
-        command("/usr/bin/systemctl", "stop", ACTIVE_SERVICE)
-        os.replace(tmp_path, OVERRIDE)
-        command("/usr/bin/systemctl", "daemon-reload")
         try:
-            command("/usr/bin/systemctl", "start", ACTIVE_SERVICE)
-            command("/usr/bin/systemctl", "is-active", "--quiet", ACTIVE_SERVICE)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
-            if old is None:
-                OVERRIDE.unlink(missing_ok=True)
-            else:
-                OVERRIDE.write_bytes(old)
-                os.chmod(OVERRIDE, 0o644)
+            command("/usr/bin/systemctl", "stop", ACTIVE_SERVICE)
+            os.replace(tmp_path, OVERRIDE)
             command("/usr/bin/systemctl", "daemon-reload")
             command("/usr/bin/systemctl", "start", ACTIVE_SERVICE)
-            raise RuntimeError("xeRAbora activation failed; previous configuration restored")
+            command("/usr/bin/systemctl", "is-active", "--quiet", ACTIVE_SERVICE)
+        except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            # Roll back the config even if daemon-reload/start failed.
+            try:
+                if old is None:
+                    OVERRIDE.unlink(missing_ok=True)
+                else:
+                    OVERRIDE.write_bytes(old)
+                    os.chmod(OVERRIDE, 0o644)
+                command("/usr/bin/systemctl", "daemon-reload")
+                command("/usr/bin/systemctl", "start", ACTIVE_SERVICE)
+            except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                pass
+            raise RuntimeError("xeRAbora activation failed; attempted previous configuration restore")
         fd, path = tempfile.mkstemp(prefix=".active-", dir=str(profiles))
         try:
             with os.fdopen(fd, "w") as out:
