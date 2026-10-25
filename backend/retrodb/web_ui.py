@@ -75,6 +75,13 @@ th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#
 input,select{color:#f0f5ff;background:#141d2f;border:1px solid #3a4d6b;padding:11px 13px;border-radius:10px;font-size:14px}
 input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;background:#294671;border-radius:10px;color:white;cursor:pointer}
 .btn:hover{background:#365c91}.label{font-size:13px;color:#aabbd2}.crumb{margin-bottom:18px;color:#9badc7}
+.player-switch{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.switch-dialog{width:min(calc(100% - 28px),430px);max-height:85vh;padding:26px;background:#151f32;color:#eaf0fc;border:1px solid #425d85;border-radius:18px;box-shadow:0 15px 60px #0008}
+.switch-dialog::backdrop{background:#020715bb}
+.switch-dialog h2{margin:8px 0 15px}
+.switch-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:22px}
+.switch-actions button{flex:1;min-width:110px}
+.switch-actions button:disabled{opacity:.6;cursor:wait}
 .detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
 @media(max-width:760px){.detail{grid-template-columns:1fr}main{padding:24px 14px}th,td{padding:9px 6px}header{padding:16px}}
 """
