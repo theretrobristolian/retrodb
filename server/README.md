@@ -1,3 +1,13 @@
+## Verified xeRAbora v1.0.0 server upgrade and RetroDB switching (25 October 2026)
+
+**Verified on the user's Debian 13 (Trixie) x86-64 VM:** yoba's `xerabora-1.0.0-ubuntu24.04-linux-x86_64` ELF resolves its shared libraries and launches; the upgraded xeRAbora v1.0.0 web dashboard loads on port **18280**. Systemd runs the client as unprivileged user `david`, from `/opt/xerabora/xerabora-linux-x86_64`, with `--server --no-sound --ui-port 18280` and per-player `XDG_CONFIG_HOME` overrides.
+
+**End-to-end server-side account switching verified:** both RetroDB accounts (`retrodb` linked to `theretrobristolian`; `PoodingPower` linked to `PoodingPower`) correctly display the linked RetroAchievements profile and can successfully switch the xeRAbora service back and forth using the authenticated **My Profile → Use this player** action. Existing credentials, player mappings, and the v1.0.0 dashboard survive the switches. The `set-startup-delay.sh 10` change was applied and tested successfully; the 10-second `ExecStartPre` pause improves switch responsiveness versus 20 seconds. Automatic recovery `RestartSec=10` remains unchanged.
+
+**Not yet verified:** the new v1.0.0 binary's **actual PS2 console-side connection, in-game memory tracking, unlocks and leaderboard functionality**. Earlier successful gameplay tests were on an earlier build and must not be used as evidence that the newly installed v1.0.0 console side is proven. Confirm these separately before describing v1.0.0 as fully validated.
+
+The Ubuntu 24.04-labelled binary runs on Debian 13 in this tested environment; this is an observation, not a guarantee for other systems. Install and upgrade procedures should keep a previous binary available for rollback. No RetroDB web application deployment or PS2 app development is implied by this documentation update.
+
 ## Efficient bulk RA artwork fetching (25 October 2026)
 
 **New default:** `server/prefetch-artwork.py --mode icons` uses the official `API_GetGameList.php` bulk catalogue endpoint for PS1 (RA system 12) and PS2 (RA system 21), with `h=0` (do **not** download supported hashes) and `f=0`. The two large catalogue responses are each cached under `/var/cache/retrodb/artwork/ra/catalogue-12.json` and `catalogue-21.json` for **30 days**. This is a major reduction in metadata API calls for icon discovery; the RA API explicitly warns that game-list responses can be very large and must not be polled often. Matching uses *only the 840 or so RA game IDs already indexed in your local PostgreSQL library* (no additional ROM scanning), then downloads missing icon PNGs from the CDN individually. Images cannot be bundled into one API call. Existing metadata/artwork are reused; cached misses are skipped.
