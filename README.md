@@ -271,6 +271,16 @@ Use **More options → 10) Refresh XLink PS2 LAN** to fetch Team XLink's manuall
 
 XLink's wiki lists titles without disc serials, so RetroDB matches **normalised exact titles** as lower-confidence, title-level evidence. `LAN` and `XLink Kai` will display `YES (title-level)` when such a match is found; this is **not an assurance that every region, disc revision or network setup works**. The PS2 Online sheet contains `Source confidence` and `XLink evidence` fields; `Currently playable` stays `UNVERIFIED`. Use **More options → 1) Export reports** to regenerate Excel after a successful import. Neither import changes game files or the RetroDB service.
 
+### Independent XLink evidence (October 2026)
+
+The **PS2 Online** workbook now preserves two separate XLink observations:
+- **Community XLink report**: what the release-specific online/DNS spreadsheet claims.
+- **XLink catalogue**: whether the separately imported Team XLink title list contains that game (title-level, never a guaranteed region match).
+
+The **XLink conflict** column flags `REVIEW: community NO / XLink listed` when the sources disagree. **Source confidence** combines the applicable match scopes, including a `partial snapshot` indication when appropriate. The previous aggregate XLink field remains for convenience but should not be used as a claim of verified, currently operational online play.
+
+**Online Summary** now separates community XLink `YES`, XLink catalogue matches, and conflict counts. Refreshing either imported catalogue remains optional; simply **re-export reports** to apply the current code to previously imported data. No ROM or RetroNAS content is modified.
+
 ### Online Summary and service evidence
 
 The workbook now contains both **PS2 Online** (one row per local PS2 image) and **Online Summary** (counts and a shortlist of documented online releases). Original historical online support, community DNS reports and XLink Kai reports are different fields; `Currently playable` remains `UNVERIFIED` until separately checked. Neither a community DNS `YES` nor a past online listing proves that a replacement server is live. LAN stays `UNKNOWN` until independently sourced. Connection methods are recorded as structured method labels (e.g. `custom_dns` and `lan_tunnel`) ready for future platform-neutral services such as DreamPi and Insignia.
