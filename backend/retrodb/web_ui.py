@@ -162,21 +162,46 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
                                     "", "gi")
     fallback_title = func.btrim(func.replace(no_serial, "_", " "), " .-_")
     display_title = func.coalesce(func.nullif(LibraryItem.ra_game_title, ""), fallback_title)
-    if q:
-        stmt = stmt.where(or_(LibraryItem.ra_game_title.ilike(f"%{q}%"), LibraryItem.filename.ilike(f"%{q}%")))
-    if letter:
-        stmt = stmt.where(display_title.ilike(f"{letter}%"))
-    matched = (LibraryItem.ra_game_id.is_not(None) & (func.lower(LibraryItem.ra_match_status) == "matched"))
-    if ra_filter == "yes":
-        stmt = stmt.where(matched)
-    elif ra_filter == "other":
-        stmt = stmt.where(~matched)
-    count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    sort_expr = {"title": func.lower(display_title), "id": LibraryItem.ra_game_id,
-                 "ra": func.lower(func.coalesce(LibraryItem.ra_match_status, "")),
-                 "disc": func.lower(LibraryItem.filename)}.get(sort_by, func.lower(display_title))
-    items = db.scalars(stmt.order_by((sort_expr.desc() if order == "desc" else sort_expr.asc()).nulls_last(),
-                                     LibraryItem.id.asc()).limit(100).offset((page_number-1)*100)).all()
+    platform_names = {p.id: p.slug for p in db.scalars(select(Platform)).all()} if not platform else {}
+    def item_slug(item):
+        return platform.slug if platform else platform_names.get(item.platform_id)
+    # GameDB cache lookup is local and deterministic. Resolve before paging so
+    # alphabet filtering and sorting use exactly the title displayed to users.
+    if sort_by == "title" or letter or q:
+        candidate_items = db.scalars(stmt.order_by(LibraryItem.id.asc())).all()
+        if q:
+            term = q.casefold()
+            candidate_items = [i for i in candidate_items if term in name(i, item_slug(i)).casefold()
+                               or term in i.filename.casefold() or term in disc_id(i).casefold()]
+        if letter:
+            candidate_items = [i for i in candidate_items if name(i, item_slug(i)).casefold().startswith(letter.casefold())]
+        matched_filter = lambda i: ra_supported(i)
+        if ra_filter == "yes":
+            candidate_items = [i for i in candidate_items if matched_filter(i)]
+        elif ra_filter == "other":
+            candidate_items = [i for i in candidate_items if not matched_filter(i)]
+        if sort_by == "title":
+            candidate_items.sort(key=lambda i: (name(i, item_slug(i)).casefold(), i.id), reverse=(order == "desc"))
+        elif sort_by == "disc":
+            candidate_items.sort(key=lambda i: (disc_id(i).casefold(), i.id), reverse=(order == "desc"))
+        elif sort_by == "id":
+            candidate_items.sort(key=lambda i: (i.ra_game_id is None, i.ra_game_id or 0, i.id), reverse=(order == "desc"))
+        else:
+            candidate_items.sort(key=lambda i: ((i.ra_match_status or "").casefold(), i.id), reverse=(order == "desc"))
+        count = len(candidate_items)
+        items = candidate_items[(page_number-1)*100:page_number*100]
+    else:
+        matched = (LibraryItem.ra_game_id.is_not(None) & (func.lower(LibraryItem.ra_match_status) == "matched"))
+        if ra_filter == "yes":
+            stmt = stmt.where(matched)
+        elif ra_filter == "other":
+            stmt = stmt.where(~matched)
+        count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        sort_expr = {"id": LibraryItem.ra_game_id,
+                     "ra": func.lower(func.coalesce(LibraryItem.ra_match_status, "")),
+                     "disc": func.lower(LibraryItem.filename)}.get(sort_by, LibraryItem.filename)
+        items = db.scalars(stmt.order_by((sort_expr.desc() if order == "desc" else sort_expr.asc()).nulls_last(),
+                                         LibraryItem.id.asc()).limit(100).offset((page_number-1)*100)).all()
     base = "/library" + ("/" + quote(slug) if slug else "")
     from urllib.parse import urlencode
     def link(**changes):
@@ -184,13 +209,12 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         args.update(changes)
         return base + "?" + urlencode(args)
     alphabet = ' '.join(f'<a class="pill" href="{escape(link(letter=c,page=1), quote=True)}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
-    platform_names = {p.id: p.slug for p in db.scalars(select(Platform)).all()} if not platform else {}
     rows = []
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item)
         badge = '🏆 Verified' if supported else (item.ra_match_status or 'Unknown')
-        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, platform.slug if platform else platform_names.get(item.platform_id)))}</a></td>
+        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
 <td data-column="id">{item.ra_game_id or '—'}</td>
 <td data-column="ra"><span class="{'achievement' if supported else 'muted'}">{escape(badge)}</span></td>
