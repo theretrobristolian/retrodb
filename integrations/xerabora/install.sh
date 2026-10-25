@@ -584,46 +584,115 @@ uninstall_client() {
   echo "The source checkout and PS2 ELF copies on the console were not removed."
 }
 
-menu() {
-  local choice latest
+
+safe_source_update() {
+  # Source only: never changes running xeRAbora binary, service, or profile.
+  local root origin
+  command -v git >/dev/null || { echo "Git unavailable"; return 0; }
+  root="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)" || { echo "Standalone install; no Git checkout"; return 0; }
+  [[ -f "$root/integrations/xerabora/install.sh" ]] || return 0
+  [[ "$(git -C "$root" branch --show-current)" == main ]] || { echo "Not on main: skipped"; return 0; }
+  origin="$(git -C "$root" remote get-url origin 2>/dev/null)" || return 0
+  case "$origin" in
+    https://github.com/theretrobristolian/retrodb|https://github.com/theretrobristolian/retrodb.git|git@github.com:theretrobristolian/retrodb.git) ;;
+    *) echo "Unknown origin; skipped"; return 0 ;;
+  esac
+  [[ -z "$(git -C "$root" status --porcelain --untracked-files=no)" ]] || { echo "Local edits; skipped"; return 0; }
+  git -C "$root" -c credential.interactive=never fetch -q origin main || { echo "GitHub unavailable"; return 0; }
+  git -C "$root" merge-base --is-ancestor HEAD FETCH_HEAD || { echo "History diverged; skipped"; return 0; }
+  if [[ "$(git -C "$root" rev-parse HEAD)" != "$(git -C "$root" rev-parse FETCH_HEAD)" ]]; then
+    git -C "$root" merge --ff-only -q FETCH_HEAD || return 0
+    echo "Manager scripts updated; xeRAbora service unchanged."
+    exec bash "$root/integrations/xerabora/install.sh" menu --updated
+  fi
+  echo "Manager scripts up to date."
+}
+release_status_line() {
+  local upstream installed
+  installed="$(installed_version)"
+  if ! upstream="$(latest_release 2>/dev/null)" || [[ -z "$upstream" ]]; then
+    echo " Upstream version: check unavailable (installed $installed)"
+  elif [[ "$installed" == "$upstream" ]]; then
+    echo " Upstream version: $installed (current)"
+  elif blocked_cpu_release "$upstream"; then
+    echo " Upstream version: $upstream available, BLOCKED on this CPU (installed $installed)"
+  else
+    echo " Upstream version: $upstream available (installed $installed; manual install)"
+  fi
+}
+advanced_menu() {
+  local choice
   while true; do
-    xr_draw_header "Installation and management"
-    echo "  1) Install or update xeRAbora"
-    echo "  2) Configure Web API key for the active account"
-    echo "  3) Test RetroAchievements API access"
-    echo "  4) Check for new releases"
-    echo "  5) View service status"
-    echo "  6) Restart xeRAbora service"
-    echo "  7) Network and connection diagnostics"
-    echo "  8) Follow active player's log (Ctrl+C to return)"
-    echo "  9) Sign in to RetroAchievements (legacy login)"
-    echo " 10) Manage player profiles"
-    echo " 11) Uninstall xeRAbora and delete all local data"
-    echo " 12) Configure Web UI / LAN access"
-    echo " 13) Service startup / automatic recovery"
-    echo " 14) Show OPL-RA.ELF download commands"
-    echo " 15) Roll back xeRAbora to previous version"
+    xr_draw_header "Advanced options"
+    echo "  1) Set Web API key"
+    echo "  2) Test API"
+    echo "  3) Network diagnostics"
+    echo "  4) Legacy login"
+    echo "  5) Web UI / LAN settings"
+    echo "  6) Service startup / recovery settings"
+    echo "  7) OPL-RA.ELF download instructions"
+    echo "  8) Roll back xeRAbora"
+    echo "  9) Uninstall and remove local account data"
+    echo "  0) Back"
+    xr_draw_footer
+    read -rp "Choose: " choice || return 0
+    case "$choice" in
+      1) set_api_key; xr_pause ;; 2) test_api; xr_pause ;;
+      3) doctor; xr_pause ;; 4) login; xr_pause ;;
+      5) web_ui_settings; xr_pause ;; 6) configure_service_startup; xr_pause ;;
+      7) show_elf_download || true; xr_pause ;;
+      8) bash "$SCRIPT_DIR/rollback.sh" || true; xr_pause ;;
+      9) uninstall_client; xr_pause ;; 0) return ;;
+      *) echo "Invalid choice"; xr_pause ;;
+    esac
+  done
+}
+service_controls() {
+  local choice
+  while true; do
+    xr_draw_header "Service controls"
+    echo "  1) Status"
+    echo "  2) Start"
+    echo "  3) Stop"
+    echo "  4) Restart"
+    echo "  0) Back"
+    xr_draw_footer
+    read -rp "Choose: " choice || return 0
+    case "$choice" in
+      1) systemctl --no-pager status xerabora.service || true; xr_pause ;;
+      2) sudo systemctl start xerabora.service; xr_pause ;;
+      3) sudo systemctl stop xerabora.service; xr_pause ;;
+      4) sudo systemctl restart xerabora.service; xr_pause ;;
+      0) return ;; *) echo "Invalid choice"; xr_pause ;;
+    esac
+  done
+}
+menu() {
+  local choice release_note
+  if [[ "$*" != *--updated* ]]; then safe_source_update; fi
+  release_note="$(release_status_line)"
+  while true; do
+    xr_draw_header "Main menu"
+    echo "$release_note"
+    echo "  1) Switch player"
+    echo "  2) Manage players (add / import / credentials)"
+    echo "  3) Follow game and achievement log"
+    echo "  4) Service controls"
+    echo "  5) Check / install xeRAbora binary (may restart service)"
+    echo "  6) Update RetroDB manager scripts (no service restart)"
+    echo "  7) Advanced options"
     echo "  0) Exit"
     xr_draw_footer
-    read -rp "Choose an option: " choice || break
+    read -rp "Choose: " choice || break
     case "$choice" in
-      1) install_client; xr_pause ;;
-      2) set_api_key; xr_pause ;;
-      3) test_api; xr_pause ;;
-      4) check_version || true; xr_pause ;;
-      5) systemctl --no-pager status xerabora.service || true; xr_pause ;;
-      6) sudo systemctl restart xerabora.service; xr_pause ;;
-      7) doctor; xr_pause ;;
-      8) xr_follow_log; xr_pause ;;
-      9) login; xr_pause ;;
-      10) bash "$SCRIPT_DIR/profiles.sh" ;;
-      11) uninstall_client; xr_pause ;;
-      12) web_ui_settings; xr_pause ;;
-      13) configure_service_startup; xr_pause ;;
-      14) show_elf_download || true; xr_pause ;;
-      15) bash "$SCRIPT_DIR/rollback.sh" || true; xr_pause ;;
-      0|q|Q) break ;;
-      *) echo "Invalid selection."; xr_pause ;;
+      1) bash "$SCRIPT_DIR/profiles.sh" switch; xr_pause ;;
+      2) bash "$SCRIPT_DIR/profiles.sh" menu ;;
+      3) xr_follow_log; xr_pause ;;
+      4) service_controls ;;
+      5) check_version || true; install_client; xr_pause; release_note="$(release_status_line)" ;;
+      6) safe_source_update; xr_pause ;;
+      7) advanced_menu ;;
+      0|q|Q) break ;; *) echo "Invalid choice"; xr_pause ;;
     esac
   done
 }
