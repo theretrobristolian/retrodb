@@ -674,6 +674,9 @@ menu() {
   while true; do
     xr_draw_header "Main menu"
     echo "$release_note"
+    echo
+    printf '%s\n' '--------------------------------------------------------------------'
+    echo
     echo "  1) Switch player"
     echo "  2) Manage players (add / import / credentials)"
     echo "  3) Follow game and achievement log"
