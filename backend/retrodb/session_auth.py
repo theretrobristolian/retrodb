@@ -78,12 +78,31 @@ input{background:#0b1020;border:1px solid #546780;color:white}button{background:
 </head><body><main><h1>◈ RetroDB</h1><p>Sign in to your game library. Stay signed in on this device for up to 30 days.</p>
 __ERROR__<form action="/login" method="post"><label>Username<input name="username" required autocomplete="username"></label>
 <label>Password<input type="password" name="password" required autocomplete="current-password"></label>
-<input type="hidden" name="next" value="__NEXT__"><button>Sign in</button></form>
+<input type="hidden" name="next" value="__NEXT__"><input type="hidden" name="csrf_token" value="__CSRF__"><button>Sign in</button></form>
 <p>Only use on your trusted home network over HTTPS.</p></main></body></html>"""
+
+def csrf_token():
+    payload = f"{int(time.time()) + 1200}:{secrets.token_urlsafe(24)}"
+    return payload + "." + signature("csrf:" + payload)
+
+def valid_csrf(token):
+    try:
+        payload, mac = token.rsplit(".", 1)
+        expires, nonce = payload.split(":", 1)
+        now = int(time.time())
+        return (bool(nonce) and len(nonce) <= 128 and now <= int(expires) <= now + 1200
+                and hmac.compare_digest(mac, signature("csrf:" + payload)))
+    except (ValueError, TypeError):
+        return False
+
+def login_html(error, target):
+    return (LOGIN_HTML.replace("__ERROR__", error)
+            .replace("__NEXT__", html.escape(target, quote=True))
+            .replace("__CSRF__", csrf_token()))
 
 @router.get("/login", response_class=HTMLResponse)
 def login_page(next: str = "/"):
-    return HTMLResponse(LOGIN_HTML.replace("__ERROR__", "").replace("__NEXT__", html.escape(safe_next(next), quote=True)), headers={"Cache-Control":"no-store"})
+    return HTMLResponse(login_html("", safe_next(next)), headers={"Cache-Control":"no-store"})
 
 def safe_next(value):
     if not value.startswith("/") or value.startswith("//") or "\\" in value or any(ord(c)<32 for c in value):
@@ -91,19 +110,22 @@ def safe_next(value):
     return value
 
 def valid_origin(request):
+    # Safari can omit Origin; our no-referrer policy also suppresses Referer.
+    # The signed per-form token prevents cross-origin submissions.
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return False
     origin = request.headers.get("origin")
-    if origin:
-        return origin == "https://retrodb.it.gattaca.house"
-    referer = request.headers.get("referer", "")
-    return referer.startswith("https://retrodb.it.gattaca.house/")
+    if origin and origin != "https://retrodb.it.gattaca.house":
+        return False
+    referer = request.headers.get("referer")
+    if referer and not referer.startswith("https://retrodb.it.gattaca.house/"):
+        return False
+    return True
 
 @router.post("/login")
 async def login_action(request: Request):
     if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
         return Response(status_code=415)
-    # Origin protection for credential submission.
-    if not valid_origin(request):
-        return Response("Invalid request origin", status_code=403)
     data = await request.body()
     if len(data) > 4096: return Response(status_code=413)
     from urllib.parse import parse_qs
@@ -111,8 +133,10 @@ async def login_action(request: Request):
     username = values.get("username", [""])[0]
     password = values.get("password", [""])[0]
     target = safe_next(values.get("next", ["/"])[0])
+    if not valid_origin(request) or not valid_csrf(values.get("csrf_token", [""])[0]):
+        return HTMLResponse("Invalid login form. Reload the page and try again.", status_code=403, headers={"Cache-Control":"no-store"})
     if not verify_password(username, password):
-        return HTMLResponse(LOGIN_HTML.replace("__ERROR__", '<p role="alert" style="color:#ff9b9b">Incorrect username or password.</p>').replace("__NEXT__", html.escape(target, quote=True)), status_code=401, headers={"Cache-Control":"no-store"})
+        return HTMLResponse(login_html('<p role="alert" style="color:#ff9b9b">Incorrect username or password.</p>', target), status_code=401, headers={"Cache-Control":"no-store"})
     response = RedirectResponse(target, status_code=303)
     response.set_cookie(COOKIE, issue(username), httponly=True, secure=True, samesite="lax",
                         max_age=LIFETIME, path="/")
