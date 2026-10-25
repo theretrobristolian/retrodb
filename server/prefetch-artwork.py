@@ -164,7 +164,8 @@ def main():
     for game_id in ids:
         data, fresh = cached_metadata(game_id)
         if args.mode == "icons":
-            missing = not artwork_path(game_id, "icon").is_file()
+            missing = (not artwork_path(game_id, "icon").is_file() and
+                       not (RA_CACHE / str(game_id) / "icon.missing").is_file())
             if missing:
                 pending.append(game_id)
         else:
@@ -211,7 +212,9 @@ def main():
                 entry = bulk.get(game_id)
                 if not entry or not ra_image(entry.get("ImageIcon")):
                     print("    No bulk icon entry available; skipped")
-                    # Avoid pretending an uncached icon exists.
+                    marker = RA_CACHE / str(game_id) / "icon.missing"
+                    marker.parent.mkdir(parents=True, exist_ok=True)
+                    marker.touch()
                     continue
                 if not data:
                     data = {"Title": entry.get("Title"), "ImageIcon": entry["ImageIcon"], "_source": "bulk"}
