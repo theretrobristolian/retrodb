@@ -1,0 +1,166 @@
+"""RetroDB v1 browser pages: read-only library, release details, and service overview."""
+from __future__ import annotations
+
+from collections import Counter
+from html import escape
+from pathlib import PurePosixPath
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import HTMLResponse
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from retrodb.database import get_session
+from retrodb.models import LibraryItem, Platform
+
+router = APIRouter(include_in_schema=False)
+
+CSS = """
+:root{color-scheme:dark;font:16px system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1020;color:#eaf0fc}
+*{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}a:hover{color:#9ebeff}
+header{border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
+header .bar{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
+.brand{font-size:24px;font-weight:800;letter-spacing:-1px;color:#f6f8ff}
+nav{display:flex;gap:18px;color:#afc0da;font-size:14px}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
+h1{font-size:34px;letter-spacing:-1.3px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 16px}
+p{line-height:1.6}.muted{color:#9daeca}.eyebrow{color:#7caeff;text-transform:uppercase;font-size:12px;font-weight:700;letter-spacing:1.7px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.card{display:block;background:#151f32;border:1px solid #293952;border-radius:15px;padding:22px;min-height:120px}
+.card:hover{border-color:#527cc6}.card h2{margin:4px 0 9px}.metric{font-size:34px;font-weight:750}
+.pill{background:#243651;color:#c4daff;padding:4px 9px;border-radius:30px;font-size:12px;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;color:#91a8c8;font-weight:600;background:#17233a}
+th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#18243a}
+.panel{background:#121c2e;border:1px solid #2a3851;border-radius:14px;overflow:hidden;margin-top:22px}
+.toolbar{display:flex;gap:12px;flex-wrap:wrap;margin:23px 0}
+input,select{color:#f0f5ff;background:#141d2f;border:1px solid #3a4d6b;padding:11px 13px;border-radius:10px;font-size:14px}
+input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;background:#294671;border-radius:10px;color:white;cursor:pointer}
+.btn:hover{background:#365c91}.label{font-size:13px;color:#aabbd2}.crumb{margin-bottom:18px;color:#9badc7}
+.detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
+@media(max-width:760px){.detail{grid-template-columns:1fr}main{padding:24px 14px}th,td{padding:9px 6px}header{padding:16px}}
+"""
+
+def page(title: str, body: str) -> HTMLResponse:
+    heading = escape(title)
+    return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>{heading} · RetroDB</title>
+<style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
+<nav><a href="/">Consoles</a><a href="/library">All games</a><a href="/management">Management</a>
+<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a></nav></div></header>
+<main>{body}</main></body></html>""")
+
+def name(item: LibraryItem) -> str:
+    return item.ra_game_title or PurePosixPath(item.filename).stem
+
+def platform_counts(db: Session):
+    stmt = (select(Platform, func.count(LibraryItem.id))
+            .outerjoin(LibraryItem, (LibraryItem.platform_id == Platform.id) & (LibraryItem.is_missing.is_(False)))
+            .group_by(Platform.id).order_by(Platform.name))
+    return db.execute(stmt).all()
+
+@router.get("/", response_class=HTMLResponse)
+def homepage(db: Session = Depends(get_session)):
+    cards = []
+    total = 0
+    for platform, count in platform_counts(db):
+        total += count
+        cards.append(f"""<a class="card" href="/library/{quote(platform.slug)}"><div class="eyebrow">{escape(platform.manufacturer or 'Console')}</div>
+<h2>{escape(platform.name)}</h2><div class="metric">{count:,}</div><span class="muted">indexed files · Explore →</span></a>""")
+    empty = '<p class="muted">No consoles are configured in PostgreSQL yet. Run RetroDB deployment and library inventory scan first.</p>' if not cards else ""
+    return page("Consoles", f"""<div class="eyebrow">Your personal game collection</div><h1>Choose a console</h1>
+<p class="muted">Browse your own indexed collection, explore releases, and check collection health.</p>
+<div class="grid">{''.join(cards)}</div>{empty}
+<h2>Library overview</h2><div class="grid"><div class="card"><div class="label">Indexed game files</div>
+<div class="metric">{total:,}</div></div><a class="card" href="/management"><h2>Library management →</h2>
+<p class="muted">Status, inventory and safe maintenance guidance</p></a></div>""")
+
+def browse(db: Session, slug: str | None, q: str, letter: str, page_number: int):
+    platform = None
+    if slug:
+        platform = db.scalar(select(Platform).where(Platform.slug == slug))
+        if platform is None:
+            raise HTTPException(404, "Console not found")
+    stmt = select(LibraryItem).where(LibraryItem.is_missing.is_(False))
+    if platform:
+        stmt = stmt.where(LibraryItem.platform_id == platform.id)
+    if q:
+        stmt = stmt.where((LibraryItem.ra_game_title.ilike(f"%{q}%")) | (LibraryItem.filename.ilike(f"%{q}%")))
+    if letter:
+        stmt = stmt.where((LibraryItem.ra_game_title.ilike(f"{letter}%")) | (LibraryItem.filename.ilike(f"{letter}%")))
+    count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    items = db.scalars(stmt.order_by(LibraryItem.filename).limit(100).offset((page_number-1)*100)).all()
+    base = "/library" + ("/" + quote(slug) if slug else "")
+    alphabet = ' '.join(f'<a class="pill" href="{base}?letter={c}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    rows = []
+    for item in items:
+        label = name(item)
+        status = escape(item.ra_match_status or "Not checked")
+        rows.append(f'<tr><td><a href="/game/{item.id}">{escape(label)}</a></td><td>{escape(item.extension.upper())}</td><td><span class="pill">{status}</span></td></tr>')
+    prev_link = f'<a class="btn" href="{base}?q={quote(q)}&letter={quote(letter)}&page={page_number-1}">← Previous</a>' if page_number > 1 else ''
+    next_link = f'<a class="btn" href="{base}?q={quote(q)}&letter={quote(letter)}&page={page_number+1}">Next →</a>' if count > page_number*100 else ''
+    heading = escape(platform.name if platform else "All games")
+    return page(heading, f"""<div class="crumb"><a href="/">Consoles</a> / {heading}</div>
+<h1>{heading}</h1><p class="muted">{count:,} indexed game files · Up to 100 per page</p>
+<form class="toolbar" action="{base}"><input name="q" value="{escape(q,quote=True)}" placeholder="Search titles or filenames">
+<button class="btn" type="submit">Search</button></form><div class="toolbar">{alphabet}</div>
+<div class="panel"><table><thead><tr><th>Game</th><th>Format</th><th>Achievements audit</th></tr></thead>
+<tbody>{''.join(rows) or '<tr><td colspan="3">No matches. Try another search or scan the library.</td></tr>'}</tbody></table></div>
+<div class="toolbar">{prev_link}{next_link}</div>""")
+
+@router.get("/library", response_class=HTMLResponse)
+def all_games(db: Session = Depends(get_session), q: str = Query("", max_length=100),
+              letter: str = Query("", pattern="^[A-Za-z]?$"),
+              page_number: int = Query(1, alias="page", ge=1, le=10000)):
+    return browse(db, None, q, letter.upper(), page_number)
+
+@router.get("/library/{slug}", response_class=HTMLResponse)
+def console_games(slug: str, db: Session = Depends(get_session), q: str = Query("", max_length=100),
+                  letter: str = Query("", pattern="^[A-Za-z]?$"),
+                  page_number: int = Query(1, alias="page", ge=1, le=10000)):
+    return browse(db, slug, q, letter.upper(), page_number)
+
+@router.get("/game/{item_id}", response_class=HTMLResponse)
+def game_details(item_id: int, db: Session = Depends(get_session)):
+    item = db.get(LibraryItem, item_id)
+    if item is None:
+        raise HTTPException(404, "Game not found")
+    platform = db.get(Platform, item.platform_id)
+    label = escape(name(item))
+    def detail(k, v):
+        return f"<p><span class='label'>{escape(k)}</span><br>{escape(str(v or 'Not available'))}</p>"
+    info = (detail("Console", platform.name if platform else None)
+            + detail("Filename", item.filename) + detail("File format", item.extension.upper())
+            + detail("Size (GiB)", f"{item.size_bytes / 1024**3:.2f}")
+            + detail("RetroAchievements ID", item.ra_game_id)
+            + detail("RA hash status", item.ra_match_status)
+            + detail("Collection path", item.relative_path))
+    return page(name(item), f"""<div class="crumb"><a href="/">Consoles</a> /
+<a href="/library/{quote(platform.slug) if platform else ''}">{escape(platform.name if platform else 'Library')}</a> / {label}</div>
+<h1>{label}</h1><p class="muted">Library record and release information</p>
+<div class="detail"><section class="card"><h2>Release and collection</h2>{info}</section>
+<section class="card"><h2>Achievements</h2><p class="muted">Your indexed RetroAchievements data appears here.
+Live profile progress and badge artwork are planned for the next version.</p>
+{detail("RA game title", item.ra_game_title)}</section>
+<section class="card"><h2>Online play</h2><p class="muted">The community DNS and XLink evidence currently lives
+in the Excel audit. Import into the database/API is planned; this page deliberately does not guess online compatibility.</p></section>
+<section class="card"><h2>Artwork, manual and controls</h2><p class="muted">Metadata, manuals, controller guidance
+and cover-art indexing are planned. No external artwork is downloaded automatically.</p></section></div>""")
+
+@router.get("/management", response_class=HTMLResponse)
+def management(db: Session = Depends(get_session)):
+    indexed = db.scalar(select(func.count(LibraryItem.id)).where(LibraryItem.is_missing.is_(False))) or 0
+    missing = db.scalar(select(func.count(LibraryItem.id)).where(LibraryItem.is_missing.is_(True))) or 0
+    rows = "".join(f"<tr><td>{escape(p.name)}</td><td>{c:,}</td></tr>" for p,c in platform_counts(db))
+    return page("Management", f"""<div class="eyebrow">Administration · Read-only preview</div>
+<h1>Library management</h1><p class="muted">v1 exposes status without executing shell commands or modifying RetroNAS files.
+Web-triggered jobs will require authenticated, permission-scoped background workers.</p>
+<div class="grid"><div class="card"><div class="label">Indexed files</div><div class="metric">{indexed:,}</div></div>
+<div class="card"><div class="label">Marked missing</div><div class="metric">{missing:,}</div></div>
+<div class="card"><div class="label">RetroDB API</div><h2>Connected</h2><a href="/health">Database health →</a></div></div>
+<h2>Library sources</h2><div class="panel"><table><thead><tr><th>Console</th><th>Indexed files</th></tr></thead>
+<tbody>{rows or '<tr><td colspan="2">No indexed games yet</td></tr>'}</tbody></table></div>
+<h2>Maintenance actions (coming next)</h2><div class="grid">
+<div class="card"><h2>↻ Rescan library</h2><p class="muted">Queue a safe read-only RetroNAS inventory scan, then show progress and logs.</p><span class="pill">Not yet enabled</span></div>
+<div class="card"><h2>↻ Refresh compatibility</h2><p class="muted">Refresh RetroAchievements, community DNS and XLink source evidence.</p><span class="pill">Not yet enabled</span></div>
+<div class="card"><h2>↑ Update RetroDB</h2><p class="muted">Review and explicitly approve application updates; never auto-update xeRAbora binaries.</p><span class="pill">Not yet enabled</span></div></div>
+<h2>Project resources</h2><p><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">RetroDB on GitHub ↗</a></p>""")
