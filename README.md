@@ -251,6 +251,18 @@ The standard `RetroDB-Compatibility.xlsx` now has an **Action Required** workshe
 
 The sheet includes platform, game name, full filename, disc ID, current status, proposed action, recommended release and region, RA ID, an existing verified copy when identifiable, reason, alternative RA candidates, local RA hash, accepted hashes and source path. The original per-platform sheets remain unchanged. Download **`RetroDB-Compatibility.xlsx`** as normal; no additional workbook or command is necessary. A **full audit** refreshes the underlying identity/hash data; export-only recreates the workbook from the previous audit.
 
+## Network and online-play compatibility (initial implementation)
+
+RetroDB now has an **offline-first PS2 online compatibility importer** and a **PS2 Online** sheet in the normal `RetroDB-Compatibility.xlsx` workbook. It stores release-specific source evidence by disc serial, independently of RetroAchievements hashes, and labels absent/unmatched evidence `UNKNOWN` rather than falsely claiming a game lacks online play. This initial importer consumes a locally exported CSV of the [PS2 Online Community's 2026 spreadsheet](https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/edit?gid=0#gid=0); **there is no automatic background internet fetching**.
+
+To populate the workbook, export that spreadsheet's first tab (`gid=0`) to CSV, copy it to the RetroDB VM, then choose **More options → 9) Import PS2 online data** and enter its path. The imported evidence is saved at `~/.cache/retrodb/online-compatibility.json` under the current user's account (not in Git). Choose **More options → 1) Export reports** to rebuild Excel without rehashing the collection. Until an import is performed, the PS2 Online sheet shows your actual local discs but marks network capabilities unknown.
+
+The initial community import captures historical online listing, original service host, community DNS/server labels, reported DNS-playability status, XLink Kai, player counts, co-op, setup requirements and notes. **Native LAN capability is intentionally unknown for now**, rather than guessing from XLink status. A community report of DNS availability is not a guarantee that servers still work today. Exact regional disc serial matching avoids incorrectly asserting that one PAL or NTSC edition shares another release's network support.
+
+### Long-term cross-platform direction
+
+The canonical model will eventually represent **Game → Release → Capabilities → Connection methods → Configuration guides**, with separate source evidence, dates and player-specific achievement progress. This is not PS2-only: Dreamcast (DreamPi/dial-up and community servers), original Xbox (Insignia), Xbox 360, PS3, GameCube, Wii, emulator-specific networking, LAN tunnelling (XLink Kai), DNS redirection and future services should use the same concepts without conflating them. A future frontend will offer console selection, a filterable A–Z game catalogue, detail pages with manuals and controller guidance, service-specific online settings and per-account achievements. These interfaces and additional platform importers are **planned**, not implemented by the initial PS2 Excel importer.
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
@@ -265,7 +277,7 @@ Main-menu **1) Audit games** performs the full eight-stage audit. **More options
 
 Main-menu **2) Patch PS2 game** handles the controlled, checksum-verified patch workflow. The default audit collection mount remains read-only. The patch workflow verifies clean base images before applying any patches, and does not silently replace original ROMs. Only explicitly selected verified output may be deployed through a separate, confirmed operation. Keep original CRT/light-gun disc images: optional *No GunCon Flash* patches are not mandatory for all light-gun games.
 
-Main-menu **3) Rename PS2 games** previews and confirms conservative OPL renames with collision safeguards. **More options** contains report exports, patch downloads, service details, rename recovery, patch journals, application maintenance, Debian upgrades, and **8) RetroNAS settings**.
+Main-menu **3) Rename PS2 games** previews and confirms conservative OPL renames with collision safeguards. **More options** contains report exports, patch downloads, service details, rename recovery, patch journals, application maintenance, Debian upgrades, **8) RetroNAS settings** and **9) Import PS2 online data**.
 
 **RetroNAS settings:** The submenu shows the SMB share, mount status and configuration, allows retrying the existing mount and reading its journal, and can run `server/configure-retronas.sh` after confirmation to change server/share/credentials. **4) Enable reliable on-demand mount at boot** runs `server/enable-retronas-automount.sh`, replacing eager boot-time mounting with a systemd automount. The helper preserves the original SMB 3.1.1 read-only mount definition and protected credentials; the user must confirm because the mount is briefly stopped. Status reports `on-demand`, `mounted`, or `unmounted`. This prevents a DNS-not-ready-at-boot failure from permanently blocking the initial mount, but does not guarantee recovery from every runtime disconnect.
 
