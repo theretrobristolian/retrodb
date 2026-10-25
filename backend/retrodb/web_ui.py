@@ -9,7 +9,7 @@ from html import escape
 from pathlib import PurePosixPath
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -43,7 +43,13 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 @media(max-width:760px){.detail{grid-template-columns:1fr}main{padding:24px 14px}th,td{padding:9px 6px}header{padding:16px}}
 """
 
-def page(title: str, body: str) -> HTMLResponse:
+def is_guest(request: Request) -> bool:
+    from retrodb.session_auth import COOKIE, user_from_cookie
+    return user_from_cookie(request.cookies.get(COOKIE, "")) == "__retrodb_guest__"
+
+def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
+    private_nav = '' if guest else '<a href="/management">Management</a><a href="/online-services">Online services</a>'
+    logout_label = "Leave guest view" if guest else "Sign out"
     heading = escape(title)
     return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>{heading} · RetroDB</title>
@@ -56,8 +62,8 @@ def page(title: str, body: str) -> HTMLResponse:
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
-<nav><a href="/">Consoles</a><a href="/library">All games</a><a href="/management">Management</a><a href="/online-services">Online services</a>
-<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">Sign out</button></form></nav></div></header>
+<nav><a href="/">Consoles</a><a href="/library">All games</a>{private_nav}
+<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
 <main>{body}</main></body></html>""")
 
 def name(item: LibraryItem) -> str:
@@ -70,7 +76,7 @@ def platform_counts(db: Session):
     return db.execute(stmt).all()
 
 @router.get("/", response_class=HTMLResponse)
-def homepage(db: Session = Depends(get_session)):
+def homepage(request: Request, db: Session = Depends(get_session)):
     cards = []
     total = 0
     for platform, count in platform_counts(db):
@@ -82,10 +88,10 @@ def homepage(db: Session = Depends(get_session)):
 <p class="muted">Browse your own indexed collection, explore releases, and check collection health.</p>
 <div class="grid">{''.join(cards)}</div>{empty}
 <h2>Library overview</h2><div class="grid"><div class="card"><div class="label">Indexed game files</div>
-<div class="metric">{total:,}</div></div><a class="card" href="/management"><h2>Library management →</h2>
-<p class="muted">Status, inventory and safe maintenance guidance</p></a></div>""")
+<div class="metric">{total:,}</div></div>{"" if is_guest(request) else """<a class="card" href="/management"><h2>Library management →</h2>
+<p class="muted">Status, inventory and safe maintenance guidance</p></a>"""}</div>""", guest=is_guest(request))
 
-def browse(db: Session, slug: str | None, q: str, letter: str, page_number: int):
+def browse(request: Request, db: Session, slug: str | None, q: str, letter: str, page_number: int):
     platform = None
     if slug:
         platform = db.scalar(select(Platform).where(Platform.slug == slug))
@@ -116,19 +122,19 @@ def browse(db: Session, slug: str | None, q: str, letter: str, page_number: int)
 <button class="btn" type="submit">Search</button></form><div class="toolbar">{alphabet}</div>
 <div class="panel"><table><thead><tr><th>Game</th><th>Format</th><th>Achievements audit</th></tr></thead>
 <tbody>{''.join(rows) or '<tr><td colspan="3">No matches. Try another search or scan the library.</td></tr>'}</tbody></table></div>
-<div class="toolbar">{prev_link}{next_link}</div>""")
+<div class="toolbar">{prev_link}{next_link}</div>""", guest=is_guest(request))
 
 @router.get("/library", response_class=HTMLResponse)
-def all_games(db: Session = Depends(get_session), q: str = Query("", max_length=100),
+def all_games(request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
               letter: str = Query("", pattern="^[A-Za-z]?$"),
               page_number: int = Query(1, alias="page", ge=1, le=10000)):
-    return browse(db, None, q, letter.upper(), page_number)
+    return browse(request, db, None, q, letter.upper(), page_number)
 
 @router.get("/library/{slug}", response_class=HTMLResponse)
-def console_games(slug: str, db: Session = Depends(get_session), q: str = Query("", max_length=100),
+def console_games(slug: str, request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
                   letter: str = Query("", pattern="^[A-Za-z]?$"),
                   page_number: int = Query(1, alias="page", ge=1, le=10000)):
-    return browse(db, slug, q, letter.upper(), page_number)
+    return browse(request, db, slug, q, letter.upper(), page_number)
 
 PS2_SERIAL = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 DATA_DIR = Path("/var/cache/retrodb/web")
@@ -175,10 +181,10 @@ def online_services():
 <div class="card"><h2>XLink Kai</h2><p class="muted">System-link LAN tunnelling via RetroNAS.</p>
 <a href="http://xlinkkai:34522/" target="_blank" rel="noopener">Open XLink Kai ↗</a></div>
 <div class="card"><h2>RetroAchievements</h2><a href="https://retroachievements.org/" target="_blank" rel="noopener">Website ↗</a></div>
-<div class="card"><h2>RetroDB source</h2><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub repository ↗</a></div></div>""")
+<div class="card"><h2>RetroDB source</h2><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub repository ↗</a></div></div>""", guest=is_guest(request))
 
 @router.get("/game/{item_id}", response_class=HTMLResponse)
-def game_details(item_id: int, db: Session = Depends(get_session)):
+def game_details(item_id: int, request: Request, db: Session = Depends(get_session)):
     item = db.get(LibraryItem, item_id)
     if item is None:
         raise HTTPException(404, "Game not found")
@@ -201,7 +207,7 @@ Live profile progress and badge artwork are planned for the next version.</p>
 {detail("RA game title", item.ra_game_title)}</section>
 <section class="card"><h2>Online play</h2>{online_details(online_record(item))}</section>
 <section class="card"><h2>Co-op and player counts</h2><p class="muted">Couch co-op, online co-op, split-screen and competitive multiplayer are distinct capabilities. Verified PS2 Co-Optimus records are not yet imported; no player limits are guessed.</p><p><a href="https://www.co-optimus.com/system/6/playstation-2.html" target="_blank" rel="noopener">Browse PS2 co-op listings ↗</a></p></section>\n<section class="card"><h2>Artwork, manual and controls</h2><p class="muted">Metadata, manuals, controller guidance
-and cover-art indexing are planned. No external artwork is downloaded automatically.</p></section></div>""")
+and cover-art indexing are planned. No external artwork is downloaded automatically.</p></section></div>""", guest=is_guest(request))
 
 @router.get("/management", response_class=HTMLResponse)
 def management(db: Session = Depends(get_session)):
