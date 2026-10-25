@@ -23,7 +23,7 @@ The audit/export title priority remains broader (including recommended RA titles
 
 The read-only `/library` and `/library/{slug}` views now display game titles, parsed serial badges, RA game IDs, and 🏆 only for records with `ra_match_status=matched` and a populated RA game ID. The Format column is optional. Select RA filters, sort direction/column, A–Z or search; columns can be shown/hidden with local browser preferences. The table header is sticky within a vertically scrollable table, and the site header is pinned.
 
-Names use the database's `ra_game_title` when available, otherwise a cleaned filename. SQL strips filename extensions, disc serials and underscores for fallback sorting across pages. Note that the Excel report additionally uses recommended RA names, GameDB and local-friendly-title audit fields which are **not yet persisted to library_item**; perfect parity requires importing those fields. No ROM or database modification is performed by these UI changes.
+Names use the database `ra_game_title` where present, otherwise the locally cached GameDB title matched by disc serial, and finally a cleaned filename. Name sorting, search and A–Z filtering resolve those displayed titles before pagination. Note that the Excel report additionally uses recommended RA names, GameDB and local-friendly-title audit fields which are **not yet persisted to library_item**; perfect parity requires importing those fields. No ROM or database modification is performed by these UI changes.
 
 Deploy with `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. Tests were added but should be run locally using the repo test environment.
 
