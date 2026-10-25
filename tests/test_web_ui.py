@@ -136,3 +136,9 @@ def test_gamedb_name_lookup_takes_precedence_over_abbreviated_filename(tmp_path,
         assert web_ui.name(item, "playstation-2") == expected
     assert web_ui.name(item, "playstation") != expected
 
+
+def test_mobile_catalogue_css_and_trophy_only_status():
+    from retrodb.web_ui import CSS
+    assert ".library-scroll table{min-width:0;table-layout:fixed}" in CSS
+    assert "overflow-wrap:anywhere" in CSS
+    assert ".ra-icon.no::after" in CSS
