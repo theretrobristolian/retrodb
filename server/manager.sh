@@ -438,6 +438,28 @@ retronas_menu() {
     esac
   done
 }
+online_import_menu() {
+  local source tmp
+  echo 'Import community PS2 online compatibility data from a CSV export.'
+  echo 'Source spreadsheet:'
+  echo ' https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/edit'
+  echo 'Export tab 0 as CSV on your computer and copy it to this VM.'
+  echo 'The source is treated as community evidence, not a live server guarantee.'
+  read -rp 'CSV path on this VM (blank to cancel): ' source
+  [[ -n "$source" ]] || return 0
+  [[ -r "$source" && -f "$source" ]] || { echo '[ERROR] Cannot read CSV.'; return 1; }
+  tmp="$(mktemp)"
+  if ! python3 "$HERE/online_catalogue.py" import-ps2 "$source" "$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  if ! sudo install -D -o retrodb -g retrodb -m 0640 "$tmp" /var/cache/retrodb/providers/online-compatibility.json; then
+    rm -f "$tmp"
+    return 1
+  fi
+  rm -f "$tmp"
+  echo '[OK] Online catalogue updated. Use More options -> Export reports to rebuild Excel.'
+}
 more_menu() {
   local choice
   while true; do
@@ -452,6 +474,7 @@ more_menu() {
     echo '  6) Update RetroDB            - Redeploy backend, migrations and service'
     echo '  7) Upgrade Debian            - Preview and apply system package upgrades'
     echo '  8) RetroNAS settings         - Mount, connection and server config'
+    echo '  9) Import PS2 online data    - Community CSV to offline catalogue'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -465,6 +488,7 @@ more_menu() {
       6) run bash "$HERE/maintenance.sh" retrodb; pause ;;
       7) run bash "$HERE/maintenance.sh" system; pause ;;
       8) retronas_menu ;;
+      9) online_import_menu; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
