@@ -108,3 +108,24 @@ def psbbn_art(serial: str):
         except OSError:
             pass
         raise HTTPException(404, "No PSBBN artwork for this release")
+
+RA_KINDS = {"icon", "box", "title", "ingame"}
+
+@router.get("/art/ra/{game_id}/{kind}", include_in_schema=False)
+def cached_ra_art(game_id: int, kind: str):
+    if game_id < 1 or kind not in RA_KINDS:
+        raise HTTPException(404, "Artwork unavailable")
+    path = RA_CACHE / str(game_id) / (kind + ".png")
+    if not path.is_file() or not path.stat().st_size:
+        raise HTTPException(404, "Artwork not cached yet")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+
+def art_location(game_id: int | None, kind: str, provider_path: object) -> str | None:
+    remote = ra_image(provider_path)
+    if not remote:
+        return None
+    if game_id and kind in RA_KINDS:
+        path = RA_CACHE / str(game_id) / (kind + ".png")
+        if path.is_file() and path.stat().st_size:
+            return f"/art/ra/{game_id}/{kind}"
+    return remote
