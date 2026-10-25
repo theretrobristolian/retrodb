@@ -15,9 +15,9 @@ from pathlib import Path
 SOURCE_URL = "https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/edit?gid=0#gid=0"
 ONLINE_COLUMNS = [
     "Game", "File", "Disc ID", "Region", "Original online", "Original host",
-    "LAN", "XLink Kai", "Private server / DNS", "DNS or service",
-    "Network status", "Players", "Co-op", "DNAS / setup",
-    "Hardware notes", "Evidence", "Last source update",
+    "LAN", "XLink Kai", "Community DNS reported", "DNS / service reference",
+    "Community report", "Players", "Co-op", "DNAS / setup",
+    "Hardware notes", "Source", "Last source update", "Connection methods", "Currently playable",
 ]
 SERIAL_RE = re.compile(r"\b(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS|SCPS)[_.\s-]*([0-9]{3})[.\s_-]*([0-9]{2})\b", re.I)
 
@@ -54,8 +54,9 @@ def build_record(row):
         "requirements": at(18), "community_notes": at(28),
         "console_compatibility": at(17), "last_source_update": at(3),
         "source_url": SOURCE_URL, "source_type": "community spreadsheet",
-        "service_methods": [{"kind":"custom_dns","value":at(4),"status":flag(at(2))}]
-            if at(4) else [],
+        "service_methods": ([{"kind":"custom_dns","reference":at(4),"evidence":at(2)}] if at(4) else []) +
+            ([{"kind":"lan_tunnel","service":"XLink Kai","evidence":at(14)}] if flag(at(14)) == "YES" else []),
+        "currently_playable": "UNVERIFIED",
     }
 
 def import_ps2(source, destination):
@@ -100,6 +101,8 @@ def report_row(audit, catalogue):
         (match or {}).get("max_players",""), (match or {}).get("co_op","UNKNOWN"),
         (match or {}).get("requirements",""), (match or {}).get("community_notes",""),
         (match or {}).get("source_url",""), (match or {}).get("last_source_update",""),
+        ", ".join(method.get("kind","") for method in (match or {}).get("service_methods",[])),
+        (match or {}).get("currently_playable","UNVERIFIED"),
     ]
 
 if __name__ == "__main__":
