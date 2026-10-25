@@ -18,6 +18,7 @@ def main():
     add = sub.add_parser("link", help="Approve a RetroDB -> RA account association")
     add.add_argument("retrodb_username")
     add.add_argument("ra_username")
+    add.add_argument("--xerabora-profile", default="", help="Pre-existing xeRAbora profile approved for web switching")
     delete = sub.add_parser("unlink", help="Remove association")
     delete.add_argument("retrodb_username")
     sub.add_parser("list", help="List associations (no API credentials)")
@@ -42,7 +43,11 @@ def main():
         known = [x.split(":", 1)[0] for x in USERS.read_text().splitlines() if ":" in x]
         if args.retrodb_username not in known:
             parser.error("RetroDB username not found in htpasswd")
-        data[args.retrodb_username] = args.ra_username
+        if args.xerabora_profile and not VALID.fullmatch(args.xerabora_profile):
+            parser.error("Invalid xeRAbora profile name")
+        data[args.retrodb_username] = {"ra_username": args.ra_username}
+        if args.xerabora_profile:
+            data[args.retrodb_username]["xerabora_profile"] = args.xerabora_profile
     else:
         data.pop(args.retrodb_username, None)
     PATH.parent.mkdir(parents=True, exist_ok=True)
