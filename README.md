@@ -263,6 +263,12 @@ The initial community import captures historical online listing, original servic
 
 The canonical model will eventually represent **Game → Release → Capabilities → Connection methods → Configuration guides**, with separate source evidence, dates and player-specific achievement progress. This is not PS2-only: Dreamcast (DreamPi/dial-up and community servers), original Xbox (Insignia), Xbox 360, PS3, GameCube, Wii, emulator-specific networking, LAN tunnelling (XLink Kai), DNS redirection and future services should use the same concepts without conflating them. A future frontend will offer console selection, a filterable A–Z game catalogue, detail pages with manuals and controller guidance, service-specific online settings and per-account achievements. These interfaces and additional platform importers are **planned**, not implemented by the initial PS2 Excel importer.
 
+### Online Summary and service evidence
+
+The workbook now contains both **PS2 Online** (one row per local PS2 image) and **Online Summary** (counts and a shortlist of documented online releases). Original historical online support, community DNS reports and XLink Kai reports are different fields; `Currently playable` remains `UNVERIFIED` until separately checked. Neither a community DNS `YES` nor a past online listing proves that a replacement server is live. LAN stays `UNKNOWN` until independently sourced. Connection methods are recorded as structured method labels (e.g. `custom_dns` and `lan_tunnel`) ready for future platform-neutral services such as DreamPi and Insignia.
+
+The Excel writer now supports column labels beyond Z, allowing future capability/evidence fields without truncation. Regenerate the workbook using **More options → 1) Export reports**; no full ROM rehash is required. To refresh the community source records with the latest schema first, use **More options → 9) Import PS2 online data**.
+
 ## Current collection-management workflow
 
 On a configured Debian host, update and launch the interactive manager:
