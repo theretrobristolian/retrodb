@@ -1,3 +1,9 @@
+### Mobile-width library table (25 October 2026)
+
+On iPhone, the catalogue now uses a width-constrained, fixed-layout table instead of the old 660px minimum. Long game names and disc serials wrap within their columns. RetroAchievements status is an **icon only**: a gold 🏆 for a locally **verified matching RA disc hash plus game ID**, or a dim/crossed trophy for other and unknown states (which **does not** mean confirmed unsupported). The icon retains a descriptive hover/accessibility title. The RA header is abbreviated to save space. Sticky table headings and the independent vertical scroll remain, as do selectable columns, guest access and desktop rendering. On very narrow displays, hiding RA ID or Disc ID through the Columns controls provides more room for titles.
+
+Deploy: `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. No new schema, ROM mutations, or permissions required.
+
 ## Game library table improvements (25 October 2026)
 
 Console and All Games pages now provide a scrollable table with sticky headings and a sticky global navigation bar; the table shows **game name**, **disc serial** (badge when a recognised serial appears in the stored filename/path), **RetroAchievements game ID**, **achievement match** (gold 🏆 only for a stored matched disc hash with RA ID), and optionally **file format**. Use the **Columns** checkboxes to show/hide columns; preferences are kept in browser local storage. Server-side filters allow verified RA or other/unknown games, title/filename/RA sorting and paging across the collection. These controls also work in read-only guest mode.
