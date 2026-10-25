@@ -1,3 +1,24 @@
+## GameDB titles in the web catalogue (October 2026)
+
+The web UI now **reuses the same cached GameDB serial-to-title map as the RetroAchievements audit** at `/var/cache/retrodb/providers/gamedb/{playstation,playstation-2}.json`. For a game with no populated `ra_game_title`, it extracts the disc serial from the filename/path and checks the local GameDB cache before using a cleaned filename fallback. This resolves known abbreviated filenames such as GTA VCS when the respective disc ID is present in GameDB. A verified RA title retains precedence. Searching, A–Z filters and game-title sorting use these resolved names **before 100-item pagination**. The game-details heading uses the same lookup.
+
+No web request downloads data or changes ROMs. The cache must already exist, be valid, and be readable by the `retrodb` service user; if not, titles gracefully fall back to filenames. To inspect a missing record:
+
+```bash
+sudo -u retrodb python3 - <<'PY'
+import json
+from pathlib import Path
+p=Path('/var/cache/retrodb/providers/gamedb/playstation-2.json')
+print('GameDB cache exists:', p.is_file())
+if p.is_file():
+    data=json.loads(p.read_text())
+    for serial in ('SLES-52541','SLES-54622'):
+        print(serial, data.get(serial, '(no GameDB match)'))
+PY
+```
+
+The audit/export title priority remains broader (including recommended RA titles and other audit-time hints). Those additional fields are still not persisted to `library_item`, so a smaller number of titles may differ from the Excel export. The current in-memory name sort is intended for the existing ~1,200-file collection; for much larger catalogues, resolved titles should be materialized and indexed in PostgreSQL.
+
 ## Console game library UI (25 October 2026)
 
 The read-only `/library` and `/library/{slug}` views now display game titles, parsed serial badges, RA game IDs, and 🏆 only for records with `ra_match_status=matched` and a populated RA game ID. The Format column is optional. Select RA filters, sort direction/column, A–Z or search; columns can be shown/hidden with local browser preferences. The table header is sticky within a vertically scrollable table, and the site header is pinned.
