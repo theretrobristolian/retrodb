@@ -36,7 +36,7 @@ def png_icon(size: int) -> bytes:
         return (x-cx)**2+(y-cy)**2 <= radius**2
     rows=[]
     for py in range(size):
-        line=bytearray(b"\\x00")
+        line=bytearray(b"\x00")
         y=(py+0.5)*100/size
         for px in range(size):
             x=(px+0.5)*100/size
@@ -50,7 +50,7 @@ def png_icon(size: int) -> bytes:
             line.extend(c)
         rows.append(bytes(line))
     raw=b"".join(rows)
-    return (b"\\x89PNG\\r\\n\\x1a\\n"+_chunk(b"IHDR",struct.pack(">IIBBBBB",size,size,8,2,0,0,0))
+    return (b"\x89PNG\r\n\x1a\n"+_chunk(b"IHDR",struct.pack(">IIBBBBB",size,size,8,2,0,0,0))
             +_chunk(b"IDAT",zlib.compress(raw,9))+_chunk(b"IEND",b""))
 
 @router.get("/favicon.svg")
