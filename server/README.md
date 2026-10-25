@@ -1,3 +1,33 @@
+## RetroDB LAN access and online services (preview)
+
+RetroDB still binds only to `127.0.0.1:8000` internally. For optional **LAN-only HTTP** access at `http://retrodb.it.gattaca.house`, first ensure your local DNS record resolves to the Debian VM and that its firewall only permits trusted LAN clients, then run:
+
+```bash
+cd ~/retrodb
+sudo bash server/deploy.sh
+sudo bash server/configure-web-access.sh http
+```
+
+This installs/enables Nginx as a reverse proxy on port 80. It does not change the RetroDB Uvicorn listener. If Nginx already hosts other sites, **review the generated virtual host and test the existing configuration first**. Do not expose port 80 or 443 to the internet: **the browser UI has no login yet**.
+
+For **HTTPS**, obtain a server certificate with DNS name `retrodb.it.gattaca.house`, full trust chain and matching private key (for example from a trusted AD CS issuing CA), then run:
+
+```bash
+sudo bash server/configure-web-access.sh https /path/to/fullchain.pem /path/to/privatekey.pem
+```
+
+This copies the chain and key to `/etc/retrodb/tls` and configures an HTTPS Nginx listener with HTTP redirected to HTTPS. Client browsers must trust the issuing CA; the certificate must contain the DNS name in Subject Alternative Name. You can change between `http` and `https` by rerunning the corresponding script with appropriate input. There is deliberately **no unauthenticated browser switch** for server/TLS configuration.
+
+The web UI now has an **Online Services** tab with direct links to xeRAbora (`http://retrodb.it.gattaca.house:18280/`), XLink Kai (`http://xlinkkai:34522/`), RetroAchievements and GitHub. These are **links, not service-health checks**. Browsers must be able to resolve and reach the service names and ports. xeRAbora player switching remains terminal-only until we implement strong browser authentication and a tightly scoped service helper; its private player credentials are not exposed to RetroDB.
+
+To publish the already imported PS2 community online compatibility data for game-detail pages:
+
+```bash
+sudo bash server/publish-online-data.sh
+```
+
+This copies only public source metadata JSON from the invoking user's `~/.cache/retrodb` to a service-readable directory, **not** xeRAbora credentials or RA API keys. On PS2 game pages RetroDB uses a serial parsed from the indexed filename/path for exact release matching; games without an identifiable serial remain `UNKNOWN`. LAN/XLink title matching and PostgreSQL import are not yet connected to these pages. Online service availability remains **UNVERIFIED**.
+
 ## RetroDB web frontend v1 (October 2026)
 
 RetroDB now includes a **real, read-only browser UI** in the existing FastAPI application. It is an early preview, not a fully populated Plex-style catalogue. The root page shows the platforms configured in PostgreSQL; select one to browse indexed library files. Available pages:
