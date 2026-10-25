@@ -47,14 +47,14 @@ def import_xlink(destination, source=URL):
     for table in parser.tables:
         if not table: continue
         heading = " ".join(table[0]).lower()
-        if "versus" in heading and "co-op" in heading and "players" in heading:
+        if table[0] and table[0][0].strip().lower() == "title" and "versus mode" in heading and "co-op mode" in heading:
             candidates.append(table)
     if len(candidates) != 1:
         raise ValueError(f"Expected exactly one PS2 supported-games table; found {len(candidates)}")
     entries = []
     for row in candidates[0][1:]:
         if not row: continue
-        title = re.sub(r"\\s+", " ", row[0]).strip()
+        title = re.sub(r"\s+", " ", row[0]).strip()
         if title: entries.append({"title": title, "source_url": URL,
                                  "evidence": "Team XLink manually verified PS2 LAN list",
                                  "match_scope": "title_only"})
