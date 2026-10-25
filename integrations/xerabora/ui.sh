@@ -51,7 +51,7 @@ xr_web_urls() {
   fi
 }
 xr_draw_header() {
-  local title="${1:-Main menu}"
+  local title="${1-Main menu}"
   if [[ -t 1 ]]; then printf '\033[2J\033[H'; fi
   cat <<'ART'
  __  __ _____ ____      _    ____   ___  ____      _
@@ -67,8 +67,10 @@ ART
   printf ' Active RetroAchievements profile: %s\n' "$(xr_active_profile)"
   xr_web_urls
   printf '%s\n' '--------------------------------------------------------------------'
-  printf ' %s\n' "$title"
-  printf '%s\n' '--------------------------------------------------------------------'
+  if [[ -n "$title" ]]; then
+    printf ' %s\n' "$title"
+    printf '%s\n' '--------------------------------------------------------------------'
+  fi
 }
 xr_draw_footer() {
   printf '%s\n' '--------------------------------------------------------------------'
