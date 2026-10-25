@@ -107,13 +107,13 @@ sync_application() {
 wait_for_health() {
     local attempt
     for attempt in $(seq 1 30); do
-        if curl --fail --silent http://127.0.0.1:8000/health >/dev/null 2>&1; then
+        if curl --fail --silent http://127.0.0.1:8000/login >/dev/null 2>&1; then
             return 0
         fi
         sleep 1
     done
 
-    printf 'RetroDB did not become healthy within 30 seconds.\n' >&2
+    printf 'RetroDB login endpoint did not become available within 30 seconds.\n' >&2
     curl --silent --show-error http://127.0.0.1:8000/health >&2 || true
     printf '\n\nService status:\n' >&2
     systemctl status --no-pager --full retrodb.service >&2 || true
