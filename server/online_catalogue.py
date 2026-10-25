@@ -19,6 +19,7 @@ ONLINE_COLUMNS = [
     "LAN", "XLink Kai", "Community DNS reported", "DNS / service reference",
     "Community report", "Players", "Co-op", "DNAS / setup",
     "Hardware notes", "Source", "Last source update", "Connection methods", "Currently playable", "Source confidence", "XLink evidence",
+    "Community XLink report", "XLink catalogue", "XLink conflict",
 ]
 SERIAL_RE = re.compile(r"\b(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS|SCPS)[_.\s-]*([0-9]{3})[.\s_-]*([0-9]{2})\b", re.I)
 
@@ -103,20 +104,34 @@ def load_xlink(path):
             if normalized_title(item.get("title"))}
 
 def enrich_with_xlink(row, xlink):
-    # Title-level evidence only, NOT a disc/region-tested compatibility guarantee.
+    """Merge evidence without overwriting or discarding either source.
+
+    Row indices 0-18 are the legacy workbook format. Appended columns document
+    the separate observations; title matches are not release-level verification.
+    """
     candidate = xlink.get(normalized_title(row[0]))
-    row.extend([
-        "Release ID matched" if row[4] == "YES" else
-        ("Title-level XLink match only" if candidate else "No source match"),
-        (candidate or {}).get("source_url", ""),
-    ])
+    community_xlink = row[7]  # retain source's raw YES / NO / UNKNOWN
+    official = "YES (title-level)" if candidate else "UNKNOWN"
+    conflict = ("REVIEW: community NO / XLink listed"
+                if candidate and community_xlink == "NO" else "")
+    confidence = ("Disc ID + XLink title" if row[4] == "YES" and candidate else
+                  "Disc ID only" if row[4] == "YES" else
+                  "XLink title only" if candidate else "No matching evidence")
+    provenance = (candidate or {}).get("source_url", "")
+    if candidate and (candidate or {}).get("source_confidence") == "bundled_partial_snapshot":
+        confidence += " (partial snapshot)"
+    # Native LAN evidence can be inferred for the title listed by XLink,
+    # never for a specific release.
     if candidate:
-        row[7] = "YES (title-level)"
         row[6] = "YES (title-level)"
-        if row[17]:
-            row[17] += ", lan_tunnel"
-        else:
-            row[17] = "lan_tunnel"
+        methods = [part.strip() for part in row[17].split(",") if part.strip()]
+        if "lan_tunnel" not in methods:
+            methods.append("lan_tunnel")
+        row[17] = ", ".join(methods)
+    # Effective summary XLink signal includes either source, while its
+    # original reported value remains in the dedicated community column.
+    row[7] = ("YES (title-level)" if candidate else community_xlink)
+    row.extend([confidence, provenance, community_xlink, official, conflict])
     return row
 
 def report_row(audit, catalogue):
