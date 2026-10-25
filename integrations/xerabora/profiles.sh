@@ -55,7 +55,7 @@ set_key() {
   cfg="$(profile_dir "$name")"
   [[ -d "$cfg" ]] || { echo "Profile missing" >&2; return 1; }
   if [[ -s "$cfg/xerabora/apikey" ]]; then
-    read -rp "Existing key found. Replace? [y/N] " answer
+    read -rp "Existing key found. Replace? [y/n] (default: no) " answer
     [[ "$answer" =~ ^[Yy]$ ]] || return 0
   fi
   read -rsp "Paste Web API key (hidden; blank cancels): " key
@@ -105,7 +105,7 @@ activate() {
   echo "Switching from ${active:-original-default} to $name."
   echo "Finish and save your PS2 game before switching accounts."
   local answer
-  read -rp "Continue? [y/N] " answer
+  read -rp "Continue? [y/n] (default: no) " answer
   [[ "$answer" =~ ^[Yy]$ ]] || { echo "Cancelled."; return 0; }
   # xeRAbora reads native LAN flag from each profile's XDG config directory.
   # Mirror the single server-wide preference into the selected profile before start.
