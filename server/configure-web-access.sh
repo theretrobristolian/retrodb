@@ -13,7 +13,7 @@ if ! command -v nginx >/dev/null || ! command -v htpasswd >/dev/null; then
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y nginx apache2-utils
 fi
-install -d -o root -g root -m 0700 /etc/retrodb
+install -d -o root -g www-data -m 0750 /etc/retrodb
 AUTH_FILE=/etc/retrodb/web-users.htpasswd
 if [[ ! -s "$AUTH_FILE" ]]; then
   echo 'Create a browser login for RetroDB. Password is requested interactively.'
@@ -60,9 +60,25 @@ server {
   }
 }
 EOF
+config_backup="$(mktemp)"
+existing_config=false
+if [[ -e /etc/nginx/sites-available/retrodb.conf ]]; then
+  cp -p /etc/nginx/sites-available/retrodb.conf "$config_backup"
+  existing_config=true
+fi
 install -o root -g root -m 0644 "$config_tmp" /etc/nginx/sites-available/retrodb.conf
 ln -sfn /etc/nginx/sites-available/retrodb.conf /etc/nginx/sites-enabled/retrodb.conf
-nginx -t
+if ! nginx -t; then
+  if [[ "$existing_config" == true ]]; then
+    cp -p "$config_backup" /etc/nginx/sites-available/retrodb.conf
+  else
+    rm -f /etc/nginx/sites-available/retrodb.conf /etc/nginx/sites-enabled/retrodb.conf
+  fi
+  rm -f "$config_backup"
+  echo "[ERROR] Nginx config invalid; prior config restored." >&2
+  exit 1
+fi
+rm -f "$config_backup"
 systemctl enable --now nginx
 systemctl reload nginx
 echo "[OK] Protected RetroDB web access configured: $MODE://$HOST/"
