@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from xml.sax.saxutils import escape
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from online_catalogue import ONLINE_COLUMNS, load as load_online, report_row as online_report_row
+from online_catalogue import ONLINE_COLUMNS, load as load_online, load_xlink, report_row as online_report_row, enrich_with_xlink
 
 COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning']
 VERIFIED = 'clean-base-verified-ready-to-patch'
@@ -208,7 +208,8 @@ def main(source,destination,preparation=None):
     outputs = patched_outputs(str(Path(preparation).with_name('patch-apply.json')) if preparation else None)
     sheets=[]
     online_catalogue = load_online(str(Path.home() / '.cache/retrodb/online-compatibility.json'))
-    ps2_online = [online_report_row(r, online_catalogue) for r in entries if r.get('platform') == 'Sony PlayStation 2']
+    xlink_catalogue = load_xlink(str(Path.home() / '.cache/retrodb/xlink-ps2.json'))
+    ps2_online = [enrich_with_xlink(online_report_row(r, online_catalogue), xlink_catalogue) for r in entries if r.get('platform') == 'Sony PlayStation 2']
     ps2_online.sort(key=lambda row: (str(row[0]).casefold(), str(row[2])))
     all_actions=[]
     summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','Eligible RA-ready %','RA eligible images','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors','Patchable %','No-set %','Unresolved %','RA identified %']]
@@ -244,10 +245,11 @@ def main(source,destination,preparation=None):
         ['Metric', 'Count', 'Meaning'],
         ['PS2 local disc images', len(ps2_online), 'Every PS2 image from the audit'],
         ['Historical online documented', len(known), 'Exact regional disc ID found in imported community data'],
-        ['XLink Kai reported supported', sum(row[7] == 'YES' for row in known), 'Community source only; verify with XLink Kai'],
+        ['XLink Kai reported supported', sum(str(row[7]).startswith('YES') for row in ps2_online), 'Community or official XLink title-level evidence; region not verified'],
         ['Community DNS reported yes', sum(row[8] == 'YES' for row in known), 'Not proof that the server is currently online'],
         ['Native LAN unknown', sum(row[6] == 'UNKNOWN' for row in ps2_online), 'Native LAN requires separate source evidence'],
-        ['No matching source record', len(ps2_online)-len(known), 'UNKNOWN does not mean NO online support'],
+        ['No historical-online source record', len(ps2_online)-len(known), 'UNKNOWN does not mean NO online support'],
+        ['XLink title matches without disc-ID online evidence', sum(row[7] == 'YES (title-level)' and row[4] != 'YES' for row in ps2_online), 'LAN play documented at title level; edition must be checked'],
     ]
     online_summary += [['', '', ''], ['Game', 'Disc ID', 'Connection details (community reported)']]
     online_summary += [[row[0], row[2], f'Original: {row[5] or "unknown"}; XLink: {row[7]}; DNS: {row[8]}; {row[9]}'] for row in known]
