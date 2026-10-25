@@ -1,3 +1,19 @@
+## Efficient bulk RA artwork fetching (25 October 2026)
+
+**New default:** `server/prefetch-artwork.py --mode icons` uses the official `API_GetGameList.php` bulk catalogue endpoint for PS1 (RA system 12) and PS2 (RA system 21), with `h=0` (do **not** download supported hashes) and `f=0`. The two large catalogue responses are each cached under `/var/cache/retrodb/artwork/ra/catalogue-12.json` and `catalogue-21.json` for **30 days**. This is a major reduction in metadata API calls for icon discovery; the RA API explicitly warns that game-list responses can be very large and must not be polled often. Matching uses *only the 840 or so RA game IDs already indexed in your local PostgreSQL library* (no additional ROM scanning), then downloads missing icon PNGs from the CDN individually. Images cannot be bundled into one API call. Existing metadata/artwork are reused; cached misses are skipped.
+
+After deployment, preview and run:
+
+```bash
+cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/prefetch-artwork.py --dry-run
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/prefetch-artwork.py --limit 25 --delay 12
+```
+
+The console catalogue may require **one fetch per console on the first icon run**, but subsequent 25-game icon batches reuse the local catalogue without another RA metadata API request. **`--mode full`** retains the previous per-game extended-metadata path, fetching `ImageBoxArt`, `ImageTitle`, `ImageIngame`, developer, publisher, genre and release year, with the same rate-conscious spacing. Example: `sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/prefetch-artwork.py --mode full --limit 10 --delay 20`. This is necessary for richer cover metadata not included in the system-wide game list. All operations are resumable and never delete previously cached full metadata.
+
+**Important:** If an older `--mode full` batch is currently running, let it finish before starting a second batch to avoid overlapping API requests. Source changes are committed but not yet executed on the live VM.
+
 ## Resumable, rate-conscious RetroAchievements artwork prefetch (October 2026)
 
 RetroDB now offers `server/prefetch-artwork.py` to populate the **existing local RA metadata cache and actual image files** from the distinct RA game IDs in the PostgreSQL `library_item` table. It avoids individual browser-triggered metadata fetch bursts and deduplicates identical RA game IDs across disc releases. It never scans/copies ROMs or writes database records.
