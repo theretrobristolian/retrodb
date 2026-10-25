@@ -25,7 +25,9 @@ def test_login_rejects_missing_token_and_cross_site(monkeypatch):
     assert client.post("/login", data=body).status_code == 403
     token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text).group(1)
     body["csrf_token"] = token
-    assert client.post("/login", data=body, headers={"sec-fetch-site":"cross-site"}).status_code == 403
+    assert client.post("/login", data=body, headers={"sec-fetch-site":"cross-site"}).status_code == 401
+    body["csrf_token"] = "invalid"
+    assert client.post("/login", data=body).status_code == 403
 
 def test_safari_null_origin_and_guest_form(monkeypatch):
     monkeypatch.setattr(auth, "secret", lambda: b"test-secret-only-not-for-production")
