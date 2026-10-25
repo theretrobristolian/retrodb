@@ -200,7 +200,7 @@ def main(source,destination,preparation=None):
     sources = patch_sources(preparation)
     outputs = patched_outputs(str(Path(preparation).with_name('patch-apply.json')) if preparation else None)
     sheets=[]
-    online_catalogue = load_online('/var/cache/retrodb/providers/online-compatibility.json')
+    online_catalogue = load_online(str(Path.home() / '.cache/retrodb/online-compatibility.json'))
     ps2_online = [online_report_row(r, online_catalogue) for r in entries if r.get('platform') == 'Sony PlayStation 2']
     ps2_online.sort(key=lambda row: (str(row[0]).casefold(), str(row[2])))
     all_actions=[]
