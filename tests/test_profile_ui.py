@@ -61,8 +61,8 @@ def test_switch_requires_admin_approved_profile_and_csrf(tmp_path, monkeypatch):
     token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
     response = client.post("/profile/switch", data={"csrf_token": token, "confirm": "SWITCH"},
                            headers={"Origin": "null"})
-    assert response.status_code == 200
-    assert "Activated" in response.text
+    assert response.status_code == 303
+    assert response.headers["location"] == "/profile?xerabora=switched"
     assert switched == ["player"]
 
 def test_switch_without_admin_mapping_is_denied(tmp_path, monkeypatch):
@@ -73,3 +73,23 @@ def test_switch_without_admin_mapping_is_denied(tmp_path, monkeypatch):
     monkeypatch.setattr(profile_ui, "user_from_cookie", lambda _: "player")
     response = TestClient(app).post("/profile/switch", data={"confirm": "SWITCH"})
     assert response.status_code == 403
+
+def test_switch_already_active_redirects_to_correct_status(tmp_path, monkeypatch):
+    import re
+    config = tmp_path / "profile-links.json"
+    config.write_text(json.dumps({"player": {"ra_username": "PoodingPower", "xerabora_profile": "PoodingPower"}}))
+    monkeypatch.setattr(profile_ui, "LINKS", config)
+    monkeypatch.setattr(session_auth, "secret", lambda: b"testing-only-not-production")
+    monkeypatch.setattr(session_auth, "user_from_cookie", lambda _: "player")
+    monkeypatch.setattr(profile_ui, "user_from_cookie", lambda _: "player")
+    monkeypatch.setenv("RETRODB_RA_API_KEY", "")
+    monkeypatch.setattr(profile_ui, "switch_xerabora", lambda u: "Already active; no restart needed")
+    client = TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False)
+    profile = client.get("/profile")
+    assert 'id="player-switch-dialog"' in profile.text
+    assert 'id="open-player-switch"' in profile.text
+    token = re.search(r'name="csrf_token" value="([^"]+)"', profile.text).group(1)
+    result = client.post("/profile/switch", data={"csrf_token": token, "confirm": "SWITCH"})
+    assert result.status_code == 303
+    assert result.headers["location"] == "/profile?xerabora=already"
+    assert "already selected" in client.get("/profile?xerabora=already").text
