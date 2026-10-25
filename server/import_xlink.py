@@ -148,6 +148,16 @@ def import_xlink(destination, source=URL):
                 diagnostics.append(f"Wiki source request: {exc}")
 
     titles = list(dict.fromkeys(t for t in titles if t and t.casefold() not in ("title","game")))
+    fallback = False
+    if len(titles) < 20:
+        snapshot = Path(__file__).resolve().parent / "data/xlink-ps2-snapshot.json"
+        if snapshot.is_file():
+            saved = json.loads(snapshot.read_text(encoding="utf-8"))
+            if saved.get("source_kind") == "bundled_partial_snapshot" and len(saved.get("titles", [])) >= 20:
+                titles = saved["titles"]
+                fallback = True
+                print(f"[WARN] Direct XLink site returned unusable content. Using bundled PARTIAL snapshot ({len(titles)} of {saved.get('declared_source_count', '?')} documented titles; snapshot date {saved.get('as_of', 'unknown')}).")
+                print("[INFO] Source diagnostics: " + " | ".join(diagnostics))
     if not 20 <= len(titles) <= 200:
         raise ValueError(
             f"Found {len(titles)} PS2 titles; refusing to replace existing data. "
@@ -155,15 +165,17 @@ def import_xlink(destination, source=URL):
         )
     entries = [{"title": title, "source_url": URL,
                 "evidence": "Team XLink manually verified PS2 LAN list",
-                "match_scope": "title_only"} for title in titles]
+                "match_scope": "title_only",
+                "source_confidence": "bundled_partial_snapshot" if fallback else "direct_site"} for title in titles]
     payload = {"schema_version":1, "platform":"playstation-2", "source":URL,
-               "updated_at":datetime.now(timezone.utc).isoformat(), "records":entries}
+               "updated_at":datetime.now(timezone.utc).isoformat(), "records":entries,
+               "source_kind":"bundled_partial_snapshot" if fallback else "direct_site"}
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\\n", encoding="utf-8")
     tmp.replace(dest)
-    print(f"[OK] Imported {len(entries)} Team XLink PS2 LAN titles (title-level evidence)")
+    print(f"[OK] Imported {len(entries)} Team XLink PS2 LAN titles (title-level evidence; {'PARTIAL SNAPSHOT' if fallback else 'live source'})")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2: sys.exit("Usage: python3 server/import_xlink.py DESTINATION.json")
