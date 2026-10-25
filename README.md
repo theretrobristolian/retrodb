@@ -261,11 +261,17 @@ git pull --ff-only origin main
 bash server/manager.sh
 ```
 
-Menu **1** performs the full eight-stage audit. Menu **4** regenerates reports from the existing audit (no new scan): `~/retrodb-exports/RetroDB-Compatibility.xlsx`, `RetroDB-OPL-Rename-Proposals.xlsx`, the machine-readable OPL rename CSV, and the raw compatibility CSV. Both Excel reports include frozen/filterable headers; the compatibility workbook has Summary, PS1 and PS2 tabs.
+Main-menu **1) Audit games** performs the full eight-stage audit. **More options → 1) Export reports** regenerates reports from the existing audit (no new scan): `~/retrodb-exports/RetroDB-Compatibility.xlsx`, `RetroDB-OPL-Rename-Proposals.xlsx`, the machine-readable OPL rename CSV, and the raw compatibility CSV. Both Excel reports include frozen/filterable headers; the compatibility workbook has Summary, PS1 and PS2 tabs.
 
-Menu **3** tests a single checksum-verified PS2 official patch locally, confirms its RetroAchievements hash, and requires typing `PATCH-<RA_GAME_ID>` before writing to RetroNAS. It retains the original under `OLD_<filename>`, checks the backup using SHA-256, verifies the patched ISO on the NAS, and journals stages under `~/retrodb-exports/opl-rename-journals/`. **Never delete OLD_ backups without separate validation.** Old backup images are excluded from active inventory, RA matching and rename proposals.
+Main-menu **2) Patch PS2 game** handles the controlled, checksum-verified patch workflow. The default audit collection mount remains read-only. The patch workflow verifies clean base images before applying any patches, and does not silently replace original ROMs. Only explicitly selected verified output may be deployed through a separate, confirmed operation. Keep original CRT/light-gun disc images: optional *No GunCon Flash* patches are not mandatory for all light-gun games.
 
-Menu **6** offers confirmed OPL renames using the CSV proposal manifest and a temporary writable share; menu **7** inspects/resumes interrupted rename journals, while menu **8** inspects the latest patch journal. Renames preserve each game's disc serial, enforce filename-safe title text and retain conservative collision/review safeguards. After renaming or patching, run a fresh full audit; exporting alone cannot refresh hashes or collection paths.
+Main-menu **3) Rename PS2 games** previews and confirms conservative OPL renames with collision safeguards. **More options** contains report exports, patch downloads, service details, rename recovery, patch journals, application maintenance, Debian upgrades, and **8) RetroNAS settings**.
+
+**RetroNAS settings:** The submenu shows the SMB share, mount status and configuration, allows retrying the existing mount and reading its journal, and can run `server/configure-retronas.sh` after confirmation to change server/share/credentials. **4) Enable reliable on-demand mount at boot** runs `server/enable-retronas-automount.sh`, replacing eager boot-time mounting with a systemd automount. The helper preserves the original SMB 3.1.1 read-only mount definition and protected credentials; the user must confirm because the mount is briefly stopped. Status reports `on-demand`, `mounted`, or `unmounted`. This prevents a DNS-not-ready-at-boot failure from permanently blocking the initial mount, but does not guarantee recovery from every runtime disconnect.
+
+**Patch-stage timing:** Stage 7 prints wall-clock start/end times and elapsed seconds for patch download/cache lookup, source-image checksum verification and the overall stage. Downloads may be reused while checksum verification still reads large ISOs across SMB. Repeated source verification is not yet skipped automatically based on these timings.
+
+After a renaming or patch deployment operation, run a fresh audit; export-only cannot refresh hashes or paths.
 
 Full safeguards, recovery steps and notes are in [Server operations](server/README.md) and [RetroNAS scanning](docs/retronas-scanning.md). Always test games and artwork on the target PS2/OPL-RA setup before removing retained original copies.
 
