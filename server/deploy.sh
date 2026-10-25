@@ -122,7 +122,24 @@ wait_for_health() {
     return 1
 }
 
+ensure_web_session_secret() {
+    if ! grep -q '^RETRODB_SESSION_SECRET=' "$CONFIG_FILE"; then
+        local secret
+        secret=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
+        printf 'RETRODB_SESSION_SECRET=%s\\n' "$secret" >> "$CONFIG_FILE"
+    fi
+    chown root:"$APP_GROUP" "$CONFIG_FILE"
+    chmod 0640 "$CONFIG_FILE"
+    # Copy bcrypt public password hashes, not private credentials, into a file
+    # readable only by the unprivileged RetroDB process.
+    if [[ -s /etc/retrodb/web-users.htpasswd ]]; then
+        install -o root -g "$APP_GROUP" -m 0640 \\
+          /etc/retrodb/web-users.htpasswd /etc/retrodb/web-users-app.htpasswd
+    fi
+}
+
 run_step 'Preparing integration configuration' ensure_retroachievements_config
+run_step 'Preparing persistent session signing key and user hashes' ensure_web_session_secret
 run_step 'Provisioning PostgreSQL database and role' provision_database
 run_step 'Synchronising application files' sync_application
 run_step 'Creating Python virtual environment' python3 -m venv "$APP_ROOT/.venv"
