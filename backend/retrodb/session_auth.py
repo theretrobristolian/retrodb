@@ -60,7 +60,7 @@ def verify_password(username, password):
             name, hashed = line.split(":", 1)
             if hmac.compare_digest(name, username) and hashed.startswith("$2"):
                 return bcrypt.checkpw(password.encode(), hashed.encode())
-    except (OSError, ValueError, bcrypt.BcryptError):
+    except (OSError, ValueError):
         return False
     return False
 
@@ -90,12 +90,19 @@ def safe_next(value):
         return "/"
     return value
 
+def valid_origin(request):
+    origin = request.headers.get("origin")
+    if origin:
+        return origin == "https://retrodb.it.gattaca.house"
+    referer = request.headers.get("referer", "")
+    return referer.startswith("https://retrodb.it.gattaca.house/")
+
 @router.post("/login")
 async def login_action(request: Request):
     if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
         return Response(status_code=415)
     # Origin protection for credential submission.
-    if request.headers.get("origin") != "https://retrodb.it.gattaca.house":
+    if not valid_origin(request):
         return Response("Invalid request origin", status_code=403)
     data = await request.body()
     if len(data) > 4096: return Response(status_code=413)
