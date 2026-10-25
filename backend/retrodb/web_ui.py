@@ -38,7 +38,31 @@ table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;colo
 th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#18243a}
 .panel.library-scroll{max-height:70vh;overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain}
 .library-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 1px #344760}
-.library-scroll table{min-width:660px}
+.library-scroll table{min-width:0;table-layout:fixed}
+.library-scroll td[data-column="title"]{overflow-wrap:anywhere;word-break:normal;line-height:1.4}
+.library-scroll th[data-column="title"]{width:43%}
+.library-scroll th[data-column="disc"]{width:25%}
+.library-scroll th[data-column="id"]{width:13%}
+.library-scroll th[data-column="ra"]{width:14%}
+.library-scroll th[data-column="format"]{width:9%}
+.library-scroll td[data-column="disc"]{overflow-wrap:anywhere}
+.library-scroll .pill.serial{white-space:normal;overflow-wrap:anywhere;line-height:1.3}
+.ra-icon{display:inline-block;position:relative;font-size:19px;line-height:1;white-space:nowrap}
+.ra-icon.yes{filter:sepia(1) saturate(3);color:#f5ca65}
+.ra-icon.no{filter:grayscale(1);opacity:.35}
+.ra-icon.no::after{content:"×";position:absolute;right:-4px;bottom:-7px;font-size:15px;font-weight:900;color:#e4e8f0;text-shadow:0 0 2px #10192d}
+@media(max-width:760px){
+ .library-scroll table{width:100%;min-width:0;font-size:12px}
+ .library-scroll th,.library-scroll td{padding:9px 4px}
+ .library-scroll th[data-column="title"]{width:42%}
+ .library-scroll th[data-column="disc"]{width:31%}
+ .library-scroll th[data-column="id"]{width:13%}
+ .library-scroll th[data-column="ra"]{width:14%}
+ .library-scroll th[data-column="format"]{width:12%}
+ .library-scroll .pill.serial{padding:3px 5px;font-size:11px}
+ .library-scroll td[data-column="id"]{overflow-wrap:anywhere}
+ .library-scroll td[data-column="ra"],.library-scroll th[data-column="ra"]{text-align:center}
+}
 .library-scroll [hidden]{display:none}
 .pill.serial{font-family:monospace;background:#263d61}
 .achievement{color:#f5ca65;font-weight:700}
@@ -213,11 +237,11 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item)
-        badge = '🏆 Verified' if supported else (item.ra_match_status or 'Unknown')
+        badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
 <td data-column="id">{item.ra_game_id or '—'}</td>
-<td data-column="ra"><span class="{'achievement' if supported else 'muted'}">{escape(badge)}</span></td>
+<td data-column="ra"><span class="ra-icon {'yes' if supported else 'no'}" role="img" aria-label="{escape(badge,quote=True)}" title="{escape(badge,quote=True)}">🏆</span></td>
 <td data-column="format">{escape(item.extension.upper())}</td></tr>""")
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
@@ -243,10 +267,10 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <label><input type="checkbox" data-toggle="ra" checked> Achievements</label>
 <label><input type="checkbox" data-toggle="format"> Format</label></div>
 <div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
-<div class="panel library-scroll"><table><thead><tr><th>Game</th><th data-column="disc">Disc ID</th>
-<th data-column="id">RA ID</th><th data-column="ra">Achievements</th><th data-column="format">Format</th></tr></thead>
+<div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">Disc ID</th>
+<th data-column="id">RA ID</th><th data-column="ra" title="RetroAchievements">RA</th><th data-column="format">Format</th></tr></thead>
 <tbody>{''.join(rows) or '<tr><td colspan="5">No games match the current filters.</td></tr>'}</tbody></table></div>
-<p class="muted">🏆 means a matching RA disc hash and RA game ID. Unknown is not evidence of incompatibility. Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
+<p class="muted">Gold 🏆 means a verified RA disc hash and RA game ID; muted crossed trophy means no verified match in the current audit (not necessarily unsupported). Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
