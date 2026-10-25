@@ -86,7 +86,7 @@ def is_guest(request: Request) -> bool:
 def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
     from retrodb.session_auth import csrf_token
     signout_csrf = csrf_token()
-    private_nav = '' if guest else '<a href="/management">Management</a><a href="/online-services">Online services</a>'
+    private_nav = '' if guest else '<a href="/profile">My profile</a><a href="/management">Management</a><a href="/online-services">Online services</a>'
     logout_label = "Leave guest view" if guest else "Sign out"
     heading = escape(title)
     return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
