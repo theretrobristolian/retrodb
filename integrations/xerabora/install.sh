@@ -31,7 +31,7 @@ prerequisites() {
       echo "apt-get not found; install Debian prerequisites manually." >&2
       return 1
     fi
-    read -rp "Install required packages with apt-get now? [y/N] " reply
+    read -rp "Install required packages with apt-get now? [y/n] (default: no) " reply
     [[ "$reply" =~ ^[Yy]$ ]] || return 1
     sudo -v || return 1
     sudo apt-get update || return 1
@@ -254,7 +254,7 @@ install_client() {
     prompt_api_key
     return
   fi
-  read -rp "Download, verify, install $version and restart service? [y/N] " confirm
+  read -rp "Download, verify, install $version and restart service? [y/n] (default: no) " confirm
   [[ "$confirm" =~ ^[Yy]$ ]] || { echo "No changes made."; return; }
   base="https://github.com/hacan359/xerabora/releases/download/$version"
   tmp="$(mktemp -d)"
@@ -311,7 +311,7 @@ EOF
   if [[ -n "$server_flag" ]]; then echo "[OK] xeRAbora $version uses persistent --server mode."; fi
   if [[ "$mode" == auto ]]; then sudo systemctl enable xerabora.service; fi
   if [[ "$old" == unknown && ! -s "$HOME_PATH/.config/xerabora/credentials" ]]; then
-    read -rp "Authenticate now? [Y/n] " confirm
+    read -rp "Authenticate now? [y/n] (default: yes) " confirm
     if [[ ! "$confirm" =~ ^[Nn]$ ]]; then login; else echo "Run login and then start when ready"; return; fi
   fi
   if [[ "$mode" == disabled ]]; then
@@ -364,7 +364,7 @@ api_key_present() { [[ -s "$(active_config_dir)/apikey" ]]; }
 set_api_key() {
   local key answer keytmp
   if api_key_present; then
-    read -rp "Web API key exists. Replace? [y/N] " answer
+    read -rp "Web API key exists. Replace? [y/n] (default: no) " answer
     [[ "$answer" =~ ^[Yy]$ ]] || return 0
   fi
   echo "Get your key from https://retroachievements.org/settings (Keys)"
@@ -392,7 +392,7 @@ prompt_api_key() {
     echo "Web API key: configured"
   else
     echo "Web API key: missing"
-    read -rp "Add Web API key? [y/N] " answer
+    read -rp "Add Web API key? [y/n] (default: no) " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then set_api_key; fi
   fi
 }
