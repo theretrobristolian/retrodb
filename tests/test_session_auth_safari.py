@@ -38,3 +38,30 @@ def test_safari_null_origin_and_guest_form(monkeypatch):
     response = client.post("/guest", data={"csrf_token": token}, headers=headers)
     assert response.status_code == 303
     assert response.headers["location"] == "/"
+
+def test_safari_guest_logout_with_null_origin(monkeypatch):
+    monkeypatch.setattr(auth, "secret", lambda: b"test-secret-only-not-for-production")
+    client = TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text).group(1)
+    entered = client.post("/guest", data={"csrf_token": token}, headers={"Origin": "null", "Sec-Fetch-Site": "cross-site"})
+    assert entered.status_code == 303
+    home = client.get("/")
+    assert home.status_code == 200
+    assert "Leave guest view" in home.text
+    signout_token = re.search(r'<form method="post" action="/logout"[^>]*><input type="hidden" name="csrf_token" value="([^"]+)"', home.text).group(1)
+    logged_out = client.post("/logout", data={"csrf_token": signout_token},
+                             headers={"Origin": "null", "Sec-Fetch-Site": "cross-site"})
+    assert logged_out.status_code == 303
+    assert logged_out.headers["location"] == "/login"
+    assert 'retrodb_session=' in logged_out.headers["set-cookie"]
+    assert 'Max-Age=0' in logged_out.headers["set-cookie"]
+    assert client.get("/").status_code == 303
+
+def test_logout_rejects_unsigned_post_even_with_guest_cookie(monkeypatch):
+    monkeypatch.setattr(auth, "secret", lambda: b"test-secret-only-not-for-production")
+    client = TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False)
+    token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text).group(1)
+    assert client.post("/guest", data={"csrf_token": token}).status_code == 303
+    bad = client.post("/logout", data={"csrf_token": "invalid"})
+    assert bad.status_code == 403
+    assert "text/html" in bad.headers["content-type"]
