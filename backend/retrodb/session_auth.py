@@ -145,7 +145,7 @@ async def login_action(request: Request):
 
 @router.post("/logout")
 async def logout(request: Request):
-    if request.headers.get("origin") != "https://retrodb.it.gattaca.house":
+    if not valid_origin(request):
         return Response(status_code=403)
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE, path="/")
