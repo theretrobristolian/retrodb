@@ -84,6 +84,8 @@ def is_guest(request: Request) -> bool:
     return user_from_cookie(request.cookies.get(COOKIE, "")) == "__retrodb_guest__"
 
 def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
+    from retrodb.session_auth import csrf_token
+    signout_csrf = csrf_token()
     private_nav = '' if guest else '<a href="/management">Management</a><a href="/online-services">Online services</a>'
     logout_label = "Leave guest view" if guest else "Sign out"
     heading = escape(title)
@@ -99,7 +101,7 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <link rel="manifest" href="/manifest.webmanifest">
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
 <nav><a href="/">Consoles</a><a href="/library">All games</a>{private_nav}
-<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
+<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
 <main>{body}</main></body></html>""")
 
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
