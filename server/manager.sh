@@ -81,7 +81,7 @@ ART
 pause() { read -rp 'Press Enter to return...' ignored || true; }
 mount_ready() {
   mountpoint -q "$MOUNT" && return 0
-  read -rp 'RetroNAS unmounted. Mount it now? [y/N] ' ans
+  read -rp 'RetroNAS unmounted. Mount it now? [y/n] (default: no) ' ans
   [[ "$ans" =~ ^[Yy]$ ]] || return 1
   sudo bash "$HERE/retronas.sh" mount && mountpoint -q "$MOUNT"
 }
@@ -385,12 +385,15 @@ menu() {
   local choice
   while true; do
     header
+    echo ' Main menu'
+    echo
     echo '  1) Audit game collection  - Scan, check RA support and export reports'
     echo '  2) Patch a PS2 game       - Test, verify and preserve original'
     echo '  3) Rename PS2 games       - Preview changes and confirm renames'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
+    echo
     echo '----------------------------------------------------------------'
     echo ' https://github.com/theretrobristolian/retrodb'
     echo ' Update: cd ~/retrodb && git pull --ff-only origin main'
