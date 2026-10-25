@@ -10,6 +10,7 @@ from retrodb.models import Platform
 from retrodb.schemas import PlatformRead
 from retrodb.web_ui import router as web_router
 from retrodb.branding import router as branding_router
+from retrodb.session_auth import router as auth_router, enforce_session
 
 app = FastAPI(
     title="RetroDB",
@@ -53,3 +54,6 @@ def list_platforms(session: Session = Depends(get_session)) -> list[Platform]:
 # Read-only v1 browser application; shares the existing database session.
 app.include_router(web_router)
 app.include_router(branding_router)
+
+app.include_router(auth_router)
+app.middleware("http")(enforce_session)
