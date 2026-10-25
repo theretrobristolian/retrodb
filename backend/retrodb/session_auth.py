@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 router = APIRouter(include_in_schema=False)
 COOKIE = "retrodb_session"
 LIFETIME = 30 * 86400
-PUBLIC = ("/login", "/favicon.svg", "/favicon.ico", "/apple-touch-icon.png",
+PUBLIC = ("/login", "/guest", "/favicon.svg", "/favicon.ico", "/apple-touch-icon.png",
           "/manifest.webmanifest", "/icons/")
 USERS = Path("/etc/retrodb/web-users-app.htpasswd")
 
@@ -44,6 +44,8 @@ def user_from_cookie(token):
         name, expiry = base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)).decode().split("|")
         if not name or int(expiry) <= time.time():
             return None
+        if name == "__retrodb_guest__":
+            return name
         # Removing a user from htpasswd also invalidates their session.
         if not any(line.split(":", 1)[0] == name for line in USERS.read_text().splitlines() if ":" in line):
             return None
@@ -79,7 +81,8 @@ input{background:#0b1020;border:1px solid #546780;color:white}button{background:
 __ERROR__<form action="/login" method="post"><label>Username<input name="username" required autocomplete="username"></label>
 <label>Password<input type="password" name="password" required autocomplete="current-password"></label>
 <input type="hidden" name="next" value="__NEXT__"><input type="hidden" name="csrf_token" value="__CSRF__"><button>Sign in</button></form>
-<p>Only use on your trusted home network over HTTPS.</p></main></body></html>"""
+<p>Only use on your trusted home network over HTTPS.</p>
+<form action="/guest" method="post"><input type="hidden" name="csrf_token" value="__CSRF__"><button type="submit" style="background:#263c60">View as guest</button></form></main></body></html>"""
 
 def csrf_token():
     payload = f"{int(time.time()) + 1200}:{secrets.token_urlsafe(24)}"
@@ -143,6 +146,23 @@ async def login_action(request: Request):
     response.headers["Cache-Control"] = "no-store"
     return response
 
+@router.post("/guest")
+async def enter_guest(request: Request):
+    if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
+        return Response(status_code=415)
+    data = await request.body()
+    if len(data) > 4096:
+        return Response(status_code=413)
+    from urllib.parse import parse_qs
+    values = parse_qs(data.decode("utf-8", "replace"), keep_blank_values=True)
+    if not valid_origin(request) or not valid_csrf(values.get("csrf_token", [""])[0]):
+        return HTMLResponse("Invalid guest form. Reload the login page.", status_code=403)
+    response = RedirectResponse("/", status_code=303)
+    response.set_cookie(COOKIE, issue("__retrodb_guest__"), httponly=True, secure=True,
+                        samesite="lax", max_age=LIFETIME, path="/")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
 @router.post("/logout")
 async def logout(request: Request):
     if not valid_origin(request):
@@ -156,7 +176,15 @@ async def enforce_session(request: Request, call_next):
     path = request.url.path
     if path in PUBLIC or path.startswith("/icons/"):
         return await call_next(request)
-    if not user_from_cookie(request.cookies.get(COOKIE, "")):
+    user = user_from_cookie(request.cookies.get(COOKIE, ""))
+    if user == "__retrodb_guest__":
+        # Guest access is read-only and limited to catalogue pages.
+        # No management, services, APIs, user tools or xeRAbora actions.
+        allowed = (path == "/" or path == "/library" or path.startswith("/library/")
+                   or (path.startswith("/game/") and path.removeprefix("/game/").isdigit()))
+        if request.method != "GET" or not allowed:
+            return Response("Guests can only browse the game catalogue.", status_code=403)
+    if not user:
         if path.startswith("/api/") or path in ("/health", "/live"):
             return Response("Authentication required", status_code=401)
         if request.method != "GET":
