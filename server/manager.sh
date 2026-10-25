@@ -439,25 +439,42 @@ retronas_menu() {
   done
 }
 online_import_menu() {
-  local source tmp
-  echo 'Import community PS2 online compatibility data from a CSV export.'
-  echo 'Source spreadsheet:'
-  echo ' https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/edit'
-  echo 'Export tab 0 as CSV on your computer and copy it to this VM.'
-  echo 'The source is treated as community evidence, not a live server guarantee.'
-  read -rp 'CSV path on this VM (blank to cancel): ' source
-  [[ -n "$source" ]] || return 0
-  [[ -r "$source" && -f "$source" ]] || { echo '[ERROR] Cannot read CSV.'; return 1; }
+  local source tmp csvurl
+  csvurl='https://docs.google.com/spreadsheets/d/15pfhL36qmC-iKr8MNjNXNLwgacG4VOmkfvwVxV5vGzo/export?format=csv&gid=0'
+  echo 'Import community PS2 online compatibility catalogue.'
+  echo '  1) Fetch public community sheet now'
+  echo '  2) Import an existing CSV file on this VM'
+  echo '  0) Cancel'
+  read -rp 'Choose: ' choice
+  case "$choice" in
+    1)
+      source="$(mktemp)"
+      if ! curl -fLsS --connect-timeout 10 --max-time 60 "$csvurl" -o "$source"; then
+        rm -f "$source"
+        echo '[ERROR] Could not fetch the public CSV. Download it manually and use option 2.'
+        return 1
+      fi
+      ;;
+    2)
+      read -rp 'CSV path on this VM: ' source
+      [[ -r "$source" && -f "$source" ]] || { echo '[ERROR] Cannot read CSV.'; return 1; }
+      ;;
+    0|'') return 0 ;;
+    *) echo 'Invalid option.'; return 1 ;;
+  esac
   tmp="$(mktemp)"
   if ! python3 "$HERE/online_catalogue.py" import-ps2 "$source" "$tmp"; then
     rm -f "$tmp"
+    [[ "$choice" == 1 ]] && rm -f "$source"
     return 1
   fi
   if ! install -D -m 0600 "$tmp" "$HOME/.cache/retrodb/online-compatibility.json"; then
     rm -f "$tmp"
+    [[ "$choice" == 1 ]] && rm -f "$source"
     return 1
   fi
   rm -f "$tmp"
+  [[ "$choice" == 1 ]] && rm -f "$source"
   echo '[OK] Online catalogue updated in ~/.cache/retrodb.'
   echo '     Use More options -> Export reports to rebuild Excel.'
 }
