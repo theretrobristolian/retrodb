@@ -672,7 +672,7 @@ menu() {
   if [[ "$*" != *--updated* ]]; then safe_source_update; fi
   release_note="$(release_status_line)"
   while true; do
-    xr_draw_header "Main menu"
+    xr_draw_header ""
     echo "$release_note"
     printf '%s\n' '--------------------------------------------------------------------'
     echo
