@@ -142,7 +142,20 @@ ensure_web_session_secret() {
 }
 
 run_step 'Preparing integration configuration' ensure_retroachievements_config
+ensure_web_user_access() {
+    # Nginx owns the directory group, but RetroDB needs traverse-only access
+    # to read its separate root:retrodb 0640 password hash file.
+    # Keep directory listing private and individual files separately protected.
+    chown root:www-data /etc/retrodb
+    chmod 0751 /etc/retrodb
+    if ! runuser -u "$APP_USER" -- test -r /etc/retrodb/web-users-app.htpasswd; then
+        echo '[ERROR] RetroDB service user cannot read app password hashes.' >&2
+        return 1
+    fi
+}
+
 run_step 'Preparing persistent session signing key and user hashes' ensure_web_session_secret
+run_step 'Verifying app password file access' ensure_web_user_access
 run_step 'Provisioning PostgreSQL database and role' provision_database
 run_step 'Synchronising application files' sync_application
 run_step 'Creating Python virtual environment' python3 -m venv "$APP_ROOT/.venv"
