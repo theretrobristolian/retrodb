@@ -72,10 +72,11 @@ ART
   echo '----------------------------------------------------------------'
   echo ' RetroDB | Community management console by The Retro Bristolian'
   echo '----------------------------------------------------------------'
-  printf ' RetroDB: %-12s Local API: http://127.0.0.1:8000/health (%s)\n' "$(state retrodb.service)" "$(web http://127.0.0.1:8000/health)"
-  printf ' PostgreSQL: %-9s RetroNAS: %s\n' "$(state postgresql.service)" "$(mountpoint -q "$MOUNT" && echo mounted || echo unavailable)"
-  printf ' RAHasher: %-12s CSV report: %s\n' "$(protected_status -x /opt/retrodb-tools/RAHasher)" "$(protected_status -f "$REPORT")"
-  printf ' xeRAbora: %-12s Web UI: http://127.0.0.1:18280/ (%s)\n' "$(state xerabora.service)" "$(web http://127.0.0.1:18280/)"
+  # Fixed-width service/status columns for consistent terminal alignment.
+  printf ' %-13s %-23s %-12s %s\n' 'RetroDB:' "$(state retrodb.service)" 'Local API:' "http://127.0.0.1:8000/health ($(web http://127.0.0.1:8000/health))"
+  printf ' %-13s %-23s %-12s %s\n' 'PostgreSQL:' "$(state postgresql.service)" 'RetroNAS:' "$(mountpoint -q "$MOUNT" && echo mounted || echo unavailable)"
+  printf ' %-13s %-23s %-12s %s\n' 'RAHasher:' "$(protected_status -x /opt/retrodb-tools/RAHasher)" 'CSV report:' "$(protected_status -f "$REPORT")"
+  printf ' %-13s %-23s %-12s %s\n' 'xeRAbora:' "$(state xerabora.service)" 'Web UI:' "http://127.0.0.1:18280/ ($(web http://127.0.0.1:18280/))"
   echo '----------------------------------------------------------------'
 }
 pause() { read -rp 'Press Enter to return...' ignored || true; }
@@ -395,8 +396,9 @@ menu() {
     echo '  0) Exit'
     echo
     echo '----------------------------------------------------------------'
-    echo ' https://github.com/theretrobristolian/retrodb'
-    echo ' Update: cd ~/retrodb && git pull --ff-only origin main'
+    echo ' Community console by The Retro Bristolian'
+    echo ' Source: https://github.com/theretrobristolian/retrodb'
+    echo ' Launch manager: retrodb (automatically checks for script updates)'
     echo '----------------------------------------------------------------'
     read -rp 'Choose an option: ' choice || break
     case "$choice" in
