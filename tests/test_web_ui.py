@@ -143,3 +143,13 @@ def test_mobile_catalogue_css_and_trophy_only_status():
     assert ".library-scroll table{min-width:0;table-layout:fixed}" in CSS
     assert "overflow-wrap:anywhere" in CSS
     assert ".ra-icon.no::after" in CSS
+
+def test_mobile_navigation_wraps_without_horizontal_overflow():
+    from retrodb.web_ui import page
+    html = page("Navigation", "<p>Test</p>").body.decode("utf-8")
+    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in html
+    assert "header nav form button" in html
+    assert 'href="/profile"' in html
+    assert 'href="/management"' in html
+    assert 'href="/online-services"' in html
+    assert 'action="/logout"' in html
