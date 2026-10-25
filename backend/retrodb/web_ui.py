@@ -57,7 +57,7 @@ def page(title: str, body: str) -> HTMLResponse:
 <link rel="manifest" href="/manifest.webmanifest">
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
 <nav><a href="/">Consoles</a><a href="/library">All games</a><a href="/management">Management</a><a href="/online-services">Online services</a>
-<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a></nav></div></header>
+<a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">Sign out</button></form></nav></div></header>
 <main>{body}</main></body></html>""")
 
 def name(item: LibraryItem) -> str:
