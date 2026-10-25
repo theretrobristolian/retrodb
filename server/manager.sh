@@ -478,6 +478,20 @@ online_import_menu() {
   echo '[OK] Online catalogue updated in ~/.cache/retrodb.'
   echo '     Use More options -> Export reports to rebuild Excel.'
 }
+xlink_import_menu() {
+  local tmp
+  echo 'Import Team XLink verified PS2 LAN games (title-level evidence).'
+  echo 'The source has no disc IDs; release/region support stays unverified.'
+  tmp="$(mktemp)"
+  if ! python3 "$HERE/import_xlink.py" "$tmp"; then
+    rm -f "$tmp"
+    echo '[WARN] XLink import failed; previous data (if any) was preserved.'
+    return 1
+  fi
+  install -D -m 0600 "$tmp" "$HOME/.cache/retrodb/xlink-ps2.json" || { rm -f "$tmp"; return 1; }
+  rm -f "$tmp"
+  echo '[OK] XLink source imported. Re-export Excel reports to apply.'
+}
 more_menu() {
   local choice
   while true; do
@@ -493,6 +507,7 @@ more_menu() {
     echo '  7) Upgrade Debian            - Preview and apply system package upgrades'
     echo '  8) RetroNAS settings         - Mount, connection and server config'
     echo '  9) Import PS2 online data    - Community CSV to offline catalogue'
+    echo ' 10) Refresh XLink PS2 LAN    - Official supported-game titles'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -507,6 +522,7 @@ more_menu() {
       7) run bash "$HERE/maintenance.sh" system; pause ;;
       8) retronas_menu ;;
       9) online_import_menu; pause ;;
+     10) xlink_import_menu; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
