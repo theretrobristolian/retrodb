@@ -194,7 +194,8 @@ async def enforce_session(request: Request, call_next):
         # Guest access is read-only and limited to catalogue pages.
         # No management, services, APIs, user tools or xeRAbora actions.
         allowed = (path == "/" or path == "/library" or path.startswith("/library/")
-                   or (path.startswith("/game/") and path.removeprefix("/game/").isdigit()))
+                   or (path.startswith("/game/") and path.removeprefix("/game/").isdigit())
+                   or path.startswith("/art/psbbn/"))
         if request.method != "GET" or not allowed:
             return Response("Guests can only browse the game catalogue.", status_code=403)
     if not user:
