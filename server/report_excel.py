@@ -7,6 +7,7 @@ import zipfile
 from collections import Counter
 from pathlib import Path
 from xml.sax.saxutils import escape
+from online_catalogue import ONLINE_COLUMNS, load as load_online, report_row as online_report_row
 
 COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning']
 VERIFIED = 'clean-base-verified-ready-to-patch'
@@ -198,6 +199,9 @@ def main(source,destination,preparation=None):
     sources = patch_sources(preparation)
     outputs = patched_outputs(str(Path(preparation).with_name('patch-apply.json')) if preparation else None)
     sheets=[]
+    online_catalogue = load_online('/var/cache/retrodb/providers/online-compatibility.json')
+    ps2_online = [online_report_row(r, online_catalogue) for r in entries if r.get('platform') == 'Sony PlayStation 2']
+    ps2_online.sort(key=lambda row: (str(row[0]).casefold(), str(row[2])))
     all_actions=[]
     summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','Eligible RA-ready %','RA eligible images','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors','Patchable %','No-set %','Unresolved %','RA identified %']]
     for platform,name in [('Sony PlayStation','PlayStation 1'),('Sony PlayStation 2','PlayStation 2')]:
@@ -226,6 +230,8 @@ def main(source,destination,preparation=None):
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
     print(f'[INFO] Action Required (all platforms): {len(all_actions)} games need attention.')
     sheets.insert(0, ('Action Required', [ACTION_COLS] + all_actions))
+    sheets.append(('PS2 Online', [ONLINE_COLUMNS] + ps2_online))
+    print(f'[INFO] PS2 online: {len(ps2_online)} local discs; {sum(row[4] == "YES" for row in ps2_online)} with release-specific source evidence.')
     sheets.insert(0,('Summary',summary))
     destination=Path(destination)
     destination.parent.mkdir(parents=True,exist_ok=True)
