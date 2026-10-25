@@ -112,6 +112,8 @@ def fetch_images(client, game_id, metadata, *, dry_run=False):
         target = artwork_path(game_id, kind)
         if target.is_file() and target.stat().st_size:
             continue
+        if target.with_suffix(".missing").is_file():
+            continue
         if dry_run:
             count += 1
             continue
@@ -119,6 +121,11 @@ def fetch_images(client, game_id, metadata, *, dry_run=False):
             r = client.get(url)
             if r.status_code in (429, 403):
                 raise RuntimeError(f"Image CDN HTTP {r.status_code}; STOP")
+            if r.status_code == 404:
+                marker = target.with_suffix(".missing")
+                marker.parent.mkdir(parents=True, exist_ok=True)
+                marker.touch()
+                continue
             r.raise_for_status()
             payload = r.content
             if not (8 < len(payload) <= 4_000_000 and payload.startswith(b"\x89PNG\r\n\x1a\n")):
