@@ -52,6 +52,15 @@ EXPORT="$HOME/retrodb-exports/retroachievements-compatibility.csv"
 [[ $EUID -ne 0 ]] || { echo 'Run as normal user, not root.' >&2; exit 1; }
 state() { systemctl is-active "$1" 2>/dev/null || true; }
 web() { curl -fsS -m 2 -o /dev/null "$1" 2>/dev/null && echo responding || echo unavailable; }
+retronas_mount_state() {
+  if findmnt -rn -M "$MOUNT" -t cifs >/dev/null 2>&1; then
+    echo mounted
+  elif systemctl is-active --quiet "$(systemd-escape --path --suffix=automount "$MOUNT")"; then
+    echo 'on-demand'
+  else
+    echo unmounted
+  fi
+}
 protected_status() {
   local flag="$1" path="$2"
   if sudo -n test "$flag" "$path" 2>/dev/null; then
@@ -79,7 +88,7 @@ ART
   [[ "$hasher" == "protected / unavailable" ]] && hasher="unavailable"
   [[ "$report" == "protected / unavailable" ]] && report="unavailable"
   printf ' %-12s %-13s %-12s %s\n' 'RetroDB:' "$(state retrodb.service)" 'Local API:' "$(web http://127.0.0.1:8000/health)"
-  printf ' %-12s %-13s %-12s %s\n' 'PostgreSQL:' "$(state postgresql.service)" 'RetroNAS:' "$(mountpoint -q "$MOUNT" && echo mounted || echo unavailable)"
+  printf ' %-12s %-13s %-12s %s\n' 'PostgreSQL:' "$(state postgresql.service)" 'RetroNAS:' "$(retronas_mount_state)"
   printf ' %-12s %-13s %-12s %s\n' 'RAHasher:' "$hasher" 'CSV report:' "$report"
   printf ' %-12s %-13s %-12s %s\n' 'xeRAbora:' "$(state xerabora.service)" 'Web UI:' "$(web http://127.0.0.1:18280/)"
   echo '----------------------------------------------------------------'
@@ -392,6 +401,7 @@ retronas_menu() {
     echo '  1) Refresh mount (start existing configuration)'
     echo '  2) View mount error log'
     echo '  3) Change server / share / SMB login'
+    echo '  4) Enable reliable on-demand mount at boot'
     echo '  0) Back'
     echo
     echo '----------------------------------------------------------------'
@@ -407,6 +417,7 @@ retronas_menu() {
           sudo bash "$HERE/configure-retronas.sh"
         fi
         pause ;;
+      4) sudo bash "$HERE/enable-retronas-automount.sh"; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
