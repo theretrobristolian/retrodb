@@ -56,7 +56,7 @@ def execute_request(payload):
     current = profiles / "active"
     if current.is_file() and current.read_text(encoding="utf-8").strip() == target:
         return "Already active; no restart needed"
-    new_value = "[Service]\\nEnvironment=XDG_CONFIG_HOME=" + str(config) + "\\n"
+    new_value = "[Service]\nEnvironment=XDG_CONFIG_HOME=" + str(config) + "\n"
     # Write LAN preference to the selected profile like the existing xeRAbora
     # terminal switcher. Do not overwrite any existing unrelated credentials.
     lan_file = home / ".config" / "xerabora-server" / "lan"
@@ -66,7 +66,7 @@ def execute_request(payload):
         raise ValueError("Invalid profile config directory")
     fd = os.open(lan_target, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w") as stream:
-        stream.write(lan_enabled + "\\n")
+        stream.write(lan_enabled + "\n")
     os.chown(lan_target, owner.pw_uid, owner.pw_gid)
     os.chmod(lan_target, 0o600)
 
@@ -95,7 +95,7 @@ def execute_request(payload):
         fd, path = tempfile.mkstemp(prefix=".active-", dir=str(profiles))
         try:
             with os.fdopen(fd, "w") as out:
-                out.write(target + "\\n")
+                out.write(target + "\n")
             os.chown(path, owner.pw_uid, owner.pw_gid)
             os.chmod(path, 0o600)
             os.replace(path, current)
