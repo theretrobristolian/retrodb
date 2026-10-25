@@ -78,7 +78,8 @@ def test_https_session_login_persists_without_basic_auth(tmp_path, monkeypatch):
             assert "Secure" in response.headers["set-cookie"]
             assert "HttpOnly" in response.headers["set-cookie"]
             assert client.get("/").status_code == 200
-            logout = client.post("/logout", headers={"origin":"https://retrodb.it.gattaca.house"})
+            token = re.search(r'<form method="post" action="/logout"[^>]*><input type="hidden" name="csrf_token" value="([^"]+)"', client.get("/").text).group(1)
+            logout = client.post("/logout", data={"csrf_token":token}, headers={"origin":"https://retrodb.it.gattaca.house"})
             assert logout.status_code == 303
             assert client.get("/").status_code == 303
     finally:
