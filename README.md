@@ -1,3 +1,23 @@
+## Resumable, rate-conscious RetroAchievements artwork prefetch (October 2026)
+
+RetroDB now offers `server/prefetch-artwork.py` to populate the **existing local RA metadata cache and actual image files** from the distinct RA game IDs in the PostgreSQL `library_item` table. It avoids individual browser-triggered metadata fetch bursts and deduplicates identical RA game IDs across disc releases. It never scans/copies ROMs or writes database records.
+
+Run **after a normal deploy**, as the `retrodb` service account (the program explicitly refuses to run as root):
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash server/deploy.sh
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/prefetch-artwork.py --dry-run
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/prefetch-artwork.py --limit 25 --delay 12
+```
+
+Default: **at most 25 distinct games per batch**, **12 seconds between RA API calls** (minimum enforced 10 seconds), no parallel requests, skip fresh 30-day metadata, skip downloaded images. Re-run the identical command to continue where the previous batch left off. `--limit 10 --delay 20` is gentler. `--refresh` explicitly refreshes otherwise-fresh metadata (avoid unnecessarily). These are conservative client-side defaults, **not provider-approved quotas or a guarantee against throttling**. On HTTP 429/403 the prefetch stops rather than retrying aggressively; check any `Retry-After` guidance before resuming. A single failed image is skipped; transient errors are reported.
+
+The prefetch downloads RA icon/box/title/ingame images to `/var/cache/retrodb/artwork/ra/GAME_ID/KIND.png`. The app now serves downloaded images locally from `/art/ra/GAME_ID/KIND`, falling back to the RA CDN until the local file exists. Metadata continues to be stored in `/var/cache/retrodb/artwork/ra/GAME_ID.json`. This does not make any bulk changes to PSBBN art caching and never sends browser users the RA API key. The cache can be used by guest library visitors. The server's existing `RETRODB_RA_API_KEY` must be set in `/etc/retrodb/retrodb.env`.
+
+First run is **committed but not live-tested on the user's Debian VM**. The tool reports counts, skips fresh entries and stops safely at the end of each batch. If RA throttles even at these settings, stop and space batches further apart rather than increasing concurrency.
+
 ## Game artwork and basic release metadata (October 2026)
 
 The game details page now displays a RetroAchievements game icon next to the title, RA box art in the main content, and additional serial-matched artwork from the community [PSBBN Art Database](https://github.com/CosmicScale/psbbn-art-database) when available. It also shows release date, publisher, developer and genre sourced from the **RetroAchievements Game Extended Details** API. Information is optional and may be absent; RA game-level release dates do not necessarily identify the exact regional disc release.
