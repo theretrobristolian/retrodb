@@ -1,3 +1,9 @@
+## Terminal menu update health-check fix (25 October 2026)
+
+The application-managed web sessions deliberately protect `GET /health`: an unauthenticated request returns HTTP **401**, not 200. Earlier `retrodb → More options → 6) Update RetroDB` ran `curl --fail http://127.0.0.1:8000/health` **after** a successful deployment, producing a misleading `curl: (22) ... 401` / `[ERROR] Operation failed`. This was a post-deployment validation bug, not evidence that migrations, service restart or the actual deployment failed.
+
+The updater now requires `/login` to respond **200** and the unauthenticated `/health` endpoint to respond **401**. The terminal menu shows `Local API: auth required` rather than `unavailable` on a protected API. Do not remove session protection from health or APIs merely to satisfy a menu check. Service availability can still be inspected using `systemctl status retrodb`, `journalctl -u retrodb`, and the login route.
+
 ### Mobile-width library table (25 October 2026)
 
 On iPhone, the catalogue now uses a width-constrained, fixed-layout table instead of the old 660px minimum. Long game names and disc serials wrap within their columns. RetroAchievements status is an **icon only**: a gold 🏆 for a locally **verified matching RA disc hash plus game ID**, or a dim/crossed trophy for other and unknown states (which **does not** mean confirmed unsupported). The icon retains a descriptive hover/accessibility title. The RA header is abbreviated to save space. Sticky table headings and the independent vertical scroll remain, as do selectable columns, guest access and desktop rendering. On very narrow displays, hiding RA ID or Disc ID through the Columns controls provides more room for titles.
