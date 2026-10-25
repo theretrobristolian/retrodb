@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.orm import Session
 
 from retrodb.database import get_session
@@ -34,6 +34,15 @@ p{line-height:1.6}.muted{color:#9daeca}.eyebrow{color:#7caeff;text-transform:upp
 .pill{background:#243651;color:#c4daff;padding:4px 9px;border-radius:30px;font-size:12px;white-space:nowrap}
 table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;color:#91a8c8;font-weight:600;background:#17233a}
 th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#18243a}
+.library-scroll{max-height:70vh;overflow:auto}
+.library-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 1px #344760}
+.library-scroll table{min-width:660px}
+.library-scroll [hidden]{display:none}
+.pill.serial{font-family:monospace;background:#263d61}
+.achievement{color:#f5ca65;font-weight:700}
+.column-picker{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin:15px 0;font-size:13px}
+.column-picker label{white-space:nowrap}
+@media(max-width:760px){.library-scroll{max-height:65vh}}
 .panel{background:#121c2e;border:1px solid #2a3851;border-radius:14px;overflow:hidden;margin-top:22px}
 .toolbar{display:flex;gap:12px;flex-wrap:wrap;margin:23px 0}
 input,select{color:#f0f5ff;background:#141d2f;border:1px solid #3a4d6b;padding:11px 13px;border-radius:10px;font-size:14px}
@@ -66,8 +75,24 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
 <main>{body}</main></body></html>""")
 
+SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
+
+def disc_id(item: LibraryItem) -> str:
+    match = SERIAL_RE.search(item.filename) or SERIAL_RE.search(item.relative_path)
+    return f"{match.group(1).upper()}-{match.group(2)}{match.group(3)}" if match else ""
+
 def name(item: LibraryItem) -> str:
-    return item.ra_game_title or PurePosixPath(item.filename).stem
+    if item.ra_game_title and item.ra_game_title.strip():
+        return item.ra_game_title.strip()
+    label = PurePosixPath(item.filename).stem
+    label = re.sub(r"^(?:OLD_|NEW_)", "", label, flags=re.I)
+    label = SERIAL_RE.sub("", label)
+    label = label.replace("_", " ")
+    label = re.sub(r"\\s*\\((?:USA|Europe|Japan|World|En|Fr|De|Rev[^)]*)\\)\\s*$", "", label, flags=re.I)
+    return re.sub(r"\\s{2,}", " ", label).strip(" -._") or PurePosixPath(item.filename).stem
+
+def ra_supported(item: LibraryItem) -> bool:
+    return bool(item.ra_game_id and (item.ra_match_status or "").lower() == "matched")
 
 def platform_counts(db: Session):
     stmt = (select(Platform, func.count(LibraryItem.id))
@@ -91,7 +116,8 @@ def homepage(request: Request, db: Session = Depends(get_session)):
 <h2>Library overview</h2><div class="grid"><div class="card"><div class="label">Indexed game files</div>
 <div class="metric">{total:,}</div></div>{management_card}</div>""", guest=is_guest(request))
 
-def browse(request: Request, db: Session, slug: str | None, q: str, letter: str, page_number: int):
+def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
+           page_number: int, ra_filter: str = "all", sort_by: str = "title", order: str = "asc"):
     platform = None
     if slug:
         platform = db.scalar(select(Platform).where(Platform.slug == slug))
@@ -100,29 +126,82 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     stmt = select(LibraryItem).where(LibraryItem.is_missing.is_(False))
     if platform:
         stmt = stmt.where(LibraryItem.platform_id == platform.id)
+    display_title = func.coalesce(func.nullif(LibraryItem.ra_game_title, ""), LibraryItem.filename)
     if q:
-        stmt = stmt.where((LibraryItem.ra_game_title.ilike(f"%{q}%")) | (LibraryItem.filename.ilike(f"%{q}%")))
+        stmt = stmt.where(or_(LibraryItem.ra_game_title.ilike(f"%{q}%"), LibraryItem.filename.ilike(f"%{q}%")))
     if letter:
-        stmt = stmt.where((LibraryItem.ra_game_title.ilike(f"{letter}%")) | (LibraryItem.filename.ilike(f"{letter}%")))
+        stmt = stmt.where(display_title.ilike(f"{letter}%"))
+    matched = (LibraryItem.ra_game_id.is_not(None) & (func.lower(LibraryItem.ra_match_status) == "matched"))
+    if ra_filter == "yes":
+        stmt = stmt.where(matched)
+    elif ra_filter == "other":
+        stmt = stmt.where(~matched)
     count = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
-    items = db.scalars(stmt.order_by(LibraryItem.filename).limit(100).offset((page_number-1)*100)).all()
+    sort_expr = {"title": func.lower(display_title), "id": LibraryItem.ra_game_id,
+                 "ra": func.lower(func.coalesce(LibraryItem.ra_match_status, "")),
+                 "disc": func.lower(LibraryItem.filename)}.get(sort_by, func.lower(display_title))
+    items = db.scalars(stmt.order_by((sort_expr.desc() if order == "desc" else sort_expr.asc()).nulls_last(),
+                                     LibraryItem.id.asc()).limit(100).offset((page_number-1)*100)).all()
     base = "/library" + ("/" + quote(slug) if slug else "")
-    alphabet = ' '.join(f'<a class="pill" href="{base}?letter={c}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    from urllib.parse import urlencode
+    def link(**changes):
+        args = dict(q=q,letter=letter,ra=ra_filter,sort=sort_by,order=order,page=page_number)
+        args.update(changes)
+        return base + "?" + urlencode(args)
+    alphabet = ' '.join(f'<a class="pill" href="{escape(link(letter=c,page=1), quote=True)}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     rows = []
     for item in items:
-        label = name(item)
-        status = escape(item.ra_match_status or "Not checked")
-        rows.append(f'<tr><td><a href="/game/{item.id}">{escape(label)}</a></td><td>{escape(item.extension.upper())}</td><td><span class="pill">{status}</span></td></tr>')
-    prev_link = f'<a class="btn" href="{base}?q={quote(q)}&letter={quote(letter)}&page={page_number-1}">← Previous</a>' if page_number > 1 else ''
-    next_link = f'<a class="btn" href="{base}?q={quote(q)}&letter={quote(letter)}&page={page_number+1}">Next →</a>' if count > page_number*100 else ''
+        disc = disc_id(item)
+        supported = ra_supported(item)
+        badge = '🏆 Verified' if supported else (item.ra_match_status or 'Unknown')
+        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item))}</a></td>
+<td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
+<td data-column="id">{item.ra_game_id or '—'}</td>
+<td data-column="ra"><span class="{'achievement' if supported else 'muted'}">{escape(badge)}</span></td>
+<td data-column="format">{escape(item.extension.upper())}</td></tr>""")
+    prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
+    next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
     heading = escape(platform.name if platform else "All games")
     return page(heading, f"""<div class="crumb"><a href="/">Consoles</a> / {heading}</div>
 <h1>{heading}</h1><p class="muted">{count:,} indexed game files · Up to 100 per page</p>
-<form class="toolbar" action="{base}"><input name="q" value="{escape(q,quote=True)}" placeholder="Search titles or filenames">
-<button class="btn" type="submit">Search</button></form><div class="toolbar">{alphabet}</div>
-<div class="panel"><table><thead><tr><th>Game</th><th>Format</th><th>Achievements audit</th></tr></thead>
-<tbody>{''.join(rows) or '<tr><td colspan="3">No matches. Try another search or scan the library.</td></tr>'}</tbody></table></div>
-<div class="toolbar">{prev_link}{next_link}</div>""", guest=is_guest(request))
+<form class="toolbar" action="{base}">
+<input name="q" value="{escape(q,quote=True)}" placeholder="Search games or serials">
+<input type="hidden" name="letter" value="{escape(letter,quote=True)}">
+<label class="label">RA <select name="ra"><option value="all">All</option>
+<option value="yes" {'selected' if ra_filter=='yes' else ''}>Verified</option>
+<option value="other" {'selected' if ra_filter=='other' else ''}>Other / unknown</option></select></label>
+<label class="label">Sort <select name="sort">
+<option value="title" {'selected' if sort_by=='title' else ''}>Game name</option>
+<option value="disc" {'selected' if sort_by=='disc' else ''}>Filename</option>
+<option value="id" {'selected' if sort_by=='id' else ''}>RA ID</option>
+<option value="ra" {'selected' if sort_by=='ra' else ''}>RA status</option></select></label>
+<select name="order"><option value="asc">Ascending</option><option value="desc" {'selected' if order=='desc' else ''}>Descending</option></select>
+<button class="btn" type="submit">Apply</button><a class="btn" href="{base}">Reset</a></form>
+<div class="column-picker"><span class="label">Columns</span>
+<label><input type="checkbox" data-toggle="disc" checked> Disc ID</label>
+<label><input type="checkbox" data-toggle="id" checked> RA ID</label>
+<label><input type="checkbox" data-toggle="ra" checked> Achievements</label>
+<label><input type="checkbox" data-toggle="format"> Format</label></div>
+<div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
+<div class="panel library-scroll"><table><thead><tr><th>Game</th><th data-column="disc">Disc ID</th>
+<th data-column="id">RA ID</th><th data-column="ra">Achievements</th><th data-column="format">Format</th></tr></thead>
+<tbody>{''.join(rows) or '<tr><td colspan="5">No games match the current filters.</td></tr>'}</tbody></table></div>
+<p class="muted">🏆 means a matching RA disc hash and RA game ID. Unknown is not evidence of incompatibility. Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
+<div class="toolbar">{prev_link}{next_link}</div>
+<script>
+(function() {{
+ const toggles=[...document.querySelectorAll('[data-toggle]')];
+ let stored={{}};try{{stored=JSON.parse(localStorage.getItem('retrodb-columns')||'{{}}')}}catch(e){{}}
+ function show(){{
+  const settings={{}};
+  toggles.forEach(box=>{{const id=box.dataset.toggle;settings[id]=box.checked;
+   document.querySelectorAll('[data-column="'+id+'"]').forEach(cell=>cell.hidden=!box.checked);}});
+  try{{localStorage.setItem('retrodb-columns',JSON.stringify(settings))}}catch(e){{}}
+ }}
+ toggles.forEach(box=>{{if(Object.prototype.hasOwnProperty.call(stored,box.dataset.toggle))box.checked=!!stored[box.dataset.toggle];box.addEventListener('change',show);}});
+ show();
+}})();
+</script>""", guest=is_guest(request))
 
 @router.get("/library", response_class=HTMLResponse)
 def all_games(request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
