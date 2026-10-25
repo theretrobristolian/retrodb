@@ -26,3 +26,22 @@ def test_select_ps2_game_table_without_depending_on_header_text():
     picked = m.select_ps2_table([[["Platform", "PlayStation 2"]], table])
     assert len(picked) == len(titles)
     assert picked[0][0] == "25 To Life"
+
+def test_wikitext_fallback_extracts_ps2_titles():
+    wiki = """== Guides ==
+Some text
+== Supported Games ==
+{| class="wikitable"
+! Title !! Versus Mode !! Co-op Mode
+|-
+| [[25 To Life]] || || 
+|-
+| [[TimeSplitters 2|TimeSplitters 2]] || || 
+|-
+| [[Star Wars: Battlefront II]] || ||
+|}
+== Other information ==
+"""
+    assert m.parse_wikitext(wiki) == [
+        "25 To Life", "TimeSplitters 2", "Star Wars: Battlefront II"
+    ]
