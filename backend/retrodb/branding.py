@@ -57,6 +57,11 @@ def png_icon(size: int) -> bytes:
 def favicon():
     return Response(SVG,media_type="image/svg+xml",headers={"Cache-Control":"public, max-age=86400"})
 
+@router.get("/favicon.ico")
+def legacy_favicon():
+    # Modern browsers accept a PNG payload served at the legacy favicon path.
+    return Response(png_icon(192), media_type="image/png", headers={"Cache-Control":"public, max-age=86400"})
+
 @router.get("/apple-touch-icon.png")
 def apple_icon():
     return Response(png_icon(180),media_type="image/png",headers={"Cache-Control":"public, max-age=86400"})
