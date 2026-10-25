@@ -391,11 +391,11 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
             + detail("RetroAchievements ID", item.ra_game_id)
             + detail("RA hash status", item.ra_match_status)
             + detail("Collection path", item.relative_path))
-    from retrodb.artwork import game_metadata, ra_image, serial_key
+    from retrodb.artwork import game_metadata, art_location, serial_key
     meta = game_metadata(item.ra_game_id)
     serial = serial_key(item.filename) or serial_key(item.relative_path)
-    icon_url = ra_image(meta.get("ImageIcon"))
-    box_url = ra_image(meta.get("ImageBoxArt"))
+    icon_url = art_location(item.ra_game_id, "icon", meta.get("ImageIcon"))
+    box_url = art_location(item.ra_game_id, "box", meta.get("ImageBoxArt"))
     psbbn_url = "/art/psbbn/" + serial if serial else None
     header_icon = (f'<img class="game-ra-icon" src="{escape(icon_url, quote=True)}" '
                    'alt="RetroAchievements game icon" loading="lazy">' if icon_url else '')
