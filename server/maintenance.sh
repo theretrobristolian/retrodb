@@ -58,8 +58,7 @@ update_retrodb() {
   login_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 10 http://127.0.0.1:8000/login)" || return 1
   health_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --max-time 10 http://127.0.0.1:8000/health)" || return 1
   if [[ "$login_status" != 200 || "$health_status" != 401 ]]; then
-    printf '[ERROR] Unexpected API check: login=%s (expected 200), unauthenticated health=%s (expected 401).\n' "$login_status" "$health_status" >&2
-    return 1
+    printf '[ERROR] Unexpected API check: login=%s (expected 200), unauthenticated health=%s (expected 401).\n' "$login_status" "$health_status" >&2    return 1
   fi
   echo '[OK] Local login responds (200); protected health endpoint correctly requires authentication (401).'
   echo
