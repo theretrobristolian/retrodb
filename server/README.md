@@ -1,3 +1,21 @@
+## OPL artwork archive import and streamlined game cover (October 2026)
+
+Game details display **exactly one centred cover** beneath the heading **Cover art**: RetroAchievements artwork is preferred; if the image fails, a PSBBN serial-matched image is tried instead. No duplicate side-by-side covers or per-image captions.
+
+The community [Luden02 OPL art archive](https://github.com/Luden02/psx-ps2-opl-art-database) has top-level `PS1/<DISC_ID>/<DISC_ID>_COV.png` and `PS2/<DISC_ID>/<DISC_ID>_COV.png` directories, plus other OPL art types. Its public repository is **several gigabytes** and contains many thousands of images; copying the whole thing is optional and can consume significant storage. Do **not** clone it into the RetroDB application directory or treat the OPL share as an image-archive backup.
+
+After extracting/cloning the archive, `server/import-opl-art.py` can flatten all PS2 PNG artwork into your **existing OPL ART share**, preserving standard OPL filenames and skipping preexisting files by default. It makes no guesses about the NAS mount or OPL share location, and defaults to dry-run. PS1 artwork has an optional **separate staging folder**, because PS1 POPStarter/OPL artwork placement and naming depend on the specific frontend. Nothing is copied to a PS1 live path unless separately specified.
+
+Example (replace the illustrative paths with your actual *existing* mounted directories):
+
+```bash
+git clone --depth 1 https://github.com/Luden02/psx-ps2-opl-art-database.git /srv/opl-art-source
+python3 server/import-opl-art.py --source /srv/opl-art-source --ps2-art /mnt/retronas/ART
+python3 server/import-opl-art.py --source /srv/opl-art-source --ps2-art /mnt/retronas/ART --apply
+```
+
+**CAUTION:** The example mount `/mnt/retronas/ART` is *not confirmed on your server*; do not run the import until the destination is verified to be the real OPL share. Script refuses nonexistent destination directories and never deletes files. Artwork usage and redistribution remain subject to rights held by the respective contributors. This importer does not automatically change RetroDB's cover provider priority or index the OPL share yet.
+
 ## Verified xeRAbora v1.0.0 server upgrade and RetroDB switching (25 October 2026)
 
 **Verified on the user's Debian 13 (Trixie) x86-64 VM:** yoba's `xerabora-1.0.0-ubuntu24.04-linux-x86_64` ELF resolves its shared libraries and launches; the upgraded xeRAbora v1.0.0 web dashboard loads on port **18280**. Systemd runs the client as unprivileged user `david`, from `/opt/xerabora/xerabora-linux-x86_64`, with `--server --no-sound --ui-port 18280` and per-player `XDG_CONFIG_HOME` overrides.
