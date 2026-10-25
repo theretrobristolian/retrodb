@@ -54,3 +54,13 @@ def test_shifted_csv_and_zero_records_rejected():
         with pytest.raises(ValueError,match="Imported 0 disc IDs"):
             m.import_ps2(file,target)
         assert len(m.load(target)) == 1
+
+def test_online_report_separates_historical_and_live_status():
+    rec = m.build_record(["Example", "", "YES", "2026", "dns.example", "Publisher",
+                          "Genre", "USA", "SLUS_123.45", "", "", "", "", "8", "YES"] + [""]*14)
+    row = m.report_row({"platform":"Sony PlayStation 2", "local_serial":"SLUS-12345",
+                        "path":"roms/example.iso"}, {("playstation-2","SLUS-12345"):rec})
+    assert row[4] == "YES"
+    assert row[8] == "YES"
+    assert row[18] == "UNVERIFIED"
+    assert "custom_dns" in row[17]
