@@ -675,8 +675,8 @@ menu() {
     xr_draw_header ""
     echo "$release_note"
     printf '%s\n' '--------------------------------------------------------------------'
-    echo
     echo " Main menu"
+    echo
     echo "  1) Switch player"
     echo "  2) Manage players (add / import / credentials)"
     echo "  3) Follow game and achievement log"
@@ -685,6 +685,7 @@ menu() {
     echo "  6) Update RetroDB manager scripts (no service restart)"
     echo "  7) Advanced options"
     echo "  0) Exit"
+    echo
     xr_draw_footer
     read -rp "Choose: " choice || break
     case "$choice" in
