@@ -40,3 +40,36 @@ def test_unlinked_user_not_implicitly_linked(tmp_path, monkeypatch):
     response = TestClient(app).get("/profile")
     assert response.status_code == 200
     assert "has not been linked" in response.text
+
+def test_switch_requires_admin_approved_profile_and_csrf(tmp_path, monkeypatch):
+    import re
+    mapping = tmp_path / "profile-links.json"
+    mapping.write_text(json.dumps({"player": {
+        "ra_username": "PoodingPower", "xerabora_profile": "PoodingPower"}}))
+    monkeypatch.setattr(profile_ui, "LINKS", mapping)
+    monkeypatch.setattr(session_auth, "secret", lambda: b"testing-only-not-production")
+    monkeypatch.setattr(session_auth, "user_from_cookie", lambda _: "player")
+    monkeypatch.setattr(profile_ui, "user_from_cookie", lambda _: "player")
+    monkeypatch.setenv("RETRODB_RA_API_KEY", "")
+    switched = []
+    monkeypatch.setattr(profile_ui, "switch_xerabora",
+                        lambda username: switched.append(username) or "Activated")
+    client = TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False)
+    assert client.post("/profile/switch", data={"confirm": "SWITCH"}).status_code == 403
+    page = client.get("/profile")
+    assert page.status_code == 200
+    token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+    response = client.post("/profile/switch", data={"csrf_token": token, "confirm": "SWITCH"},
+                           headers={"Origin": "null"})
+    assert response.status_code == 200
+    assert "Activated" in response.text
+    assert switched == ["player"]
+
+def test_switch_without_admin_mapping_is_denied(tmp_path, monkeypatch):
+    config = tmp_path / "profile-links.json"
+    config.write_text(json.dumps({"player": {"ra_username": "PoodingPower"}}))
+    monkeypatch.setattr(profile_ui, "LINKS", config)
+    monkeypatch.setattr(session_auth, "user_from_cookie", lambda _: "player")
+    monkeypatch.setattr(profile_ui, "user_from_cookie", lambda _: "player")
+    response = TestClient(app).post("/profile/switch", data={"confirm": "SWITCH"})
+    assert response.status_code == 403
