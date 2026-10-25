@@ -46,7 +46,15 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 def page(title: str, body: str) -> HTMLResponse:
     heading = escape(title)
     return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>{heading} · RetroDB</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>{heading} · RetroDB</title>
+<meta name="theme-color" content="#10192d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RetroDB">
+<meta name="application-name" content="RetroDB">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
 <nav><a href="/">Consoles</a><a href="/library">All games</a><a href="/management">Management</a><a href="/online-services">Online services</a>
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a></nav></div></header>
