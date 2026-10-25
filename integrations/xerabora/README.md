@@ -1,3 +1,15 @@
+## Faster profile switching
+
+The default `ExecStartPre` pause is now **10 seconds** rather than 20; automatic recovery's `RestartSec=10` is unchanged. Existing servers preserve their systemd drop-ins across git pulls, so apply this new default explicitly:
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash integrations/xerabora/set-startup-delay.sh 10
+```
+
+This updates the current automatic-mode `restart.conf` in place, runs `systemctl daemon-reload`, and **does not restart the running xeRAbora service**. The next RetroDB player switch uses the shorter pause. The script declines to alter manually-managed or disabled startup modes. If needed, restore 20 seconds using the same command with `20`.
+
 ## Recovery after an incompatible Linux CPU build (October 2026)
 
 **Temporary upstream release block:** On CPUs identified as Intel Celeron J6412 or without both AVX and AVX2, the installer explicitly refuses upstream `v1.0.0` **before downloading or touching the working service**. The release-check menu reports it as blocked rather than recommending installation. This is in addition to executable ISA preflight and rollback safeguards. Later versions are not automatically blocked; they must pass the binary preflight before replacing anything. Remove or revise the v1.0.0 block only after a compatible upstream build is verified. The currently working `v0.1.0-alpha.19` and the `PoodingPower` profile should be left untouched.
@@ -36,7 +48,7 @@ Expected v1.x ExecStart includes `--server` alongside `--ui-port 18280` or `--no
 
 Community installer, updater and multi-account manager for [xeRAbora](https://github.com/hacan359/xerabora) and its matching PS2 `OPL-RA.ELF`. Maintained in the [RetroDB](https://github.com/theretrobristolian/retrodb) repository, but **RetroDB is not required**: no PostgreSQL, Python RetroDB application, RetroNAS, database, ROM scanner or existing VM image is involved.
 
-**Status:** The xeRAbora client has been exercised successfully on a Debian 13 VM connected to a real UK PAL PS2 Slim, including game identification and achievement notifications for *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Multi-account switching has now been tested on the existing Debian VM: two separate RetroAchievements profiles were activated successfully, and the browser dashboard displayed the selected account while tracking live PS2 gameplay and achievement progress. Service auto-start and the 20-second pre-start delay have also been observed running on that VM. A clean, fresh-machine end-to-end install has **not** yet been tested. Upstream xeRAbora remains alpha software.
+**Status:** The xeRAbora client has been exercised successfully on a Debian 13 VM connected to a real UK PAL PS2 Slim, including game identification and achievement notifications for *Crash of the Titans* and *The Lord of the Rings: The Return of the King*. Multi-account switching has now been tested on the existing Debian VM: two separate RetroAchievements profiles were activated successfully, and the browser dashboard displayed the selected account while tracking live PS2 gameplay and achievement progress. Service auto-start and the pre-start delay have also been observed running on that VM. A clean, fresh-machine end-to-end install has **not** yet been tested. Upstream xeRAbora remains alpha software.
 
 The full-repository xeRAbora installer now registers `xerabora` and `xeRAbora` automatically after a successful installation or when confirming the installed version is already current. The confirmation tells you the command to type. Copying only the standalone xeRAbora scripts remains supported, but that minimal layout omits the shared launcher helper.
 
@@ -198,7 +210,7 @@ Run `bash integrations/xerabora/install.sh` to open the main menu or `bash integ
 
 ## Service startup, reboot delay and automatic recovery
 
-The installer manages the `xerabora.service` systemd unit, including a **20-second startup delay** after network readiness and a **10-second restart interval** when automatic recovery is enabled. Use **4) Service controls** (and related advanced options) to configure service startup / automatic recovery:
+The installer manages the `xerabora.service` systemd unit, including a **10-second startup delay** after network readiness and a **10-second restart interval** when automatic recovery is enabled. Use **4) Service controls** (and related advanced options) to configure service startup / automatic recovery:
 
 | Mode | Boot | Unexpected exit | When selected |
 | --- | --- | --- | --- |
