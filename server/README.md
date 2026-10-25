@@ -1,3 +1,11 @@
+## Game artwork and basic release metadata (October 2026)
+
+The game details page now displays a RetroAchievements game icon next to the title, RA box art in the main content, and additional serial-matched artwork from the community [PSBBN Art Database](https://github.com/CosmicScale/psbbn-art-database) when available. It also shows release date, publisher, developer and genre sourced from the **RetroAchievements Game Extended Details** API. Information is optional and may be absent; RA game-level release dates do not necessarily identify the exact regional disc release.
+
+RetroAchievements metadata is cached at `/var/cache/retrodb/artwork/ra/<gameid>.json` for up to 30 days, using the already configured `RETRODB_RA_API_KEY` in `/etc/retrodb/retrodb.env`. Community art requests use sanitized disc IDs such as `SLUS_209.59` and download at most 4 MB of verified PNG data into `/var/cache/retrodb/artwork/psbbn/`. Failed lookups are cached for one day; image failures do not prevent the game page loading. Cached PSBBN art is served from `/art/psbbn/<serial>`, including to read-only guests. Image provenance is clearly labelled. This first iteration uses publicly supplied images with attribution and does not import the GPL art-downloader code. No bulk background scraping or automatic library mutations are performed.
+
+Deploy: `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. Open any existing game detail page. The first request for a newly matched game may be a little slower while artwork/metadata is cached. Further sources, region-specific publisher/rating metadata, accessory flags, player counts and filters remain future work. This change is source-committed and **not yet runtime-tested on the user's VM**.
+
 ## Polished xeRAbora profile switching (October 2026)
 
 The linked player's **My Profile** page uses a compact **Use this player** button and an iPhone-friendly confirmation dialog instead of the old inline warning checkbox. The dialog explains that selecting a different shared xeRAbora player interrupts any connected PS2 session and may require restarting OPL-RA/reselecting the appropriate MemCard Pro 2 image. The **Switch player** button disables on submit to reduce accidental repeat taps.
