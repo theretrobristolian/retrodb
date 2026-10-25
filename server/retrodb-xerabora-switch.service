@@ -1,0 +1,18 @@
+[Unit]
+Description=Restricted RetroDB xeRAbora profile switching helper
+Requires=retrodb-xerabora-switch.socket
+After=retrodb-xerabora-switch.socket
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /opt/retrodb/server/xerabora-switch-helper.py
+StandardInput=null
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/etc/systemd/system/xerabora.service.d /home
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=false
