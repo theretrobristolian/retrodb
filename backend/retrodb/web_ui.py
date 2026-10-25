@@ -5,6 +5,7 @@ import json
 import re
 from pathlib import Path
 from collections import Counter
+from functools import lru_cache
 from html import escape
 from pathlib import PurePosixPath
 from urllib.parse import quote
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from retrodb.database import get_session
 from retrodb.models import LibraryItem, Platform
+from retrodb.providers.gamedb import load as load_gamedb
 
 router = APIRouter(include_in_schema=False)
 
@@ -82,9 +84,34 @@ def disc_id(item: LibraryItem) -> str:
     match = SERIAL_RE.search(item.filename) or SERIAL_RE.search(item.relative_path)
     return f"{match.group(1).upper()}-{match.group(2)}{match.group(3)}" if match else ""
 
-def name(item: LibraryItem) -> str:
+GAMEDB_CACHE = Path("/var/cache/retrodb/providers/gamedb")
+
+@lru_cache(maxsize=8)
+def _gamedb_titles(slug: str, mtime_ns: int) -> dict[str, str]:
+    try:
+        return load_gamedb(GAMEDB_CACHE, slug)
+    except (OSError, ValueError):
+        return {}
+
+def gamedb_title(item: LibraryItem, slug: str | None) -> str:
+    if slug not in ("playstation", "playstation-2"):
+        return ""
+    serial = disc_id(item)
+    if not serial:
+        return ""
+    cache = GAMEDB_CACHE / f"{slug}.json"
+    try:
+        titles = _gamedb_titles(slug, cache.stat().st_mtime_ns)
+    except OSError:
+        return ""
+    return titles.get(serial, "")
+
+def name(item: LibraryItem, slug: str | None = None) -> str:
     if item.ra_game_title and item.ra_game_title.strip():
         return item.ra_game_title.strip()
+    catalogue_title = gamedb_title(item, slug)
+    if catalogue_title:
+        return catalogue_title
     label = PurePosixPath(item.filename).stem
     label = re.sub(r"^(?:OLD_|NEW_)", "", label, flags=re.I)
     label = SERIAL_RE.sub("", label)
@@ -157,12 +184,13 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         args.update(changes)
         return base + "?" + urlencode(args)
     alphabet = ' '.join(f'<a class="pill" href="{escape(link(letter=c,page=1), quote=True)}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    platform_names = {p.id: p.slug for p in db.scalars(select(Platform)).all()} if not platform else {}
     rows = []
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item)
         badge = '🏆 Verified' if supported else (item.ra_match_status or 'Unknown')
-        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item))}</a></td>
+        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, platform.slug if platform else platform_names.get(item.platform_id)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
 <td data-column="id">{item.ra_game_id or '—'}</td>
 <td data-column="ra"><span class="{'achievement' if supported else 'muted'}">{escape(badge)}</span></td>
@@ -282,7 +310,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     if item is None:
         raise HTTPException(404, "Game not found")
     platform = db.get(Platform, item.platform_id)
-    label = escape(name(item))
+    label = escape(name(item, platform.slug if platform else None))
     def detail(k, v):
         return f"<p><span class='label'>{escape(k)}</span><br>{escape(str(v or 'Not available'))}</p>"
     info = (detail("Console", platform.name if platform else None)
@@ -291,7 +319,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
             + detail("RetroAchievements ID", item.ra_game_id)
             + detail("RA hash status", item.ra_match_status)
             + detail("Collection path", item.relative_path))
-    return page(name(item), f"""<div class="crumb"><a href="/">Consoles</a> /
+    return page(name(item, platform.slug if platform else None), f"""<div class="crumb"><a href="/">Consoles</a> /
 <a href="/library/{quote(platform.slug) if platform else ''}">{escape(platform.name if platform else 'Library')}</a> / {label}</div>
 <h1>{label}</h1><p class="muted">Library record and release information</p>
 <div class="detail"><section class="card"><h2>Release and collection</h2>{info}</section>
