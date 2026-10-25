@@ -1,3 +1,11 @@
+## Polished xeRAbora profile switching (October 2026)
+
+The linked player's **My Profile** page uses a compact **Use this player** button and an iPhone-friendly confirmation dialog instead of the old inline warning checkbox. The dialog explains that selecting a different shared xeRAbora player interrupts any connected PS2 session and may require restarting OPL-RA/reselecting the appropriate MemCard Pro 2 image. The **Switch player** button disables on submit to reduce accidental repeat taps.
+
+A successful switch now follows **POST → 303 redirect → GET /profile** to avoid an accidental second switch when Safari reloads or navigates back. The feedback is different for `switched` (service restarted for the selected account) and `already` (the helper reported the selected account was already active, no restart needed). This addresses the confusing message seen immediately after a manual player change. These messages indicate the result returned by the helper; they are **not** proof of live PS2 session ownership. The underlying least-privilege Unix socket helper, administrator-approved mapping and signed CSRF form validation are unchanged. Newly added regression tests exercise both outcomes; real iPhone behaviour needs verification after deployment.
+
+Deploy with `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. The already-installed optional switch helper does not need reinstallation for this interface-only update.
+
 ## Linked RetroAchievements profiles and optional xeRAbora switch (25 October 2026)
 
 **Implemented:** Named RetroDB users now have a **My profile** navigation entry and `GET /profile`. The page reads an **administrator-approved mapping**, displays the official RetroAchievements avatar, username, motto, hardcore points and softcore points (where the RA Web API is configured), and links to the RA website. Guest users cannot access it. The user's RA password is **never collected by RetroDB**. The existing bcrypt local login remains authoritative; looking up a public RA user does **not** verify ownership. A single server-side Web API key from `/etc/retrodb/retrodb.env` (`RETRODB_RA_API_KEY`) is used for public profile reads; never expose or check this key into Git.
