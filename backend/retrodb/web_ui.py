@@ -82,7 +82,7 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:22px}
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
-.game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
+.game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:150px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:360px;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
 .detail{display:grid;grid-template-columns:1fr 1fr;gap:18px}.detail .card{min-height:0}
 @media(max-width:760px){
  .detail{grid-template-columns:1fr}
@@ -399,18 +399,24 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     psbbn_url = "/art/psbbn/" + serial if serial else None
     header_icon = (f'<img class="game-ra-icon" src="{escape(icon_url, quote=True)}" '
                    'alt="RetroAchievements game icon" loading="lazy">' if icon_url else '')
-    artwork = ""
+    # Choose only one cover, with RA preferred and PSBBN on load failure.
+    # The fallback is never displayed alongside the preferred artwork.
     if box_url:
-        artwork += (f'<figure><img class="game-cover" src="{escape(box_url, quote=True)}" '
-                    'alt="RetroAchievements box artwork" loading="lazy">'
-                    '<figcaption class="label">Box art · RetroAchievements</figcaption></figure>')
-    if psbbn_url:
-        artwork += (f'<figure><img class="game-cover" src="{escape(psbbn_url, quote=True)}" '
-                    'alt="PSBBN disc-specific artwork" loading="lazy" '
-                    'onerror="this.closest(\'figure\').hidden=true">'
-                    '<figcaption class="label">Release artwork · PSBBN Art Database</figcaption></figure>')
-    if not artwork:
-        artwork = '<p class="muted">Artwork has not been matched to this release yet.</p>'
+        fallback_attr = (f' data-fallback="{escape(psbbn_url, quote=True)}"'
+                         if psbbn_url else "")
+        artwork = (f'<img class="game-cover" src="{escape(box_url, quote=True)}"'
+                   f'{fallback_attr} alt="Game cover" loading="lazy" '
+                   'onerror="if(this.dataset.fallback){this.src=this.dataset.fallback;'
+                   'delete this.dataset.fallback;}else{this.hidden=true;'
+                   'this.nextElementSibling.hidden=false;}">'
+                   '<p class="muted" hidden>Cover art unavailable for this release.</p>')
+    elif psbbn_url:
+        artwork = (f'<img class="game-cover" src="{escape(psbbn_url, quote=True)}"'
+                   ' alt="Game cover" loading="lazy" '
+                   'onerror="this.hidden=true;this.nextElementSibling.hidden=false">'
+                   '<p class="muted" hidden>Cover art unavailable for this release.</p>')
+    else:
+        artwork = '<p class="muted">Cover art unavailable for this release.</p>'
     release = (detail("Release date", meta.get("Released"))
                + detail("Publisher", meta.get("Publisher"))
                + detail("Developer", meta.get("Developer"))
@@ -418,7 +424,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     body = f"""<div class="crumb"><a href="/">Consoles</a> /
 <a href="/library/{quote(platform.slug) if platform else ''}">{escape(platform.name if platform else 'Library')}</a> / {label}</div>
 <div class="game-title-row">{header_icon}<div><h1>{label}</h1><p class="muted">Library record and release information</p></div></div>
-<div class="detail"><section class="card"><h2>Cover artwork</h2><div class="game-art-grid">{artwork}</div></section>
+<div class="detail"><section class="card"><h2>Cover art</h2><div class="game-art-grid">{artwork}</div></section>
 <section class="card"><h2>Game information</h2>{release}
 <p class="muted">These fields come from RetroAchievements and can describe the game generally, rather than your specific regional release.</p></section>
 <section class="card"><h2>Release and collection</h2>{info}</section>
