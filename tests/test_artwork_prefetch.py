@@ -36,3 +36,17 @@ def test_batch_script_cache_is_resumable(tmp_path, monkeypatch):
     data, fresh = script.cached_metadata(33)
     assert fresh and data == metadata
     assert script.artwork_path(33, "icon") == tmp_path / "33" / "icon.png"
+
+def test_bulk_catalogue_reuses_cache(tmp_path, monkeypatch):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("bulk_prefetch", Path(__file__).resolve().parents[1] / "server" / "prefetch-artwork.py")
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    monkeypatch.setattr(script, "RA_CACHE", tmp_path)
+    (tmp_path / "catalogue-12.json").write_text(json.dumps([{"ID": 812, "ImageIcon": "/Images/117775.png"}]))
+    class NoNetwork:
+        def get(self, *args, **kwargs):
+            raise AssertionError("Fresh bulk catalogue must not refetch")
+    rows, requested = script.bulk_catalogue(NoNetwork(), "playstation", "not-real")
+    assert not requested
+    assert rows[0]["ID"] == 812
