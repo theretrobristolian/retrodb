@@ -195,7 +195,7 @@ async def enforce_session(request: Request, call_next):
         # No management, services, APIs, user tools or xeRAbora actions.
         allowed = (path == "/" or path == "/library" or path.startswith("/library/")
                    or (path.startswith("/game/") and path.removeprefix("/game/").isdigit())
-                   or path.startswith("/art/psbbn/"))
+                   or path.startswith("/art/psbbn/") or path.startswith("/art/ra/"))
         if request.method != "GET" or not allowed:
             return Response("Guests can only browse the game catalogue.", status_code=403)
     if not user:
