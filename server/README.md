@@ -1,3 +1,9 @@
+## Named-user login fix: password-file directory permissions (25 October 2026)
+
+**Root cause identified:** `server/configure-web-access.sh` creates `/etc/retrodb` as `root:www-data` with mode `0750`, while `retrodb.service` runs as `retrodb:retrodb`. Although the application bcrypt hashes are installed at `/etc/retrodb/web-users-app.htpasswd` with `root:retrodb 0640`, the service user could not traverse the parent directory. Password verification silently caught the resulting permission error and displayed **Incorrect username or password**, even after resetting a valid account. The deployment now makes the parent directory traverse-only to non-owner/non-group users (`root:www-data 0751`) while preserving individual file restrictions, and explicitly checks that the `retrodb` service account can read its hashes.
+
+Apply immediately using `sudo chmod 0751 /etc/retrodb` and validate with `sudo -u retrodb test -r /etc/retrodb/web-users-app.htpasswd && echo 'Password hashes readable'`. Then retry an existing named-user login; no service restart or password reset should be required for this access fix. For a persistent deployment fix, `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. The final successful browser login remains to be verified on the user's environment.
+
 ## Safari guest sign-out correction (25 October 2026)
 
 **Fixed in source:** The guest **Leave guest view** / signed-in **Sign out** form formerly submitted `POST /logout` without a CSRF form token, while the logout handler insisted on matching `Origin`/ `Referer` to the HTTPS hostname. Safari, especially installed Home Screen web apps, can send `Origin: null` or omit those headers. This could yield a bare 403 response presented as a download instead of logging out.
