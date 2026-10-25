@@ -24,6 +24,16 @@ ssh -N -L 8000:127.0.0.1:8000 david@retrodb.it.gattaca.house
 
 Then open **http://127.0.0.1:8000/** in your computer's browser. This deliberately does **not** expose the web UI publicly or automatically to the LAN. If you already use local port 8000, substitute local port 18000 in the SSH command (`-L 18000:127.0.0.1:8000`) and browse `http://127.0.0.1:18000/`.
 
+If your page shows zero indexed games, you can populate the database's **read-only inventory** using the existing scanner on the VM (this is separate from the full RA audit and does not hash ISOs):
+
+```bash
+sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend \\
+  /opt/retrodb/.venv/bin/python -m retrodb.cli \\
+  library-scan --root /mnt/retrodb-retronas
+```
+
+This scan needs the RetroNAS automount working and the `retrodb` service account to be able to read the share. The scanner updates only PostgreSQL inventory records; RetroNAS is never written to. The current scanner covers PS1 and PS2 paths only; further consoles are planned.
+
 **Important:** The web UI reads PostgreSQL's existing `library_item` inventory, not the CSV and Excel audit snapshots. If the console counts show zero, it means the DB inventory has not yet been scanned/populated; **it does not mean your RetroNAS game files are missing**. The existing menu / inventory scan remains the source for indexing. In v1, online DNS and XLink reports still live in the offline imported data and Excel report; database-backed game online settings, manuals, artwork, genre, profile progress, job progress, and authenticated rescan/update buttons are future work. These controls are intentionally non-functional placeholders and not security-sensitive shell-command endpoints. RetroNAS remains read-only; nothing touches the xeRAbora binary or its existing web UI.
 
 # Server build
