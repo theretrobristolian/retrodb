@@ -1,6 +1,35 @@
+## Current web access status and intended HTTP/HTTPS policy (25 October 2026)
+
+**Verified on the household setup:** RetroDB is available over **https://retrodb.it.gattaca.house/** through Nginx with a certificate issued by the private **Gattaca-Root-CA**. The CA has been installed/trusted on the Mac and iPhone. The RetroDB favicon, iPhone Home Screen icon and application name render correctly, and **View as guest** successfully opens the PS1/PS2 catalogue on iPhone. The guest session can browse consoles, search the library and view game details; RetroDB management, online services, APIs and xeRAbora/profile-switching functionality are not exposed to guests. The restrictions are enforced in the FastAPI session middleware, not just hidden links.
+
+**Known unresolved bug / not verified:** Signing in with a named username/password has **not been confirmed working in Safari on Mac or iPhone**. Earlier form submissions generated `Invalid request origin` and `Invalid login form`; a server-side test using deliberately invalid credentials did pass CSRF validation and reached the expected HTTP 401 password-verification response. Guest mode works following the latest fixes, but do not claim named-user authentication, login persistence or role-based access as tested and reliable yet. Authentication should be re-tested in Safari and in the installed iPhone web-app context, including logout, before enabling any privileged profile-switching controls.
+
+**Protocol/security policy (design, not deployed functionality):**
+
+| Access | HTTP on trusted LAN | HTTPS |
+|---|---|---|
+| Guest catalogue (read-only) | **Desired future option; not enabled/verified** | **Working** |
+| Named-user password login/session | **Must not be permitted** | **Implemented, browser sign-in still unresolved** |
+| Management, APIs, xeRAbora profile switching | **Never exposed to guests** | **Authentication/authorization required; privileged operations not yet implemented** |
+
+Current `server/configure-web-access.sh https` creates an **HTTP → HTTPS redirect**; it does **not** serve guest catalogue pages over plain HTTP. FastAPI guest mode currently issues the same `Secure`, `HttpOnly`, `SameSite=Lax` session cookie type as named-user sessions, so plain HTTP guest mode needs explicit engineering changes. Do **not** remove `Secure` from authenticated cookies or expose `/login`, `/guest` POST, or management routes on HTTP. A future HTTP guest-only listener should enforce strict route/method allowlisting **at the reverse proxy and application layers**, avoid password fields and credentials on HTTP, and work without a shared session cookie that could affect HTTPS authentication. Limit even guest HTTP to the trusted LAN/VPN, since game records may disclose filenames and collection paths.
+
+**Using RetroDB from an iPhone:** trust the public Gattaca CA (install the certificate profile **and** enable full root trust under Settings → General → About → Certificate Trust Settings); open `https://retrodb.it.gattaca.house/login` in Safari; choose **View as guest**; use Share → **Add to Home Screen** and name the shortcut **RetroDB**. If an old icon is cached, remove the old shortcut and add it afresh. The site is not offline-capable.
+
+**Deploy current code:**
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash server/deploy.sh
+```
+
+**Troubleshooting named logins:** Check `sudo journalctl -u retrodb -n 80 --no-pager`, the Safari Web Inspector POST to `/login`, response status and whether the form has a `csrf_token`. Never publish real passwords, session cookies or CSRF tokens in issues or screenshots. Avoid claiming an HTTP 401 response with intentionally bad credentials proves a real user's successful sign-in; it only proves the request reached password verification.
+
+---
 ## iPhone standalone web app: persistent HTTPS login (October 2026)
 
-RetroDB now provides **application-managed login sessions** instead of requiring the Nginx HTTP Basic authentication dialog on every Home Screen launch. It reuses the existing bcrypt `htpasswd` usernames/passwords and signs a Secure, HttpOnly, SameSite=Lax cookie valid for up to **30 days** on that device. A login form, explicit Sign out button and application-level protection for pages and APIs are included. Login/logout POST requests enforce same-site origin or referer. Web operations remain read-only; application sessions are **not yet role-based accounts**.
+RetroDB now provides **application-managed login sessions** instead of requiring the Nginx HTTP Basic authentication dialog on every Home Screen launch. It reuses the existing bcrypt `htpasswd` usernames/passwords and signs a Secure, HttpOnly, SameSite=Lax cookie valid for up to **30 days** on that device. A login form, explicit Sign out button and application-level protection for pages and APIs are included. Login and guest-entry POSTs validate signed, expiring CSRF form tokens rather than requiring Origin/Referer headers; logout still checks the request origin when supplied. Web operations remain read-only; application sessions are **not yet role-based accounts**.
 
 **Important two-phase migration** — run on Debian while retaining the current HTTPS reverse proxy:
 
@@ -13,7 +42,7 @@ sudo bash server/enable-web-sessions.sh
 
 The deployment generates a durable signing secret in `/etc/retrodb/retrodb.env` (root + retrodb group only), copies existing bcrypt hashes into `/etc/retrodb/web-users-app.htpasswd` (root + retrodb group only), and restarts only RetroDB. It does **not** disclose passwords. The second command **fails closed** unless the localhost login returns 200 while the unauthenticated homepage redirects (303) and protected health API rejects access (401); only then does it remove Nginx's Basic authentication directives from the **HTTPS** vhost and reload Nginx. Nginx continues terminating trusted TLS. If migration fails, leave the original Nginx authentication enabled and inspect `journalctl -u retrodb -n 80 --no-pager`.
 
-Visit `https://retrodb.it.gattaca.house/` in iPhone Safari and sign in **once** via the RetroDB-branded form. Remove the old home-screen shortcut and install a new one with **Open as Web App enabled**. Home-screen apps have independent cookie storage, so you may need to log in **once more inside the new app**, then it should persist across launches for up to 30 days unless the session is cleared, expires, the signing secret changes or the account is removed. Do not reuse the old shortcut to test icon changes. The Apple touch icon and manifest are now public application assets once the Nginx Basic-auth requirement is removed, fixing the unauthenticated icon-fetch problem.
+Visit `https://retrodb.it.gattaca.house/` in iPhone Safari. **Guest mode is working; named-user login has not yet been successfully verified in Safari.** Once named-user sign-in is fixed, sign in via the RetroDB-branded form. Remove the old home-screen shortcut and install a new one with **Open as Web App enabled**. Home-screen apps have independent cookie storage, so you may need to log in **once more inside the new app**, then it should persist across launches for up to 30 days unless the session is cleared, expires, the signing secret changes or the account is removed. Do not reuse the old shortcut to test icon changes. The Apple touch icon and manifest are now public application assets once the Nginx Basic-auth requirement is removed, fixing the unauthenticated icon-fetch problem.
 
 **Accounts:** Password file remains managed with `sudo htpasswd -B /etc/retrodb/web-users.htpasswd USERNAME`. After adding, changing or removing accounts, sync the updated bcrypt hashes securely for the unprivileged application:
 
@@ -43,7 +72,7 @@ git pull --ff-only
 sudo bash server/deploy.sh
 ```
 
-Then open **https://retrodb.it.gattaca.house/** in iPhone Safari, tap Share → **Add to Home Screen**, confirm the name **RetroDB** and select **Add**. If previously added, remove the old home-screen bookmark and add it again to refresh cached metadata/icons. Safari may cache the favicon and touch icon; reload the site if necessary. The existing Nginx Basic authentication remains in place.
+Then open **https://retrodb.it.gattaca.house/** in iPhone Safari, tap Share → **Add to Home Screen**, confirm the name **RetroDB** and select **Add**. If previously added, remove the old home-screen bookmark and add it again to refresh cached metadata/icons. Safari may cache the favicon and touch icon; reload the site if necessary. After the application-session migration, Nginx Basic authentication is removed from the HTTPS virtual host; the app login and guest entry are handled by RetroDB.
 
 ## Security and PS2 multiplayer notes (25 October 2026)
 
