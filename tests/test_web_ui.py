@@ -114,3 +114,25 @@ def test_catalogue_controls_render(monkeypatch):
         assert "library-scroll" in result.text
     finally:
         app.dependency_overrides.clear()
+
+def test_gamedb_name_lookup_takes_precedence_over_abbreviated_filename(tmp_path, monkeypatch):
+    import json
+    from types import SimpleNamespace
+    from retrodb import web_ui
+    from retrodb.providers.gamedb import cache_file
+    monkeypatch.setattr(web_ui, "GAMEDB_CACHE", tmp_path)
+    web_ui._gamedb_titles.cache_clear()
+    (tmp_path / "playstation-2.json").write_text(json.dumps({
+        "SLES-52541": "Grand Theft Auto: San Andreas",
+        "SLES-54622": "Grand Theft Auto: Vice City Stories"
+    }), encoding="utf-8")
+    for serial, expected in (
+        ("SLES-52541", "Grand Theft Auto: San Andreas"),
+        ("SLES-54622", "Grand Theft Auto: Vice City Stories"),
+    ):
+        item = SimpleNamespace(filename="GTA VCS " + serial + ".iso",
+                               relative_path="roms/sony/playstation2/GTA VCS " + serial + ".iso",
+                               ra_game_title=None)
+        assert web_ui.name(item, "playstation-2") == expected
+    assert web_ui.name(item, "playstation") != expected
+
