@@ -165,8 +165,19 @@ async def enter_guest(request: Request):
 
 @router.post("/logout")
 async def logout(request: Request):
-    if not valid_origin(request):
-        return Response(status_code=403)
+    # Use the same signed form token as login/guest entry. Safari's standalone
+    # web app may send Origin:null even for a genuine user gesture.
+    if request.headers.get("content-type", "").split(";")[0] != "application/x-www-form-urlencoded":
+        return HTMLResponse("Invalid sign-out form. Return to the library and try again.", status_code=415,
+                            headers={"Cache-Control": "no-store"})
+    data = await request.body()
+    if len(data) > 4096:
+        return HTMLResponse("Invalid sign-out form.", status_code=413, headers={"Cache-Control": "no-store"})
+    from urllib.parse import parse_qs
+    values = parse_qs(data.decode("utf-8", "replace"), keep_blank_values=True)
+    if not valid_csrf(values.get("csrf_token", [""])[0]):
+        return HTMLResponse("Sign-out form expired. Return to the library, reload and try again.",
+                            status_code=403, headers={"Cache-Control": "no-store"})
     response = RedirectResponse("/login", status_code=303)
     response.delete_cookie(COOKIE, path="/")
     response.headers["Cache-Control"] = "no-store"
