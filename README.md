@@ -1,3 +1,30 @@
+## Linked RetroAchievements profiles and optional xeRAbora switch (25 October 2026)
+
+**Implemented:** Named RetroDB users now have a **My profile** navigation entry and `GET /profile`. The page reads an **administrator-approved mapping**, displays the official RetroAchievements avatar, username, motto, hardcore points and softcore points (where the RA Web API is configured), and links to the RA website. Guest users cannot access it. The user's RA password is **never collected by RetroDB**. The existing bcrypt local login remains authoritative; looking up a public RA user does **not** verify ownership. A single server-side Web API key from `/etc/retrodb/retrodb.env` (`RETRODB_RA_API_KEY`) is used for public profile reads; never expose or check this key into Git.
+
+**Set up an explicit link**, after deploying the current repository:
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash server/deploy.sh
+sudo python3 server/manage-profile-links.py list
+sudo python3 server/manage-profile-links.py link LOCAL_RETRODB_USERNAME RETROACHIEVEMENTS_USERNAME
+```
+
+The script verifies the **local username exists** in `/etc/retrodb/web-users.htpasswd`, creates `/etc/retrodb/profile-links.json` with `root:retrodb`, permissions `0640`, and only associates accounts when a trusted administrator runs it. Replace the uppercase example arguments with actual names. Existing links are preserved when adding others. Refresh `/profile` after linking; a backend restart is not needed.
+
+**Optional xeRAbora profile switching:** xeRAbora has its own cached credentials under the xeRAbora service user's `~/.config/xerabora-profiles/PROFILE/xerabora/credentials`. A local RetroDB account may be mapped to a **pre-existing** profile by an administrator (the helper never receives an RA password):
+
+```bash
+sudo python3 server/manage-profile-links.py link LOCAL_RETRODB_USERNAME RETROACHIEVEMENTS_USERNAME --xerabora-profile EXISTING_XERABORA_PROFILE
+sudo bash server/enable-xerabora-web-switch.sh
+```
+
+The second command is an **explicit opt-in**, separate from `deploy.sh`. It installs the `retrodb-xerabora-switch.socket` and `.service` systemd units. The web process retains `NoNewPrivileges=true`; it can only contact a group-restricted local Unix socket, never execute arbitrary commands or use sudo. The separate root helper checks the calling UID, reloads the root-controlled allowlist, validates the requested target and the xeRAbora user's existing profile/credential files, and applies a fixed xeRAbora systemd override. It does **not** create users or reveal any credentials. A logged-in player must tick an explicit interruption warning and submit a CSRF-signed POST before switching; guest mode cannot call it. An approved switch restarts xeRAbora; **quit the game and relaunch OPL-RA / restart your PS2**, and select the correct MemCard Pro 2 image. This is a **shared PS2 service**, not independent per-player sessions.
+
+**Important:** The new helper was committed with application-level regression tests but **has not been installed or end-to-end tested on your Debian host**. Before installing the optional root service, inspect the systemd units and helper script and take a backup of `/etc/systemd/system/xerabora.service.d/profile.conf`; use the terminal xeRAbora profile menu until you're ready to test an interruption. For any error see `sudo journalctl -u retrodb-xerabora-switch.service -n 80 --no-pager`. Disable the optional socket with `sudo systemctl disable --now retrodb-xerabora-switch.socket`. The rest of the RetroDB catalogue and login work without this optional component.
+
 ## Named-user login fix: password-file directory permissions (25 October 2026)
 
 **Root cause identified:** `server/configure-web-access.sh` creates `/etc/retrodb` as `root:www-data` with mode `0750`, while `retrodb.service` runs as `retrodb:retrodb`. Although the application bcrypt hashes are installed at `/etc/retrodb/web-users-app.htpasswd` with `root:retrodb 0640`, the service user could not traverse the parent directory. Password verification silently caught the resulting permission error and displayed **Incorrect username or password**, even after resetting a valid account. The deployment now makes the parent directory traverse-only to non-owner/non-group users (`root:www-data 0751`) while preserving individual file restrictions, and explicitly checks that the `retrodb` service account can read its hashes.
@@ -43,7 +70,7 @@ To deploy: `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. T
 | Access | HTTP on trusted LAN | HTTPS |
 |---|---|---|
 | Guest catalogue (read-only) | **Desired future option; not enabled/verified** | **Working** |
-| Named-user password login/session | **Must not be permitted** | **Implemented, browser sign-in still unresolved** |
+| Named-user password login/session | **Must not be permitted** | **Working with HTTPS sessions** |
 | Management, APIs, xeRAbora profile switching | **Never exposed to guests** | **Authentication/authorization required; privileged operations not yet implemented** |
 
 Current `server/configure-web-access.sh https` creates an **HTTP → HTTPS redirect**; it does **not** serve guest catalogue pages over plain HTTP. FastAPI guest mode currently issues the same `Secure`, `HttpOnly`, `SameSite=Lax` session cookie type as named-user sessions, so plain HTTP guest mode needs explicit engineering changes. Do **not** remove `Secure` from authenticated cookies or expose `/login`, `/guest` POST, or management routes on HTTP. A future HTTP guest-only listener should enforce strict route/method allowlisting **at the reverse proxy and application layers**, avoid password fields and credentials on HTTP, and work without a shared session cookie that could affect HTTPS authentication. Limit even guest HTTP to the trusted LAN/VPN, since game records may disclose filenames and collection paths.
@@ -76,7 +103,7 @@ sudo bash server/enable-web-sessions.sh
 
 The deployment generates a durable signing secret in `/etc/retrodb/retrodb.env` (root + retrodb group only), copies existing bcrypt hashes into `/etc/retrodb/web-users-app.htpasswd` (root + retrodb group only), and restarts only RetroDB. It does **not** disclose passwords. The second command **fails closed** unless the localhost login returns 200 while the unauthenticated homepage redirects (303) and protected health API rejects access (401); only then does it remove Nginx's Basic authentication directives from the **HTTPS** vhost and reload Nginx. Nginx continues terminating trusted TLS. If migration fails, leave the original Nginx authentication enabled and inspect `journalctl -u retrodb -n 80 --no-pager`.
 
-Visit `https://retrodb.it.gattaca.house/` in iPhone Safari. **Guest mode is working; named-user login has not yet been successfully verified in Safari.** Once named-user sign-in is fixed, sign in via the RetroDB-branded form. Remove the old home-screen shortcut and install a new one with **Open as Web App enabled**. Home-screen apps have independent cookie storage, so you may need to log in **once more inside the new app**, then it should persist across launches for up to 30 days unless the session is cleared, expires, the signing secret changes or the account is removed. Do not reuse the old shortcut to test icon changes. The Apple touch icon and manifest are now public application assets once the Nginx Basic-auth requirement is removed, fixing the unauthenticated icon-fetch problem.
+Visit `https://retrodb.it.gattaca.house/` in iPhone Safari. **Guest mode is working; named-user login is now working after correcting the password directory permissions.** Once named-user sign-in is fixed, sign in via the RetroDB-branded form. Remove the old home-screen shortcut and install a new one with **Open as Web App enabled**. Home-screen apps have independent cookie storage, so you may need to log in **once more inside the new app**, then it should persist across launches for up to 30 days unless the session is cleared, expires, the signing secret changes or the account is removed. Do not reuse the old shortcut to test icon changes. The Apple touch icon and manifest are now public application assets once the Nginx Basic-auth requirement is removed, fixing the unauthenticated icon-fetch problem.
 
 **Accounts:** Password file remains managed with `sudo htpasswd -B /etc/retrodb/web-users.htpasswd USERNAME`. After adding, changing or removing accounts, sync the updated bcrypt hashes securely for the unprivileged application:
 
