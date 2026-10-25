@@ -89,8 +89,8 @@ def name(item: LibraryItem) -> str:
     label = re.sub(r"^(?:OLD_|NEW_)", "", label, flags=re.I)
     label = SERIAL_RE.sub("", label)
     label = label.replace("_", " ")
-    label = re.sub(r"\\s*\\((?:USA|Europe|Japan|World|En|Fr|De|Rev[^)]*)\\)\\s*$", "", label, flags=re.I)
-    return re.sub(r"\\s{2,}", " ", label).strip(" -._") or PurePosixPath(item.filename).stem
+    label = re.sub(r"\s*\((?:USA|Europe|Japan|World|En|Fr|De|Rev[^)]*)\)\s*$", "", label, flags=re.I)
+    return re.sub(r"\s{2,}", " ", label).strip(" -._") or PurePosixPath(item.filename).stem
 
 def ra_supported(item: LibraryItem) -> bool:
     return bool(item.ra_game_id and (item.ra_match_status or "").lower() == "matched")
@@ -129,7 +129,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         stmt = stmt.where(LibraryItem.platform_id == platform.id)
     # Sort on the same basic cleanup used to display filename fallbacks.
     # This avoids sorting missing-RA titles under their disc serial rather than title.
-    filename_stem = func.regexp_replace(LibraryItem.filename, r"\\.[^.]+$", "", "g")
+    filename_stem = func.regexp_replace(LibraryItem.filename, r"\.[^.]+$", "", "g")
     no_serial = func.regexp_replace(filename_stem,
                                     r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*[0-9]{3}[. -]*[0-9]{2}",
                                     "", "gi")
