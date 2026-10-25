@@ -1,3 +1,11 @@
+## Console game library UI (25 October 2026)
+
+The read-only `/library` and `/library/{slug}` views now display game titles, parsed serial badges, RA game IDs, and 🏆 only for records with `ra_match_status=matched` and a populated RA game ID. The Format column is optional. Select RA filters, sort direction/column, A–Z or search; columns can be shown/hidden with local browser preferences. The table header is sticky within a vertically scrollable table, and the site header is pinned.
+
+Names use the database's `ra_game_title` when available, otherwise a cleaned filename. SQL strips filename extensions, disc serials and underscores for fallback sorting across pages. Note that the Excel report additionally uses recommended RA names, GameDB and local-friendly-title audit fields which are **not yet persisted to library_item**; perfect parity requires importing those fields. No ROM or database modification is performed by these UI changes.
+
+Deploy with `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. Tests were added but should be run locally using the repo test environment.
+
 ## Current web access status and intended HTTP/HTTPS policy (25 October 2026)
 
 **Verified on the household setup:** RetroDB is available over **https://retrodb.it.gattaca.house/** through Nginx with a certificate issued by the private **Gattaca-Root-CA**. The CA has been installed/trusted on the Mac and iPhone. The RetroDB favicon, iPhone Home Screen icon and application name render correctly, and **View as guest** successfully opens the PS1/PS2 catalogue on iPhone. The guest session can browse consoles, search the library and view game details; RetroDB management, online services, APIs and xeRAbora/profile-switching functionality are not exposed to guests. The restrictions are enforced in the FastAPI session middleware, not just hidden links.
