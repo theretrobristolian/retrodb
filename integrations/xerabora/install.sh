@@ -672,11 +672,11 @@ menu() {
   if [[ "$*" != *--updated* ]]; then safe_source_update; fi
   release_note="$(release_status_line)"
   while true; do
-    xr_draw_header "Main menu"
+    xr_draw_header "xeRAbora status"
     echo "$release_note"
-    echo
     printf '%s\n' '--------------------------------------------------------------------'
     echo
+    echo " Main menu"
     echo "  1) Switch player"
     echo "  2) Manage players (add / import / credentials)"
     echo "  3) Follow game and achievement log"
