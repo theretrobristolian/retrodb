@@ -173,7 +173,7 @@ def import_xlink(destination, source=URL):
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\\n", encoding="utf-8")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
     tmp.replace(dest)
     print(f"[OK] Imported {len(entries)} Team XLink PS2 LAN titles (title-level evidence; {'PARTIAL SNAPSHOT' if fallback else 'live source'})")
 
