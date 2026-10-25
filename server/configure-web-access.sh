@@ -1,34 +1,55 @@
 #!/usr/bin/env bash
-# Opt-in LAN reverse proxy; RetroDB backend remains loopback-only.
+# RetroDB LAN reverse proxy with mandatory authentication.
+# App stays bound to loopback and never runs as root.
 set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo 'Run using sudo.' >&2; exit 1; }
 MODE=${1:-}
+HOST='retrodb.it.gattaca.house'
 case "$MODE" in http|https) ;; *) echo 'Usage: sudo bash server/configure-web-access.sh http|https [fullchain.pem privatekey.pem]' >&2; exit 2;; esac
-if [[ "$MODE" == https && ( ! -f "${2:-}" || ! -f "${3:-}" ) ]]; then
-  echo 'HTTPS requires an existing certificate chain and matching private key.' >&2; exit 2
+if [[ "$MODE" == https && ( ! -s "${2:-}" || ! -s "${3:-}" ) ]]; then
+  echo 'HTTPS requires a certificate chain and matching private key.' >&2; exit 2
 fi
-if ! command -v nginx >/dev/null; then
+if ! command -v nginx >/dev/null || ! command -v htpasswd >/dev/null; then
   apt-get update
-  DEBIAN_FRONTEND=noninteractive apt-get install -y nginx
+  DEBIAN_FRONTEND=noninteractive apt-get install -y nginx apache2-utils
 fi
-mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
+install -d -o root -g root -m 0700 /etc/retrodb
+AUTH_FILE=/etc/retrodb/web-users.htpasswd
+if [[ ! -s "$AUTH_FILE" ]]; then
+  echo 'Create a browser login for RetroDB. Password is requested interactively.'
+  read -rp 'Login name [retrodb]: ' LOGIN
+  LOGIN=${LOGIN:-retrodb}
+  [[ "$LOGIN" =~ ^[A-Za-z0-9_-]{1,32}$ ]] || { echo '[ERROR] Invalid username.' >&2; exit 1; }
+  htpasswd -cB "$AUTH_FILE" "$LOGIN"
+  chmod 0640 "$AUTH_FILE"
+  chown root:www-data "$AUTH_FILE"
+fi
+tls=''
+redirect=''
 if [[ "$MODE" == https ]]; then
-  install -d -m 0700 /etc/retrodb/tls
-  install -m 0644 "$2" /etc/retrodb/tls/fullchain.pem
-  install -m 0600 "$3" /etc/retrodb/tls/privkey.pem
-  tls="listen 443 ssl; ssl_certificate /etc/retrodb/tls/fullchain.pem; ssl_certificate_key /etc/retrodb/tls/privkey.pem;"
-  redirect='server { listen 80; server_name retrodb.it.gattaca.house; return 301 https://$host$request_uri; }'
+  install -d -o root -g root -m 0700 /etc/retrodb/tls
+  install -o root -g root -m 0644 "$2" /etc/retrodb/tls/fullchain.pem
+  install -o root -g root -m 0600 "$3" /etc/retrodb/tls/privkey.pem
+  tls='listen 443 ssl; ssl_certificate /etc/retrodb/tls/fullchain.pem; ssl_certificate_key /etc/retrodb/tls/privkey.pem;'
+  redirect='server { listen 80; server_name retrodb.it.gattaca.house; return 301 https://retrodb.it.gattaca.house$request_uri; }'
 else
   tls='listen 80;'
-  redirect=''
 fi
-cat > /etc/nginx/sites-available/retrodb.conf <<EOF
+install -d -m 0755 /etc/nginx/sites-available /etc/nginx/sites-enabled
+# Maintain existing Nginx virtual hosts. Do not disable other applications.
+config_tmp="$(mktemp)"
+trap 'rm -f "$config_tmp"' EXIT
+cat > "$config_tmp" <<EOF
 $redirect
 server {
   $tls
-  server_name retrodb.it.gattaca.house;
+  server_name $HOST;
+  server_tokens off;
   add_header X-Content-Type-Options nosniff always;
   add_header Referrer-Policy no-referrer always;
+  add_header X-Frame-Options DENY always;
+  auth_basic "RetroDB";
+  auth_basic_user_file $AUTH_FILE;
   client_max_body_size 1m;
   location / {
     proxy_pass http://127.0.0.1:8000;
@@ -39,10 +60,11 @@ server {
   }
 }
 EOF
+install -o root -g root -m 0644 "$config_tmp" /etc/nginx/sites-available/retrodb.conf
 ln -sfn /etc/nginx/sites-available/retrodb.conf /etc/nginx/sites-enabled/retrodb.conf
 nginx -t
 systemctl enable --now nginx
 systemctl reload nginx
-echo "[OK] RetroDB LAN access configured for $MODE://retrodb.it.gattaca.house/"
-echo '[INFO] DNS must resolve to this VM; firewall ports 80/443 must permit LAN clients.'
-echo '[SAFE] RetroDB remains on 127.0.0.1:8000; this only configures a reverse proxy.'
+echo "[OK] Protected RetroDB web access configured: $MODE://$HOST/"
+echo '[INFO] Authentication is mandatory. Restrict firewall to trusted LAN; prefer HTTPS.'
+echo '[SAFE] No sudo delegation or browser-executable maintenance commands were added.'
