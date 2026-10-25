@@ -1,3 +1,17 @@
+## iPhone home-screen / favicon branding
+
+Borrowing the *web-app metadata pattern* from [Beoremote-Pro](https://github.com/theretrobristolian/Beoremote-Pro), RetroDB now supplies its own branded favicon (`/favicon.svg`), Apple touch icon (`/apple-touch-icon.png`), Android/PWA icons (`/icons/icon-192.png`, `/icons/icon-512.png`) and manifest (`/manifest.webmanifest`). The browser title and installed home-screen name are **RetroDB**. All icons are generated locally, without external assets or extra dependencies. This is a home-screen-capable website, not an offline-capable app; browsing still requires access to your trusted network and HTTPS server.
+
+To deploy updated FastAPI routes and branding on the Debian VM:
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash server/deploy.sh
+```
+
+Then open **https://retrodb.it.gattaca.house/** in iPhone Safari, tap Share → **Add to Home Screen**, confirm the name **RetroDB** and select **Add**. If previously added, remove the old home-screen bookmark and add it again to refresh cached metadata/icons. Safari may cache the favicon and touch icon; reload the site if necessary. The existing Nginx Basic authentication remains in place.
+
 ## Security and PS2 multiplayer notes (25 October 2026)
 
 **Important security change:** `server/configure-web-access.sh` now requires a browser login (created with an interactive bcrypt `htpasswd` prompt on first run). If you installed the earlier unauthenticated proxy, re-run the configuration to apply this protection. For **HTTPS**, configure a trusted certificate; HTTP Basic authentication sent over ordinary HTTP is **not secure against credential interception**. Keep the service LAN-only while upgrading to HTTPS. The web app remains bound to loopback and runs as the dedicated `retrodb` account; no browser sudo or systemd management endpoints are enabled. Existing Nginx sites are not intentionally removed. Review certificate and firewall permissions before offering access to other household users.
