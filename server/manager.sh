@@ -357,6 +357,61 @@ service_details() {
   echo
   sudo bash "$HERE/retronas.sh" status || true
 }
+retronas_details() {
+  local unit source dialect opts
+  unit="$(systemd-escape --path --suffix=mount "$MOUNT")"
+  echo ' RetroNAS connection'
+  echo '----------------------------------------------------------------'
+  printf ' Mount path: %s\n' "$MOUNT"
+  source="$(systemctl show "$unit" -p What --value 2>/dev/null || true)"
+  printf ' SMB share: %s\n' "${source:-not configured}"
+  printf ' Unit state: %s\n' "$(systemctl is-active "$unit" 2>/dev/null || true)"
+  printf ' At startup: %s\n' "$(systemctl is-enabled "$unit" 2>/dev/null || true)"
+  if mountpoint -q "$MOUNT"; then
+    echo ' Mount: connected'
+    printf ' Filesystem: %s\n' "$(findmnt -n -o FSTYPE -T "$MOUNT" 2>/dev/null || echo unknown)"
+    opts="$(findmnt -n -o OPTIONS -T "$MOUNT" 2>/dev/null || true)"
+    dialect="$(printf '%s' "$opts" | grep -oE 'vers=[0-9.]+' | head -n 1 || true)"
+    printf ' Requested SMB dialect: %s\n' "${dialect:-not shown in mount options}"
+    echo ' Negotiated SMB details: sudo cat /proc/fs/cifs/DebugData'
+    echo ' Network link rate: not determined by SMB dialect'
+  else
+    echo ' Mount: DISCONNECTED'
+    echo ' No active SMB dialect can be reported.'
+    echo ' View failure: sudo journalctl -u "'"$unit"'" -n 50'
+  fi
+}
+retronas_menu() {
+  local choice confirm
+  while true; do
+    header
+    retronas_details
+    echo '----------------------------------------------------------------'
+    echo ' RetroNAS settings'
+    echo
+    echo '  1) Refresh mount (start existing configuration)'
+    echo '  2) View mount error log'
+    echo '  3) Change server / share / SMB login'
+    echo '  0) Back'
+    echo
+    echo '----------------------------------------------------------------'
+    read -rp 'Choose an option: ' choice || return 0
+    case "$choice" in
+      1) sudo bash "$HERE/retronas.sh" mount; pause ;;
+      2) sudo journalctl -u "$(systemd-escape --path --suffix=mount "$MOUNT")" -n 70 --no-pager; pause ;;
+      3)
+        echo ' This replaces the mount settings and saved SMB login.'
+        echo ' It restarts the RetroNAS mount; do not run during an audit.'
+        read -rp 'Continue? [y/n] (default: no) ' confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+          sudo bash "$HERE/configure-retronas.sh"
+        fi
+        pause ;;
+      0|q|Q) return 0 ;;
+      *) echo 'Invalid option.'; pause ;;
+    esac
+  done
+}
 more_menu() {
   local choice
   while true; do
@@ -370,6 +425,7 @@ more_menu() {
     echo '  5) View patch journal        - Inspect latest patch operation'
     echo '  6) Update RetroDB            - Redeploy backend, migrations and service'
     echo '  7) Upgrade Debian            - Preview and apply system package upgrades'
+    echo '  8) RetroNAS settings         - Mount, connection and server config'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -382,6 +438,7 @@ more_menu() {
       5) run patch_journal_status; pause ;;
       6) run bash "$HERE/maintenance.sh" retrodb; pause ;;
       7) run bash "$HERE/maintenance.sh" system; pause ;;
+      8) retronas_menu ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
