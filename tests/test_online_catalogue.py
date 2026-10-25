@@ -64,3 +64,32 @@ def test_online_report_separates_historical_and_live_status():
     assert row[8] == "YES"
     assert row[18] == "UNVERIFIED"
     assert "custom_dns" in row[17]
+
+def test_xlink_sources_remain_independent_and_conflicts_are_visible():
+    rec = m.build_record(["Example", "", "YES", "2026", "dns.example", "Publisher",
+                          "Genre", "USA", "SLUS_123.45", "", "", "", "", "8", "NO"] + [""]*14)
+    source_row = m.report_row({"platform":"Sony PlayStation 2", "local_serial":"SLUS-12345",
+                               "path":"roms/example.iso", "gamedb_title":"Example"},
+                              {("playstation-2","SLUS-12345"):rec})
+    title = m.normalized_title("Example")
+    result = m.enrich_with_xlink(source_row, {title:{
+        "title":"Example", "source_url":"https://www.teamxlink.co.uk/wiki/PlayStation_2",
+        "source_confidence":"bundled_partial_snapshot"}})
+    assert len(result) == len(m.ONLINE_COLUMNS)
+    assert result[7] == "YES (title-level)"
+    assert result[21] == "NO"  # community report retained
+    assert result[22] == "YES (title-level)"
+    assert "REVIEW" in result[23]
+    assert "partial snapshot" in result[19]
+    assert result[6] == "YES (title-level)"
+    assert result[17].split(",").count(" lan_tunnel") <= 1
+
+def test_online_enrichment_no_source_does_not_claim_no_lan():
+    row = m.report_row({"platform":"Sony PlayStation 2", "local_serial":"SLUS-12345",
+                        "path":"roms/test.iso", "gamedb_title":"Unknown Game"}, {})
+    enriched = m.enrich_with_xlink(row, {})
+    assert enriched[6] == "UNKNOWN"
+    assert enriched[21] == "UNKNOWN"
+    assert enriched[22] == "UNKNOWN"
+    assert enriched[23] == ""
+    assert len(enriched) == len(m.ONLINE_COLUMNS)
