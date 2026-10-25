@@ -22,7 +22,7 @@ router = APIRouter(include_in_schema=False)
 CSS = """
 :root{color-scheme:dark;font:16px system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1020;color:#eaf0fc}
 *{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}a:hover{color:#9ebeff}
-header{border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
+header{position:sticky;top:0;z-index:20;border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
 header .bar{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
 .brand{font-size:24px;font-weight:800;letter-spacing:-1px;color:#f6f8ff}
 nav{display:flex;gap:18px;color:#afc0da;font-size:14px}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
