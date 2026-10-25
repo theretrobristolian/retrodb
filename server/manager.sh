@@ -185,10 +185,25 @@ audit() {
   echo 'NOTE: No original RetroNAS game images were changed.'
 }
 patch_audit() {
-  # Individual patch download failures must not block source verification
-  # for successfully downloaded variants (e.g. Max Payne Bartis1989).
-  sudo bash "$HERE/retronas.sh" patch-download || echo "[WARN] Some patch downloads failed; checking available packages anyway."
-  sudo bash "$HERE/retronas.sh" patch-prepare
+  # Time the two distinct operations to identify download versus SMB checksum cost.
+  # Individual patch download failures must not block source verification.
+  local started download_started verify_started ended download_rc=0 verify_rc=0
+  started="$(date +%s)"
+  printf '[TIMING] Stage 7 started: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+
+  download_started="$(date +%s)"
+  printf '[TIMING] Patch download/cache check started: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+  sudo bash "$HERE/retronas.sh" patch-download || download_rc=$?
+  printf '[TIMING] Patch download/cache check ended: %s | elapsed: %ss\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$(($(date +%s) - download_started))"
+  (( download_rc == 0 )) || echo "[WARN] Some patch downloads failed; checking available packages anyway."
+
+  verify_started="$(date +%s)"
+  printf '[TIMING] Source ISO checksum verification started: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
+  sudo bash "$HERE/retronas.sh" patch-prepare || verify_rc=$?
+  ended="$(date +%s)"
+  printf '[TIMING] Source ISO checksum verification ended: %s | elapsed: %ss\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$((ended - verify_started))"
+  printf '[TIMING] Stage 7 ended: %s | total elapsed: %ss\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$((ended - started))"
+  return "$verify_rc"
 }
 patch_download() {
   mount_ready || return 1
