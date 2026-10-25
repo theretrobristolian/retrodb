@@ -192,7 +192,7 @@ def game_details(item_id: int, db: Session = Depends(get_session)):
 Live profile progress and badge artwork are planned for the next version.</p>
 {detail("RA game title", item.ra_game_title)}</section>
 <section class="card"><h2>Online play</h2>{online_details(online_record(item))}</section>
-<section class="card"><h2>Artwork, manual and controls</h2><p class="muted">Metadata, manuals, controller guidance
+<section class="card"><h2>Co-op and player counts</h2><p class="muted">Couch co-op, online co-op, split-screen and competitive multiplayer are distinct capabilities. Verified PS2 Co-Optimus records are not yet imported; no player limits are guessed.</p><p><a href="https://www.co-optimus.com/system/6/playstation-2.html" target="_blank" rel="noopener">Browse PS2 co-op listings ↗</a></p></section>\n<section class="card"><h2>Artwork, manual and controls</h2><p class="muted">Metadata, manuals, controller guidance
 and cover-art indexing are planned. No external artwork is downloaded automatically.</p></section></div>""")
 
 @router.get("/management", response_class=HTMLResponse)
