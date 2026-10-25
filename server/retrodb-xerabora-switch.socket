@@ -1,0 +1,12 @@
+[Unit]
+Description=RetroDB approved xeRAbora player switch request socket
+
+[Socket]
+ListenStream=/run/retrodb-xerabora-switch.sock
+SocketUser=root
+SocketGroup=retrodb
+SocketMode=0660
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
