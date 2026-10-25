@@ -3,6 +3,7 @@
 Title-level evidence only; source offers no disc serials or per-region guarantees.
 """
 import json
+import urllib.parse
 import re
 import sys
 import urllib.request
@@ -71,27 +72,96 @@ def select_ps2_table(tables):
     return [row for row in rows if row and row[0].casefold().strip() not in ("title", "game")]
 
 
-def import_xlink(destination, source=URL):
-    req = urllib.request.Request(source, headers={"User-Agent":"RetroDB-compatible-import/0.1"})
+def parse_wikitext(text):
+    """Parse the PS2 supported-games wiki table from MediaWiki source text."""
+    section = re.search(r"(?im)^={2,6}\\s*Supported Games\\s*={2,6}\\s*$", text)
+    if not section:
+        raise ValueError("MediaWiki page has no Supported Games section")
+    rest = text[section.end():]
+    next_heading = re.search(r"(?m)^={2,6}[^=].*={2,6}\\s*$", rest)
+    if next_heading:
+        rest = rest[:next_heading.start()]
+    titles = []
+    for raw in rest.splitlines():
+        line = raw.strip()
+        if not line.startswith("|") or line.startswith("|-") or line.startswith("|+"):
+            continue
+        first = line[1:].split("||", 1)[0].strip()
+        # A MediaWiki row can carry cell attributes before its visible content.
+        if "|" in first:
+            first = first.rsplit("|", 1)[-1].strip()
+        first = re.sub(r"\\[\\[([^]|]+)\\|([^]]+)\\]\\]", r"\\2", first)
+        first = re.sub(r"\\[\\[([^]]+)\\]\\]", r"\\1", first)
+        first = re.sub(r"<[^>]+>", "", first)
+        first = re.sub(r"'{2,}", "", first).strip()
+        if first and first.casefold() not in ("title", "game"):
+            titles.append(first)
+    return titles
+
+def fetch_url(url):
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "RetroDB-online-compatibility/0.2 (personal cataloguer)",
+        "Accept": "text/html, application/json, text/plain",
+    })
     with urllib.request.urlopen(req, timeout=25) as response:
-        html = response.read(5_000_000).decode("utf-8", "replace")
-    parser = WikiTables()
-    parser.feed(html)
-    entries = []
-    for row in select_ps2_table(parser.tables):
-        title = re.sub(r"\\s+", " ", row[0]).strip()
-        if title:
-            entries.append({"title": title, "source_url": URL,
-                            "evidence": "Team XLink manually verified PS2 LAN list",
-                            "match_scope": "title_only"})
-    if len(entries) < 20:
-        raise ValueError(f"Only {len(entries)} titles found; refusing to replace an existing catalogue")
+        body = response.read(5_000_000).decode("utf-8", "replace")
+        return body, f"HTTP {response.status}, type={response.headers.get('Content-Type','unknown')}, bytes={len(body.encode('utf-8'))}"
+
+def import_xlink(destination, source=URL):
+    diagnostics = []
+    titles = []
+    try:
+        html, details = fetch_url(source)
+        parser = WikiTables()
+        parser.feed(html)
+        diagnostics.append(f"HTML: {details}, tables={len(parser.tables)}")
+        if parser.tables:
+            try:
+                titles = [row[0].strip() for row in select_ps2_table(parser.tables) if row and row[0].strip()]
+            except ValueError as exc:
+                diagnostics.append(f"HTML selection: {exc}")
+    except (OSError, ValueError) as exc:
+        diagnostics.append(f"HTML request: {exc}")
+
+    if len(titles) < 20:
+        # Query the underlying wiki source instead of relying on page HTML.
+        base = "https://www.teamxlink.co.uk/wiki/"
+        urls = [
+            base + "api.php?" + urllib.parse.urlencode({
+                "action":"parse","page":"PlayStation_2","prop":"wikitext","format":"json"}),
+            base + "index.php?title=PlayStation_2&action=raw",
+        ]
+        for url in urls:
+            try:
+                body, details = fetch_url(url)
+                if "api.php?" in url:
+                    payload = json.loads(body)
+                    text = payload["parse"]["wikitext"]["*"]
+                else:
+                    text = body
+                found = parse_wikitext(text)
+                diagnostics.append(f"Wiki source: {details}, titles={len(found)}")
+                if len(found) >= 20:
+                    titles = found
+                    break
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                diagnostics.append(f"Wiki source request: {exc}")
+
+    titles = list(dict.fromkeys(t for t in titles if t and t.casefold() not in ("title","game")))
+    if not 20 <= len(titles) <= 200:
+        raise ValueError(
+            f"Found {len(titles)} PS2 titles; refusing to replace existing data. "
+            + " | ".join(diagnostics)
+        )
+    entries = [{"title": title, "source_url": URL,
+                "evidence": "Team XLink manually verified PS2 LAN list",
+                "match_scope": "title_only"} for title in titles]
     payload = {"schema_version":1, "platform":"playstation-2", "source":URL,
                "updated_at":datetime.now(timezone.utc).isoformat(), "records":entries}
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\n", encoding="utf-8")
+    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False)+"\\n", encoding="utf-8")
     tmp.replace(dest)
     print(f"[OK] Imported {len(entries)} Team XLink PS2 LAN titles (title-level evidence)")
 
