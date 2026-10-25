@@ -136,7 +136,7 @@ async def login_action(request: Request):
     username = values.get("username", [""])[0]
     password = values.get("password", [""])[0]
     target = safe_next(values.get("next", ["/"])[0])
-    if not valid_origin(request) or not valid_csrf(values.get("csrf_token", [""])[0]):
+    if not valid_csrf(values.get("csrf_token", [""])[0]):
         return HTMLResponse("Invalid login form. Reload the page and try again.", status_code=403, headers={"Cache-Control":"no-store"})
     if not verify_password(username, password):
         return HTMLResponse(login_html('<p role="alert" style="color:#ff9b9b">Incorrect username or password.</p>', target), status_code=401, headers={"Cache-Control":"no-store"})
