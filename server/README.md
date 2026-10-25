@@ -1,3 +1,9 @@
+### Mobile-width library table (25 October 2026)
+
+On iPhone, the catalogue now uses a width-constrained, fixed-layout table instead of the old 660px minimum. Long game names and disc serials wrap within their columns. RetroAchievements status is an **icon only**: a gold 🏆 for a locally **verified matching RA disc hash plus game ID**, or a dim/crossed trophy for other and unknown states (which **does not** mean confirmed unsupported). The icon retains a descriptive hover/accessibility title. The RA header is abbreviated to save space. Sticky table headings and the independent vertical scroll remain, as do selectable columns, guest access and desktop rendering. On very narrow displays, hiding RA ID or Disc ID through the Columns controls provides more room for titles.
+
+Deploy: `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. No new schema, ROM mutations, or permissions required.
+
 ## GameDB titles in the web catalogue (October 2026)
 
 The web UI now **reuses the same cached GameDB serial-to-title map as the RetroAchievements audit** at `/var/cache/retrodb/providers/gamedb/{playstation,playstation-2}.json`. For a game with no populated `ra_game_title`, it extracts the disc serial from the filename/path and checks the local GameDB cache before using a cleaned filename fallback. This resolves known abbreviated filenames such as GTA VCS when the respective disc ID is present in GameDB. A verified RA title retains precedence. Searching, A–Z filters and game-title sorting use these resolved names **before 100-item pagination**. The game-details heading uses the same lookup.
