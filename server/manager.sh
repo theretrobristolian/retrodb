@@ -101,7 +101,7 @@ ART
   printf ' %-12s %-13s %-12s %s\n' 'RetroDB:' "$(state retrodb.service)" 'Local API:' "$(web http://127.0.0.1:8000/health)"
   printf ' %-12s %-13s %-12s %s\n' 'PostgreSQL:' "$(state postgresql.service)" 'RetroNAS:' "$(retronas_mount_state)"
   printf ' %-12s %-13s %-12s %s\n' 'RAHasher:' "$hasher" 'CSV report:' "$report"
-  printf ' %-12s %-13s %-12s %s\n' 'xeRAbora:' "$(state xerabora.service)" 'Web UI:' "$(web http://127.0.0.1:18280/)"
+  printf ' %-12s %-13s %-12s %s\n' 'xeRAbora:' "$(state xerabora.service)" 'Web UI:' "$(web http://retrodb.it.gattaca.house:18280/)"
   echo '----------------------------------------------------------------'
 }
 pause() { read -rp 'Press Enter to return...' ignored || true; }
