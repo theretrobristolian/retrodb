@@ -70,7 +70,9 @@ def test_https_session_login_persists_without_basic_auth(tmp_path, monkeypatch):
         with TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False) as client:
             assert client.get("/").status_code == 303
             assert client.get("/login").status_code == 200
-            response = client.post("/login", data={"username":"player","password":"correct-horse","next":"/"},
+            import re
+            token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text).group(1)
+            response = client.post("/login", data={"username":"player","password":"correct-horse","next":"/","csrf_token":token},
                                    headers={"origin":"https://retrodb.it.gattaca.house"})
             assert response.status_code == 303
             assert "Secure" in response.headers["set-cookie"]
@@ -79,5 +81,36 @@ def test_https_session_login_persists_without_basic_auth(tmp_path, monkeypatch):
             logout = client.post("/logout", headers={"origin":"https://retrodb.it.gattaca.house"})
             assert logout.status_code == 303
             assert client.get("/").status_code == 303
+    finally:
+        app.dependency_overrides.clear()
+
+def test_catalogue_title_serial_and_achievement_status():
+    from types import SimpleNamespace
+    from retrodb.web_ui import name, disc_id, ra_supported
+    raw = SimpleNamespace(filename="Ratchet_&_Clank_(Europe)_SLES_509.16.iso",
+                          relative_path="PS2/Ratchet_&_Clank_(Europe)_SLES_509.16.iso",
+                          ra_game_title=None, ra_game_id=None, ra_match_status="unknown")
+    assert "Ratchet" in name(raw)
+    assert "SLES" not in name(raw)
+    assert disc_id(raw) == "SLES-50916"
+    assert not ra_supported(raw)
+    raw.ra_game_title = "Ratchet & Clank"
+    raw.ra_game_id = 12345
+    raw.ra_match_status = "matched"
+    assert name(raw) == "Ratchet & Clank"
+    assert ra_supported(raw)
+
+def test_catalogue_controls_render(monkeypatch):
+    import retrodb.session_auth as auth
+    monkeypatch.setattr(auth, "user_from_cookie", lambda _: "test-player")
+    app.dependency_overrides[get_session] = stub
+    try:
+        client = TestClient(app)
+        result = client.get("/library?sort=title&ra=all")
+        assert result.status_code == 200
+        assert 'data-toggle="disc"' in result.text
+        assert "Disc ID" in result.text
+        assert "Achievements" in result.text
+        assert "library-scroll" in result.text
     finally:
         app.dependency_overrides.clear()
