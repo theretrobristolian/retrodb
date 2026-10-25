@@ -298,7 +298,7 @@ Group=$(id -gn "$USER_NAME")
 WorkingDirectory=/opt/xerabora
 Environment=HOME=$HOME_PATH
 ExecStart=/opt/xerabora/xerabora-linux-x86_64 --no-sound --ui-port 18280$server_flag
-ExecStartPre=/bin/sleep 20
+ExecStartPre=/bin/sleep 10
 Restart=always
 RestartSec=10
 
@@ -446,7 +446,7 @@ configure_service_startup() {
   sudo -v || return 1
   sudo install -d -m 0755 "$dir"
   if [[ "$mode" == auto ]]; then
-    printf '# xeRAbora startup mode: auto\n[Service]\nExecStartPre=\nExecStartPre=/bin/sleep 20\nRestart=always\nRestartSec=10\n' | sudo tee "$dir/restart.conf" >/dev/null
+    printf '# xeRAbora startup mode: auto\n[Service]\nExecStartPre=\nExecStartPre=/bin/sleep 10\nRestart=always\nRestartSec=10\n' | sudo tee "$dir/restart.conf" >/dev/null
     sudo systemctl daemon-reload
     sudo systemctl enable xerabora.service
     sudo systemctl restart xerabora.service
