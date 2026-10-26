@@ -1,3 +1,33 @@
+## LizardByte GameDB / IGDB metadata enrichment (26 October 2026)
+
+RetroDB now supports an **opt-in, cache-only metadata enrichment importer** for the public static [LizardByte GameDB](https://github.com/LizardByte/GameDB), which is generated from IGDB data. **No IGDB/Twitch API credentials or HTML scraping are needed.** It imports game modes (e.g. single player/multiplayer), available ESRB/PEGI/CERO/BBFC ratings, genres and platform release years. It does **not** invent player counts, peripherals, GunCon/mouse support, or online capability. Game modes are general IGDB metadata; a "multiplayer" label is not evidence of working online multiplayer on the exact disc.
+
+Existing serial-title GameDB-PSX/PS2 imports are unaffected. LizardByte enrichment is an additional source and is matched conservatively, with identical normalized names **and** matching PS1/PS2 platform IDs. Ambiguous names are skipped for manual review; a game that has no certain match is unchanged. Existing RetroAchievements artwork and release metadata remain primary. Enrichment is stored per-library item under `/var/cache/retrodb/providers/lizardbyte/<library_id>.json`; the site performs **no outgoing calls at page render time**. The importer does not modify ROM files or database rows.
+
+Deploy and preview:
+
+```bash
+cd ~/retrodb
+git pull --ff-only
+sudo bash server/deploy.sh
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/enrich-gamedb.py --limit 25
+```
+
+Once preview matches look correct, apply a limited batch:
+
+```bash
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/enrich-gamedb.py --apply --limit 25
+```
+
+Repeat that command to advance through uncached records. The script deduplicates title-bucket downloads *within a run*, performs only a small number of sequential requests, and stops on 429/403. Explicit manual association for an ambiguous record requires verifying the mapping first:
+
+```bash
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/enrich-gamedb.py --item-id LOCAL_ITEM_ID --game-id IGDB_GAME_ID
+sudo -u retrodb /opt/retrodb/.venv/bin/python /opt/retrodb/server/enrich-gamedb.py --item-id LOCAL_ITEM_ID --game-id IGDB_GAME_ID --apply
+```
+
+The initial implementation is committed but **not yet runtime-tested on the deployed Debian VM**. GameDB is AGPL-3.0 for its software; IGDB content and third-party image rights are distinct. We consume public JSON on demand rather than copying GameDB into RetroDB or redistributing its dataset.
+
 ## Desktop and game-detail UI refinement (26 October 2026)
 
 Desktop header styling now follows the compact mobile branding more closely (tighter navigation spacing, modest RetroDB logo). Game detail panels use two compact content-height columns on desktop, and one full-width column on mobile, reducing tall blank stretches between uneven cards. The game title subline shows console/disc identifier instead of a redundant generic description.
