@@ -94,7 +94,7 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
  .game-art-card{padding:18px 16px}
  .game-art-card h2{margin-bottom:12px}
  .game-cover{max-height:230px;max-width:min(100%,230px)}
- main{padding:14px 14px calc(92px + env(safe-area-inset-bottom));min-width:0;max-width:100%;overflow-x:clip}
+ main{padding:14px 14px calc(80px + env(safe-area-inset-bottom, 0px));min-width:0;max-width:100%;overflow-x:clip}
  h1{font-size:27px;letter-spacing:-.7px}
  h2{font-size:19px}
  th,td{padding:9px 6px}
@@ -105,7 +105,7 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
  .mobile-actions{display:flex;align-items:center;gap:10px;font-size:12px;color:#afc0da}
  .mobile-actions form{margin:0}
  .mobile-actions button{font:inherit;color:#afc0da;background:transparent;border:0;padding:8px 3px;cursor:pointer}
- .mobile-nav{display:grid;position:fixed;z-index:40;bottom:0;left:0;right:0;width:100%;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;align-items:stretch;padding:7px 5px calc(7px + env(safe-area-inset-bottom));border-top:1px solid #2a3851;background:#10192df5;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+ .mobile-nav{display:grid;position:fixed;z-index:40;bottom:0;left:0;right:0;width:100%;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;align-items:stretch;padding:7px 5px max(8px, calc(env(safe-area-inset-bottom, 0px) - 20px));border-top:1px solid #2a3851;background:#10192df5;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
  .mobile-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;padding:8px 2px;border-radius:10px;color:#afc0da;min-width:0;font-size:10px;line-height:1.15;overflow-wrap:anywhere}
  .mobile-nav a .nav-icon{font-size:19px;line-height:1}
  .mobile-nav a[aria-current="page"]{background:#294671;color:#fff}
