@@ -198,7 +198,28 @@ def xml_sheet(rows):
         xml.append('</row>')
     xml.append('</sheetData><autoFilter ref="A1:%s%d"/></worksheet>' % (excel_column(len(rows[0])),len(rows)))
     return ''.join(xml)
-def main(source,destination,preparation=None):
+def load_ps1_audit(path):
+    if not path or not Path(path).is_file():
+        return []
+    with open(path, newline='', encoding='utf-8-sig') as handle:
+        return list(csv.DictReader(handle))
+
+
+def ps1_action_row(r):
+    status = r.get('status', '')
+    issue = r.get('issues', '')
+    action = ('Repair broken CUE / references' if status == 'BROKEN' else
+              'Review disc identity and source files' if status == 'REVIEW' else
+              'Review BIN/CUE naming warning' if status == 'WARNING' else
+              'Review paired BIN/CUE rename')
+    source = r.get('relative_cue') or r.get('relative_bin', '')
+    return ['Sony PlayStation', Path(source).stem, Path(source).name,
+            r.get('internal_serial') or r.get('filename_serial', ''), status, action,
+            '', '', '', '', issue, '', '', '',
+            source]
+
+
+def main(source,destination,preparation=None,ps1_audit=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
     entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
@@ -234,6 +255,21 @@ def main(source,destination,preparation=None):
                         f'{100*(counts["YES"]+counts["NO"]+counts["NO SET"])/effective:.2f}%' if effective else '0.00%'])
         sheets.append((name,[COLS]+entries_console))
         all_actions.extend(action_rows_from_audit(entries, platform, active))
+    ps1_rows = load_ps1_audit(ps1_audit)
+    if ps1_rows:
+        ps1_cols = ['Status', 'CUE path', 'BIN path', 'Filename disc ID',
+                    'Internal disc ID', 'Selected disc ID', 'Homebrew',
+                    'CUE file references', 'Referenced file count',
+                    'Proposed CUE', 'Proposed BIN', 'RA verification', 'Issues']
+        ps1_keys = ['status', 'relative_cue', 'relative_bin', 'filename_serial',
+                    'internal_serial', 'selected_serial', 'homebrew',
+                    'file_references', 'file_count', 'proposed_cue', 'proposed_bin',
+                    'ra_compatibility', 'issues']
+        sheets.append(('PS1 File Audit', [ps1_cols] +
+                       [[r.get(k, '') for k in ps1_keys] for r in ps1_rows]))
+        all_actions.extend(ps1_action_row(r) for r in ps1_rows
+                           if r.get('status') != 'VALID')
+        print(f'[INFO] PS1 file audit: {len(ps1_rows)} disc/file records integrated.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
@@ -272,5 +308,5 @@ def main(source,destination,preparation=None):
     print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json]')
-    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)==4 else None)
+    if len(sys.argv) not in (3,4,5): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv]')
+    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)==5 else None)
