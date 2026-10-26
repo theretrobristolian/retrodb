@@ -164,10 +164,29 @@ result with RAHasher and retains only successful results under
 
 ## Current end-to-end audit and controlled NAS writes
 
-The current recommended entry point is `bash server/manager.sh` as your ordinary Linux user. Menu **1** refreshes inventory and RA/PS2 GameDB matching, verifies official patch sources, then exports both a formatted compatibility Excel workbook and a filterable OPL rename Excel workbook. Menu **4** re-exports the existing audit without scanning. The machine-readable OPL proposal CSV remains the input used by menu **6** (confirmed bulk renames).
+The interactive entry point is `retrodb` (or `bash server/manager.sh`) as the ordinary Linux user.
 
-Menus **3** and **6** are exceptional **writable** workflows: they mount a second temporary SMB connection at `/mnt/retrodb-retronas-pilot-rw`; the normal `/mnt/retrodb-retronas` auditing mount remains read-only. The PS2 patch workflow validates a clean original against official patch requirements, builds and RA-verifies the patched ISO locally, requires the exact confirmation `PATCH-<RA_GAME_ID>`, backs up the original as `OLD_<filename>`, SHA-256-verifies that backup, copies and RA-verifies the patched output on RetroNAS, then checks the final active ISO. Stage information and failure states are recorded under `~/retrodb-exports/opl-rename-journals/`; menu **8** displays the latest patch journal.
+| Main menu | Operation |
+|---|---|
+| 1 | Audit PS1 and PS2 through the read-only RetroNAS mount, then export compatibility reports and rename proposals |
+| 2 | Patch **one** RA game ID: check the original source checksum; reuse a verified existing local output or create one; offer **PS1** network deployment with a separate `DEPLOY-<RA_GAME_ID>` confirmation |
+| 3 | Preview and confirm PS1 paired BIN/CUE renames or PS2 OPL renames |
+| 4 | More options (including exports, downloads, recovery tools and status) |
 
-**Do not remove a failed or partial `OLD_` backup or blindly rerun a failed operation.** Check the deployment journal and the two files first. Backups are deliberately omitted from new active scans, RA checks, Excel reporting and OPL rename proposals, but retained on disk. Explicit rename operations have their own recovery journal (menu **7**). After any patch or rename, perform a new full audit before trusting the reports.
+### PS1 patch deployment and `OLD_` backups
 
-The older command `sudo bash server/retronas.sh patch-apply` still describes a **local verified-output workflow**, not menu 3's direct-on-NAS deployment. Keep these two paths distinct.
+Local patching alone **never writes to RetroNAS**. A separate deployment confirmation within menu 2 permits temporary network write access for a single PS1 game. The normal audit share remains mounted read-only at `/mnt/retrodb-retronas`; a temporary SMB mount at `/mnt/retrodb-retronas-pilot-rw` is created only for confirmed write operations and unmounted afterward.
+
+The PS1 deployment reads `/var/lib/retrodb/patches/patch-apply.json` and requires an existing `patched-and-verified` result with the expected 32-character RA hash. It copies the **unmodified patched CUE and BIN files under their verified patch filenames**, checks staged SHA-256 checksums and RetroAchievements hash, creates `OLD_` backups of the original CUE and BIN, checks backup SHA-256 checksums, publishes the new files and verifies their RA hash once more. After successful verification, the former active filenames are retired; the `OLD_` copies remain. The original CUE's track layout is not rewritten.
+
+An existing `OLD_` backup or destination collision blocks deployment. Operations are journalled under `~/retrodb-exports/opl-rename-journals/ps1-deploy-*.json`. If any step fails, **check the journal and the NAS files before retrying**, especially when a write may have started. Do not delete backups or temporary files while investigating.
+
+PS2's historical `server/patch_retronas.py` mechanism also uses `OLD_` backups and checksum verification, but **the current interactive menu 2 does not automatically deploy PS2 patches to the NAS**. Do not assume the PS1 deployment process applies to PS2 ISO images.
+
+### PS1 filenames, paired renames and multiple discs
+
+Menu 3's PS1 workflow audits CUE references, reads an internal serial from the corresponding BIN when possible, uses cached GameDB titles, and previews changes before a confirmed rename of eligible BIN/CUE pairs. It does not alter BIN data. Destination collisions, unverifiable serials and ambiguous multi-file track layouts require review; the rename executor records a local journal before modifying filenames or CUE references.
+
+Friendly titles preserve `(Disc N)` when disc numbering is independently supported by reviewed serial mappings or an existing per-disc filename. Reviewed examples include Metal Gear Solid (two discs) and Geppy-X (four discs, serials `SLPS-01995` through `SLPS-01998`). Do **not** infer disc order from sorting files or from a shared RetroAchievements game title. Unknown multi-disc identities remain manual-review work. Display names omit revision suffixes such as `(Rev 1)`, without claiming those revisions are identical for RA compatibility.
+
+After any confirmed patch deployment or rename, run menu 1 again to refresh the inventory and reports.
