@@ -60,6 +60,16 @@ CURATED_DISPLAY_TITLES = {
     "blood omen 2 the legacy of kain series": "Blood Omen 2",
     "midnight club 3 dub edition remix": "Midnight Club 3 DUB Remix",
     "midnight club 3 dub edition remix greatest hits": "Midnight Club 3 DUB Remix",
+    # Buzz! franchise: retain distinct quiz and Junior subtitles within OPL limits.
+    "buzz junior ace racers": "Buzz Jr Ace Racers",
+    "buzz junior jungle party": "Buzz Jr Jungle Party",
+    "buzz junior monster rumble": "Buzz Jr Monster Rumble",
+    "buzz junior robojam": "Buzz Jr RoboJam",
+    "buzz the big quiz": "Buzz The Big Quiz",
+    "buzz the hollywood quiz": "Buzz The Hollywood Quiz",
+    "buzz the mega quiz": "Buzz The Mega Quiz",
+    "buzz the music quiz": "Buzz The Music Quiz",
+    "buzz the pop quiz": "Buzz The Pop Quiz",
     # Keep each Prince of Persia subtitle identifiable within OPL’s display limit.
     "prince of persia warrior within": "PoP Warrior Within",
     "prince of persia the two thrones": "PoP The Two Thrones",
