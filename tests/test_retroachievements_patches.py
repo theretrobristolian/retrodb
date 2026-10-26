@@ -186,3 +186,20 @@ def test_patch_apply_keeps_only_ra_verified_output(tmp_path, monkeypatch):
     assert result.verified == 1
     assert next((tmp_path / "verified/42-example").glob("*.iso")).read_bytes() == b"patched image"
     assert source.read_bytes() == b"clean image"
+
+def test_patch_digest_cache_reuses_unchanged_file_and_invalidates_changes(tmp_path, monkeypatch):
+    from retrodb import retroachievements_patches as patch
+    source = tmp_path / "disc.iso"
+    source.write_bytes(b"original")
+    cache, stats = {}, {"hits": 0, "reads": 0}
+    fake_hasher = tmp_path / "hasher"
+    fake_hasher.write_text("test")
+    first = patch._cached_disc_digest(source, "md5", 21, fake_hasher, cache, stats)
+    assert first == hashlib.md5(b"original").hexdigest()
+    assert patch._cached_disc_digest(source, "md5", 21, fake_hasher, cache, stats) == first
+    assert stats == {"hits": 1, "reads": 1}
+    source.write_bytes(b"modified-image")
+    second = patch._cached_disc_digest(source, "md5", 21, fake_hasher, cache, stats)
+    assert second != first
+    assert stats["reads"] == 2
+
