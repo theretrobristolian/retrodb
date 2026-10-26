@@ -286,10 +286,10 @@ PYJ
       return 1
     fi
   done < <(find "$journal_dir" -maxdepth 1 -name '*.json' -type f | sort)
-  sudo python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
-  echo '[IMPORTANT] This is an experimental PS1 renamer. Review the proposals before proceeding.'
-  read -rp 'Type RENAMEPS1 to apply paired BIN/CUE renames: ' answer
-  [[ "$answer" == RENAMEPS1 ]] || { echo 'Cancelled'; return 0; }
+  sudo python3 "$HERE/ps1_rename.py" preview --limit 3 --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
+  echo '[PILOT] Only the three displayed BIN/CUE pairs will be changed.'
+  read -rp 'Type PILOT3 to rename ONLY these three pairs: ' answer
+  [[ "$answer" == PILOT3 ]] || { echo 'Cancelled'; return 0; }
   source="$(findmnt -n -o SOURCE --target "$MOUNT")"
   [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
@@ -298,9 +298,9 @@ PYJ
   fi
   sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
   journal="$journal_dir/ps1-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-  python3 "$HERE/ps1_rename.py" apply --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
+  python3 "$HERE/ps1_rename.py" apply --limit 3 --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active!'; return 1; }
-  echo "PS1 journal: $journal"
+  echo "PS1 pilot journal: $journal"
   [[ "$result" -eq 0 ]] || echo '[WARNING] Incomplete operation: inspect journal before any rerun.'
   return "$result"
 }
@@ -620,7 +620,7 @@ menu() {
       1) run audit; pause ;;
       2) run patch_retronas_one; pause ;;
       3)
-        echo '  1) PlayStation 1 - Read-only proposal export'
+        echo '  1) PlayStation 1 - Pilot rename (3 BIN/CUE pairs)'
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
