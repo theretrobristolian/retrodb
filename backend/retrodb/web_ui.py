@@ -207,6 +207,8 @@ PS1_DISC_NUMBERS = {
     "SLUS-00594": 1, "SLUS-00776": 2,  # Metal Gear Solid
     "SLUS-00544": 1, "SLUS-00556": 2,  # G-Police
     "SLUS-00710": 1, "SLUS-00731": 2,  # Abe's Exoddus
+    "SLPS-01995": 1, "SLPS-01996": 2,  # Geppy-X (four discs)
+    "SLPS-01997": 3, "SLPS-01998": 4,
 }
 DISC_MARKER = re.compile(r"\\((?:Disc|Disk|CD)\\s*(\\d+)(?:\\s*(?:of|/)\\s*\\d+)?\\)", re.I)
 REV_MARKER = re.compile(r"\\s*\\((?:Rev(?:ision)?\\s*\\d+(?:\\.\\d+)?|v\\d+(?:\\.\\d+)?)\\)", re.I)
