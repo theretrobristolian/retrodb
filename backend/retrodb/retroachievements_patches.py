@@ -525,6 +525,13 @@ def _cached_disc_digest(path: Path, algorithm: str, console_id: int, hasher: Pat
     signature = [str(path.resolve()), st.st_size, st.st_mtime_ns,
                  st.st_ctime_ns, st.st_dev, st.st_ino, algorithm]
     if algorithm == "ra_hash":
+        if path.suffix.casefold() == ".cue":
+            data_file = _cue_data_file(path)
+            if not data_file or not data_file.is_file():
+                raise PatchError(f"Referenced CUE data file is unavailable: {path}")
+            data_stat = data_file.stat()
+            signature.extend([str(data_file.resolve()), data_stat.st_size, data_stat.st_mtime_ns,
+                              data_stat.st_ctime_ns, data_stat.st_dev, data_stat.st_ino])
         tool_stat = hasher.stat()
         signature.extend([console_id, tool_stat.st_size, tool_stat.st_mtime_ns])
     key = json.dumps(signature, separators=(",", ":"))
