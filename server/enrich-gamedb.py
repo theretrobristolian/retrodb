@@ -99,6 +99,18 @@ def safe_record(raw, platform, title):
                    if isinstance(v, dict) and isinstance(v.get("name"), str)],
     }
 
+def mark_review(item_id, title, reason, candidates):
+    """Keep unresolved matches out of automatic batches; preserve manual review."""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    target = CACHE / f"{item_id}.review.json"
+    tmp = target.with_suffix(".tmp")
+    tmp.write_text(json.dumps({
+        "status": "needs-review", "title": title, "reason": reason,
+        "candidates": candidates[:50],
+    }), encoding="utf-8")
+    tmp.replace(target)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--apply", action="store_true", help="Write cached matches (otherwise preview only)")
@@ -118,13 +130,15 @@ def main():
                           .order_by(LibraryItem.id)).all()
     pending = [(item, slug) for item, slug in rows
                if slug in PLATFORMS and (args.item_id == item.id or
-                   (args.item_id is None and not (CACHE / f"{item.id}.json").exists()))]
+                   (args.item_id is None and not (CACHE / f"{item.id}.json").exists()
+                    and not (CACHE / f"{item.id}.review.json").exists()))]
     pending = pending[:args.limit]
     print(f"Uncached candidates: {len(pending)} in this batch. apply={args.apply}")
     if not pending:
         return 0
     buckets = {}
     completed = 0
+    review = 0
     with httpx.Client(headers={"User-Agent": "RetroDB-GameDB-enrichment/0.1"}, follow_redirects=False) as client:
         for item, platform in pending:
             title = name(item, platform)
@@ -140,15 +154,24 @@ def main():
                     ids = [int(id_) for id_, v in entries.items()
                            if isinstance(v, dict) and norm(v.get("name", "")) == norm(title)]
                 if len(ids) != 1:
-                    print(f"SKIP {item.id} {title}: {len(ids)} exact title candidates")
+                    print(f"REVIEW {item.id} {title}: {len(ids)} exact title candidates")
+                    if args.apply:
+                        mark_review(item.id, title, "ambiguous" if ids else "no-exact-match", ids)
+                        review += 1
                     continue
                 raw = get_json(client, f"/games/{ids[0]}.json")
                 if not args.game_id and norm(raw.get("name", "")) != norm(title):
-                    print(f"SKIP {item.id} {title}: returned title differs")
+                    print(f"REVIEW {item.id} {title}: returned title differs")
+                    if args.apply:
+                        mark_review(item.id, title, "title-mismatch", ids)
+                        review += 1
                     continue
                 record = safe_record(raw, platform, title)
                 if not record:
-                    print(f"SKIP {item.id} {title}: platform mismatch")
+                    print(f"REVIEW {item.id} {title}: platform mismatch")
+                    if args.apply:
+                        mark_review(item.id, title, "platform-mismatch", ids)
+                        review += 1
                     continue
                 print(f"MATCH {item.id} {title} -> GameDB {ids[0]}, ratings={len(record['age_ratings'])}, modes={record['game_modes']}")
                 if args.apply:
@@ -164,7 +187,7 @@ def main():
                 return 2
             except (httpx.HTTPError, ValueError, TypeError, KeyError, OSError) as exc:
                 print(f"SKIP {item.id}: {type(exc).__name__}")
-    print(f"Completed: {completed}. Re-run --apply to continue.")
+    print(f"Completed: {completed}; marked for manual review: {review}. Re-run --apply to continue.")
     return 0
 
 if __name__ == "__main__":
