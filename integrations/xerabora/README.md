@@ -53,6 +53,12 @@ bash integrations/xerabora/install.sh status
 
 The service is managed by systemd. The standard install location is `/opt/xerabora/`; player configuration is stored privately under `~/.config/xerabora-profiles/`. Each profile has independent xeRAbora data. Switching players **restarts the service**; the PS2 may need an OPL-RA restart/reconnection.
 
+### Gameplay monitor and unsupported achievements
+
+Menu **3** provides a read-only gameplay monitor: current game when the local xeRAbora `/state` endpoint exposes it, the previous hour of meaningful logged events, and new unlocks/leaderboards as they occur. Routine HTTP polling and heartbeats are hidden. It uses Python 3 and the standard library; no RetroDB service is involved.
+
+Some RetroAchievements sets contain **pointer-chain memory reads** that the current PS2 agent cannot evaluate. xeRAbora reports a count such as `3 cannot unlock here (pointer chains)`. The manager highlights this count at game load. **A count is not a list of achievement names**: specific IDs and names appear only if the running xeRAbora build emits its detailed unsupported-achievement trace messages. Do not assume a missed unlock is one of those limitations without matching it to a named warning. Enable upstream trace logging only deliberately; it requires modifying the client startup and restarting the service.
+
 ## Version reporting and compatible binaries
 
 The manager shows **Recorded version** (the `/opt/xerabora/VERSION` marker) separately from **Binary identity** (identified by the executable's SHA-256 where known). These can differ after a manual or community test-build installation.
