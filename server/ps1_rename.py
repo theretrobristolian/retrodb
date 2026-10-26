@@ -115,13 +115,58 @@ def apply(ops, journal):
             sync(journal, ops)
             raise
 
+
+def rollback(journal: Path):
+    """Reverse a journal conservatively; stop at unexpected files or conflicts."""
+    data = json.loads(journal.read_text(encoding="utf-8"))
+    operations = data["operations"]
+    for op in reversed(operations):
+        state = op.get("state", "pending")
+        if state in ("pending", "rolled_back"):
+            continue
+        oldcue, oldbin, newcue, newbin = (Path(op[k]) for k in
+            ("old_cue", "old_bin", "new_cue", "new_bin"))
+        original = bytes.fromhex(op["original_cue_hex"])
+        if state in ("applied", "cue_moved"):
+            if oldcue.exists() or not newcue.is_file() or newcue.is_symlink():
+                raise RuntimeError(f"CUE rollback conflict: {newcue}")
+            # Applied CUE is modified; its content must refer to the expected BIN.
+            if state == "applied":
+                content = newcue.read_text(encoding=op["encoding"])
+                matches = [line for line in content.splitlines()
+                           if line.lstrip().upper().startswith("FILE ")]
+                if len(matches) != 1 or not (m := FILE_LINE.match(matches[0])) or (m.group(2) or m.group(3)) != newbin.name:
+                    raise RuntimeError(f"Unexpected CUE content: {newcue}")
+            newcue.rename(oldcue)
+            op["state"] = "bin_moved"
+            sync(journal, operations)
+            # Restore original bytes only after the renamed CUE is back.
+            oldcue.write_bytes(original)
+        if op.get("state") == "bin_moved":
+            if oldbin.exists() or not newbin.is_file() or newbin.is_symlink():
+                raise RuntimeError(f"BIN rollback conflict: {newbin}")
+            if disc_serial(newbin) != op["serial"]:
+                raise RuntimeError(f"BIN identity changed: {newbin}")
+            newbin.rename(oldbin)
+            op["state"] = "rolled_back"
+            sync(journal, operations)
+            print("[RESTORED]", oldcue.name)
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("preview", "apply"))
-    p.add_argument("--csv", type=Path, required=True)
-    p.add_argument("--root", type=Path, required=True)
+    p.add_argument("mode", choices=("preview", "apply", "rollback"))
+    p.add_argument("--csv", type=Path)
+    p.add_argument("--root", type=Path)
     p.add_argument("--journal", type=Path)
     args = p.parse_args()
+    if args.mode == "rollback":
+        if not args.journal:
+            p.error("--journal required for rollback")
+        rollback(args.journal)
+        return
+    if not args.csv or not args.root:
+        p.error("--csv and --root required for preview/apply")
     ops = parse(args)
     print(f"Eligible paired BIN/CUE renames: {len(ops)}")
     for op in ops:
