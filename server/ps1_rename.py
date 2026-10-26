@@ -8,6 +8,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from report_ps1_audit import disc_serial
 
 FILE_LINE = re.compile(r'^(\s*FILE\s+)(?:"([^"]+)"|(\S+))(\s+[^\r\n]+)$', re.I)
 
@@ -39,6 +40,8 @@ def parse(args):
             continue
         if not all(p.is_file() for p in (oldcue, oldbin)):
             continue
+        if disc_serial(oldbin) != row["internal_serial"]:
+            continue
         if (newcue != oldcue and newcue.exists()) or (newbin != oldbin and newbin.exists()):
             continue
         if any(str(p).casefold() in used for p in (newcue, newbin)):
@@ -61,6 +64,7 @@ def parse(args):
         ops.append(dict(old_cue=str(oldcue), old_bin=str(oldbin),
                         new_cue=str(newcue), new_bin=str(newbin),
                         original_cue_hex=raw.hex(), encoding=encoding,
+                        serial=row["internal_serial"],
                         state="pending"))
     return ops
 
@@ -92,6 +96,8 @@ def apply(ops, journal):
             lines[idx] = updated + ending
             if oldcue.read_bytes() != raw:
                 raise RuntimeError("CUE changed since plan")
+            if disc_serial(oldbin) != op["serial"]:
+                raise RuntimeError("Internal disc ID changed since audit")
             oldbin.rename(newbin)
             op["state"] = "bin_moved"
             sync(journal, ops)
