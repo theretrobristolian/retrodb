@@ -286,7 +286,25 @@ PYJ
       return 1
     fi
   done < <(find "$journal_dir" -maxdepth 1 -name '*.json' -type f | sort)
+  # Always rescan before a rename; cached proposals can be stale after a prior run.
+  ( umask 077; sudo python3 "$HERE/report_ps1_audit.py" --root "$MOUNT/roms/sony/playstation1" --output "$csv" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$csv" || return 1
+  chmod 0600 "$csv" || return 1
   sudo python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
+  local eligible
+  eligible="$(sudo python3 - "$HERE" "$csv" "$MOUNT/roms/sony/playstation1" <<'PYCOUNT'
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+sys.path.insert(0, sys.argv[1])
+from ps1_rename import parse
+print(len(parse(SimpleNamespace(csv=Path(sys.argv[2]), root=Path(sys.argv[3]), limit=None))))
+PYCOUNT
+)" || return 1
+  if [[ "$eligible" == 0 ]]; then
+    echo '[OK] No eligible PS1 renames remain; nothing changed and no journal created.'
+    return 0
+  fi
   echo '[BULK] All currently eligible PS1 BIN/CUE pairs displayed above will be renamed.'
   read -rp 'Type RENAMEPS1 to rename ALL eligible pairs: ' answer
   [[ "$answer" == RENAMEPS1 ]] || { echo 'Cancelled'; return 0; }
