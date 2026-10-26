@@ -294,15 +294,46 @@ PYCHECK
   read -rp "Type PATCH-$game_id to confirm: " confirm
   [[ "$confirm" == "PATCH-$game_id" ]] || { echo 'Cancelled.'; return 0; }
   step "2/2" "Apply selected patch and verify its RA hash" sudo bash "$HERE/retronas.sh" patch-apply --game-id "$game_id" || return 1
-  echo '[COMPLETE] Local verified outputs: /var/lib/retrodb/patches/verified/'
-  echo 'Journal: /var/lib/retrodb/patches/patch-apply.json'
+  echo '[OK] Local patch RA-verified.'
+  sudo python3 - "$game_id" <<'PYPLATFORM'
+import json,sys
+from pathlib import Path
+rows=json.loads(Path('/var/lib/retrodb/patches/patch-plan.json').read_text())
+match=[r for r in rows if str(r.get('ra_game_id'))==sys.argv[1]]
+print('[INFO] Patched game platform:', ', '.join(sorted({str(r.get('platform')) for r in match})))
+PYPLATFORM
+  if sudo python3 - "$game_id" <<'PYISPS1'
+import json,sys
+from pathlib import Path
+rows=json.loads(Path('/var/lib/retrodb/patches/patch-plan.json').read_text())
+sys.exit(0 if any(str(r.get('ra_game_id'))==sys.argv[1] and r.get('platform')=='Sony PlayStation' for r in rows) else 1)
+PYISPS1
+  then
+    deploy_ps1_patch "$game_id"
+  else
+    echo '[INFO] PS2 local result ready. Existing PS2 network deployment remains a separate legacy workflow.'
+  fi
 }
 deploy_ps1_patch() {
   local game_id answer source journal result=0
   mount_ready || return 1
-  read -rp 'Enter the single PS1 RA game ID to deploy (e.g. 10907): ' game_id
+  game_id="${1:-}"
+  if [[ -z "$game_id" ]]; then
+    read -rp 'Enter the single PS1 RA game ID to deploy (e.g. 10907): ' game_id
+  fi
   [[ "$game_id" =~ ^[0-9]{1,8}$ ]] || { echo 'Cancelled.'; return 0; }
-  echo 'This retains the original BIN and CUE as OLD_ copies and replaces the active pair.'
+  if ! sudo python3 - "$game_id" <<'PYPATCH'
+import json,sys
+from pathlib import Path
+p=Path('/var/lib/retrodb/patches/patch-apply.json')
+rows=json.loads(p.read_text())
+assert any(str(r.get('ra_game_id'))==sys.argv[1] and r.get('status')=='patched-and-verified' for r in rows)
+PYPATCH
+  then
+    echo '[INFO] No locally verified patch result for this ID (or not a PS1 patch).'
+    return 0
+  fi
+  echo 'This PS1 deployment retains original BIN and CUE as OLD_ backups and replaces the active pair.'
   echo 'Patch must already be locally RA-verified. Existing OLD_ files are never overwritten.'
   read -rp "Type DEPLOY-$game_id to confirm NAS changes: " answer
   [[ "$answer" == "DEPLOY-$game_id" ]] || { echo 'Cancelled.'; return 0; }
@@ -686,7 +717,7 @@ menu() {
     echo ' Main menu'
     echo
     echo '  1) Audit games       - Check RA support and export reports'
-    echo '  2) Patch PS1 / PS2   - Select ONE verified game by RA ID'
+    echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
     echo '  3) Rename games      - PS1 preview / PS2 confirmed changes\n  5) Deploy PS1 patch  - Verified BIN/CUE with OLD_ backups'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
