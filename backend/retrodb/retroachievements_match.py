@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from retrodb.models import LibraryItem, Platform
+from retrodb.disc_identity import internal_disc_serial
 from retrodb.providers.gamedb import load as load_gamedb
 from retrodb.providers.retroachievements import (
     RetroAchievementsClient,
@@ -592,6 +593,15 @@ def match_collection(
             counts[item.ra_match_status or "failed"] += 1
 
             serial, local_region = identify_local_release(item.relative_path)
+            internal_serial = internal_disc_serial(path, slug)
+            # Preserve observed conflicts for review; never silently overwrite
+            # a filename serial with a different internal disc identity.
+            serial_conflict = bool(serial and internal_serial and serial != internal_serial)
+            identity_source = "filename" if serial else "unidentified"
+            if not serial and internal_serial:
+                serial = internal_serial
+                local_region = REGION_BY_PREFIX.get(serial.split("-", 1)[0], "")
+                identity_source = "system-cnf"
             gamedb_title = gamedb_titles.get(serial, '')
             # Non-retail discs are identified but never promoted from a retail
             # title alone. Their hashes can still legitimately match RA.
@@ -727,6 +737,9 @@ def match_collection(
                 "status": item.ra_match_status,
                 "path": item.relative_path,
                 "local_serial": serial,
+                "internal_disc_serial": internal_serial,
+                "disc_id_source": identity_source,
+                "disc_id_conflict": "YES" if serial_conflict else "NO",
                 "local_friendly_title": friendly_local_title(item.relative_path),
                 "gamedb_title": gamedb_title,
                 "identity_review_reason": review_reason(
@@ -790,7 +803,7 @@ def match_collection(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = report_path.with_suffix(".tmp")
     fields = [
-        "platform", "status", "path", "local_serial", "local_region",
+        "platform", "status", "path", "local_serial", "internal_disc_serial", "disc_id_source", "disc_id_conflict", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
         "identity_resolution", "identity_review_reason",
         "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
