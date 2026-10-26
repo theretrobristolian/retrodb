@@ -1,3 +1,7 @@
+### GameDB batch progression and unresolved matches (26 October 2026)
+
+The first live 25-item dry run completed: 13 matches and 12 safe skips (ambiguous or unmatched). The importer now writes `<library_item_id>.review.json` in `/var/cache/retrodb/providers/lizardbyte/` **only during `--apply`** for no-match, ambiguous-title or wrong-platform results. Automatic runs skip those review markers and advance through the collection rather than becoming stuck on the same first 25 entries. No review marker is interpreted as an accepted match and the UI ignores them. Dry runs remain read-only. An explicit `--item-id ... --game-id ... --apply` can later resolve a reviewed item after manual verification. Transient network failures are not marked resolved and are retried in subsequent batches. The reviewed metadata and any existing RA cache are preserved.
+
 ## LizardByte GameDB / IGDB metadata enrichment (26 October 2026)
 
 RetroDB now supports an **opt-in, cache-only metadata enrichment importer** for the public static [LizardByte GameDB](https://github.com/LizardByte/GameDB), which is generated from IGDB data. **No IGDB/Twitch API credentials or HTML scraping are needed.** It imports game modes (e.g. single player/multiplayer), available ESRB/PEGI/CERO/BBFC ratings, genres and platform release years. It does **not** invent player counts, peripherals, GunCon/mouse support, or online capability. Game modes are general IGDB metadata; a "multiplayer" label is not evidence of working online multiplayer on the exact disc.
