@@ -109,10 +109,13 @@ def main():
     if args.journal.exists():
         raise ValueError("Journal already exists")
     token = uuid.uuid4().hex
-    stage_bin = active_bin.with_name(".retrodb-" + token + ".bin")
-    stage_cue = active_cue.with_name(".retrodb-" + token + ".cue")
-    # During staging, CUE must reference staged BIN; then rewrite it to the
-    # final name before the final swap (verified once more afterwards).
+    stage_dir = active_cue.parent / ("retrodb-patch-stage-" + token)
+    stage_dir.mkdir(mode=0o700)
+    stage_bin = stage_dir / active_bin.name
+    stage_cue = stage_dir / active_cue.name
+    # Keep the exact live BIN filename in the temporary CUE. The RAHasher
+    # uses disc-file identity while locating the PlayStation executable;
+    # randomised/hidden temporary BIN names can make it reject a valid disc.
     def rewrite_cue(new_bin_name):
         _, text, encoding, match = cue_bin(patched_cue)
         updated = text[:match.start()] + match.group(1) + '"' + new_bin_name + '"' + match.group(4) + text[match.end():]
@@ -124,7 +127,7 @@ def main():
     switched_bin = switched_cue = False
     try:
         shutil.copyfile(patched_bin, stage_bin)
-        stage_cue.write_bytes(rewrite_cue(stage_bin.name))
+        stage_cue.write_bytes(rewrite_cue(active_bin.name))
         if hash_file(args.hasher, 12, stage_cue) != expected:
             raise ValueError("Staged NAS BIN/CUE RA hash mismatch")
         record["state"] = "creating-backups"
@@ -135,7 +138,6 @@ def main():
             raise ValueError("OLD_ BIN/CUE SHA256 verification failed")
         record["state"] = "backups-verified"
         save(args.journal, record)
-        stage_cue.write_bytes(rewrite_cue(active_bin.name))
         record["state"] = "switching-pair"
         save(args.journal, record)
         os.replace(stage_bin, active_bin)
@@ -173,6 +175,8 @@ def main():
         for staged in (stage_bin, stage_cue):
             if staged.exists():
                 staged.unlink()
+        if stage_dir.exists():
+            stage_dir.rmdir()
 
 
 if __name__ == "__main__":
