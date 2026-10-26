@@ -23,7 +23,7 @@ router = APIRouter(include_in_schema=False)
 
 CSS = """
 :root{color-scheme:dark;font:16px system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1020;color:#eaf0fc}
-*{box-sizing:border-box}body{margin:0}a{color:inherit;text-decoration:none}a:hover{color:#9ebeff}
+*{box-sizing:border-box}html{width:100%;max-width:100%;overflow-x:clip}body{margin:0;width:100%;max-width:100%;overflow-x:clip}a{color:inherit;text-decoration:none}a:hover{color:#9ebeff}
 header{position:sticky;top:0;z-index:20;border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
 header .bar{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
 .brand{font-size:24px;font-weight:800;letter-spacing:-1px;color:#f6f8ff}
@@ -31,7 +31,7 @@ nav{display:flex;flex-wrap:wrap;gap:12px 18px;min-width:0;max-width:100%;color:#
 h1{font-size:34px;letter-spacing:-1.3px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 16px}
 p{line-height:1.6}.muted{color:#9daeca}.eyebrow{color:#7caeff;text-transform:uppercase;font-size:12px;font-weight:700;letter-spacing:1.7px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-.card{display:block;background:#151f32;border:1px solid #293952;border-radius:15px;padding:22px;min-height:120px}
+.card{display:block;min-width:0;max-width:100%;overflow-wrap:anywhere;background:#151f32;border:1px solid #293952;border-radius:15px;padding:22px;min-height:120px}
 .card:hover{border-color:#527cc6}.card h2{margin:4px 0 9px}.metric{font-size:34px;font-weight:750}
 .pill{background:#243651;color:#c4daff;padding:4px 9px;border-radius:30px;font-size:12px;white-space:nowrap}
 table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;color:#91a8c8;font-weight:600;background:#17233a}
@@ -83,13 +83,13 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
 .game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
-.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px}.detail .card{min-height:0;min-width:0}
+.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;min-width:0;max-width:100%}.detail .card{min-height:0;min-width:0;max-width:100%}.detail .card p{overflow-wrap:anywhere;word-break:normal}.detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal}.game-title-row>div{min-width:0;max-width:100%}.game-title-row h1,.crumb{overflow-wrap:anywhere}
 @media(max-width:760px){
  .detail{grid-template-columns:minmax(0,1fr)}
  .game-art-card{padding:18px 16px}
  .game-art-card h2{margin-bottom:12px}
  .game-cover{max-height:230px;max-width:min(100%,230px)}
- main{padding:24px 14px;min-width:0}
+ main{padding:24px 14px;min-width:0;max-width:100%;overflow-x:clip}
  th,td{padding:9px 6px}
  header{padding:12px 14px}
  header .bar{display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0}
@@ -387,7 +387,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     platform = db.get(Platform, item.platform_id)
     label = escape(name(item, platform.slug if platform else None))
     def detail(k, v):
-        return f"<p><span class='label'>{escape(k)}</span><br>{escape(str(v or 'Not available'))}</p>"
+        return f"<p class='detail-field'><span class='label'>{escape(k)}</span><br>{escape(str(v if v is not None and v != '' else 'Not available'))}</p>"
     info = (detail("Console", platform.name if platform else None)
             + detail("Filename", item.filename) + detail("File format", item.extension.upper())
             + detail("Size (GiB)", f"{item.size_bytes / 1024**3:.2f}")
