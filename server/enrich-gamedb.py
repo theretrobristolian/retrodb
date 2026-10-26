@@ -17,6 +17,7 @@ from pathlib import Path
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from retrodb.database import get_engine
@@ -110,11 +111,11 @@ def main():
     if os.geteuid() == 0:
         ap.error("Run as the retrodb service user, not root")
     environment()
-    with get_engine().connect() as db:
+    with Session(get_engine()) as db:
         rows = db.execute(select(LibraryItem, Platform.slug)
                           .join(Platform, LibraryItem.platform_id == Platform.id)
                           .where(LibraryItem.is_missing.is_(False))
-                          .order_by(LibraryItem.id)).tuples().all()
+                          .order_by(LibraryItem.id)).all()
     pending = [(item, slug) for item, slug in rows
                if slug in PLATFORMS and (args.item_id == item.id or
                    (args.item_id is None and not (CACHE / f"{item.id}.json").exists()))]
