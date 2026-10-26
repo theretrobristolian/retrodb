@@ -82,10 +82,15 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:22px}
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
-.game-title-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
-.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;min-width:0;max-width:100%}.detail .card{min-height:0;min-width:0;max-width:100%}.detail .card p{overflow-wrap:anywhere;word-break:normal}.detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal}.game-title-row>div{min-width:0;max-width:100%}.game-title-row h1,.crumb{overflow-wrap:anywhere}
+.game-title-row{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:center;gap:16px;margin-bottom:18px;min-width:0;max-width:100%}.game-title-row:not(:has(.game-ra-icon)){grid-template-columns:minmax(0,1fr)}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
+.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;min-width:0;max-width:100%}.detail .card{min-height:0;min-width:0;max-width:100%}.detail .card p{overflow-wrap:anywhere;word-break:normal}.detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal}.game-title-row>div{min-width:0;max-width:100%;overflow-wrap:anywhere}.game-title-row .muted{margin:8px 0 0}.game-title-row h1,.crumb{overflow-wrap:anywhere}
 @media(max-width:760px){
  .detail{grid-template-columns:minmax(0,1fr)}
+ .game-title-row{grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:center}
+ .game-title-row:not(:has(.game-ra-icon)){grid-template-columns:minmax(0,1fr)}
+ .game-title-row .game-ra-icon{width:64px;height:64px}
+ .game-title-row h1{font-size:clamp(19px,5.5vw,27px);line-height:1.18;letter-spacing:-.5px}
+ .game-title-row .muted{font-size:12px;line-height:1.35}
  .game-art-card{padding:18px 16px}
  .game-art-card h2{margin-bottom:12px}
  .game-cover{max-height:230px;max-width:min(100%,230px)}
