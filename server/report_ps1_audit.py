@@ -177,7 +177,7 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
             blockers.add("PAIR_NOT_SINGLE_BIN")
             issues.append("PAIR_NOT_SINGLE_BIN")
         status = "BROKEN" if broken else "REVIEW" if any(x in blockers for x in issues) else "WARNING" if issues else "VALID"
-        if status in ("VALID", "WARNING") and all(x == "EXTENSION_CASE_NORMALIZATION" for x in issues) and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
+        if status in ("VALID", "WARNING") and all(x in ("EXTENSION_CASE_NORMALIZATION", "BASENAME_MISMATCH") for x in issues) and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
             status = "RENAME_CANDIDATE"
         if status == "VALID" and dest_cue and dest_bin and paths and (dest_cue != cue or dest_bin != paths[0]):
             status = "RENAME_CANDIDATE"
