@@ -114,7 +114,7 @@ def main():
         rows = db.execute(select(LibraryItem, Platform.slug)
                           .join(Platform, LibraryItem.platform_id == Platform.id)
                           .where(LibraryItem.is_missing.is_(False))
-                          .order_by(LibraryItem.id)).all()
+                          .order_by(LibraryItem.id)).tuples().all()
     pending = [(item, slug) for item, slug in rows
                if slug in PLATFORMS and (args.item_id == item.id or
                    (args.item_id is None and not (CACHE / f"{item.id}.json").exists()))]
