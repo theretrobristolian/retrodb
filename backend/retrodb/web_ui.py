@@ -201,19 +201,39 @@ def gamedb_title(item: LibraryItem, slug: str | None) -> str:
         return ""
     return titles.get(serial, "")
 
+# Only verified PS1 disc-to-volume identities. Extend as catalogues are reviewed;
+# never assign disc order alphabetically or from unverified region variants.
+PS1_DISC_NUMBERS = {
+    "SLUS-00594": 1, "SLUS-00776": 2,  # Metal Gear Solid
+    "SLUS-00544": 1, "SLUS-00556": 2,  # G-Police
+    "SLUS-00710": 1, "SLUS-00731": 2,  # Abe's Exoddus
+}
+DISC_MARKER = re.compile(r"\\((?:Disc|Disk|CD)\\s*(\\d+)(?:\\s*(?:of|/)\\s*\\d+)?\\)", re.I)
+REV_MARKER = re.compile(r"\\s*\\((?:Rev(?:ision)?\\s*\\d+(?:\\.\\d+)?|v\\d+(?:\\.\\d+)?)\\)", re.I)
+
+
 def name(item: LibraryItem, slug: str | None = None) -> str:
-    if item.ra_game_title and item.ra_game_title.strip():
-        return item.ra_game_title.strip()
-    catalogue_title = gamedb_title(item, slug)
-    if catalogue_title:
-        return catalogue_title
-    label = PurePosixPath(item.filename).stem
-    label = re.sub(r"^(?:OLD_|NEW_)", "", label, flags=re.I)
-    label = SERIAL_RE.sub("", label)
-    label = re.sub(r"\[\s*\]|\{\s*\}|\(\s*\)", " ", label)
-    label = label.replace("_", " ")
-    label = re.sub(r"\s*\((?:USA|Europe|Japan|World|En|Fr|De|Rev[^)]*)\)\s*$", "", label, flags=re.I)
-    return re.sub(r"\s{2,}", " ", label).strip(" -._") or PurePosixPath(item.filename).stem
+    filename = PurePosixPath(item.filename).stem
+    title = ((item.ra_game_title or "").strip()
+             or gamedb_title(item, slug)
+             or filename)
+    title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
+    title = SERIAL_RE.sub("", title)
+    title = re.sub(r"\\[\\s*\\]|\\{\\s*\\}|\\(\\s*\\)", " ", title)
+    title = title.replace("_", " ")
+    title = REV_MARKER.sub("", title)
+    title = re.sub(r"\\s*\\((?:USA|Europe|Japan|World|En|Fr|De)\\)\\s*$", "", title, flags=re.I)
+    title = re.sub(r"\\s{2,}", " ", title).strip(" -._")
+    if slug == "playstation":
+        serial = disc_id(item)
+        # A visible filename disc number remains useful even when RA/GameDB
+        # supplies a shared title for every disc of the same game.
+        disc = (PS1_DISC_NUMBERS.get(serial)
+                or (int(DISC_MARKER.search(filename).group(1)) if DISC_MARKER.search(filename) else None))
+        if disc:
+            title = DISC_MARKER.sub("", title).strip()
+            title += f" (Disc {disc})"
+    return title or filename
 
 def ra_supported(item: LibraryItem) -> bool:
     return bool(item.ra_game_id and (item.ra_match_status or "").lower() == "matched")
