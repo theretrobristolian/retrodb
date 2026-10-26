@@ -39,7 +39,7 @@ def cleaned_ps1_title(stem: str) -> str:
     title = SERIAL.sub("", stem)
     # Removing the serial may leave empty or mismatched delimiters.
     title = re.sub(r"\[\s*\]|\{\s*\}|\(\s*\)", " ", title)
-    title = title.rstrip(" ._-[]{}()")
+    title = title.rstrip(" ._-[]{}")  # Preserve meaningful suffixes such as (Disc 1) and (Claire)
     title = BAD_CHARS.sub(" ", title)
     return " ".join(title.split())
 
