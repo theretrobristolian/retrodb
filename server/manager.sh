@@ -255,7 +255,35 @@ INFO
   read -rp 'Type APPLY to proceed, or press Enter to cancel: ' answer
   [[ "$answer" == APPLY ]] || { echo 'Cancelled.'; return 0; }
   step "1/2" "Verify candidate source checksums against patch instructions" sudo bash "$HERE/retronas.sh" patch-prepare || return 1
-  step "2/2" "Apply patches locally and verify output RA hashes" sudo bash "$HERE/retronas.sh" patch-apply || return 1
+  local choice game_id
+  echo '  1) Crash Bash only (PS1)'
+  echo '  2) All verified, patch-ready games (PS1 and PS2)'
+  read -rp 'Patch selection [1/2]: ' choice
+  case "$choice" in
+    1)
+      game_id="$(sudo python3 - <<'PYPATCH'
+import json
+from pathlib import Path
+path = Path("/var/lib/retrodb/patches/patch-plan.json")
+try:
+    data = json.loads(path.read_text())
+    matches = {str(r.get("ra_game_id")) for r in data
+               if r.get("platform") == "Sony PlayStation" and
+               "crash bash" in str(r.get("title", "")).casefold() and r.get("ra_game_id")}
+    print(next(iter(matches)) if len(matches) == 1 else "")
+except (OSError, ValueError, TypeError):
+    pass
+PYPATCH
+)"
+      [[ -n "$game_id" ]] || { echo '[STOP] Crash Bash has no unambiguous PS1 patch plan.'; return 1; }
+      echo "Applying only Crash Bash (RA game ID $game_id)."
+      step "2/2" "Apply Crash Bash patch and verify resulting RA hash" sudo bash "$HERE/retronas.sh" patch-apply --game-id "$game_id" || return 1
+      ;;
+    2)
+      step "2/2" "Apply all ready patches and verify RA hashes" sudo bash "$HERE/retronas.sh" patch-apply || return 1
+      ;;
+    *) echo 'Cancelled.'; return 0 ;;
+  esac
   printf '\n[COMPLETE] Inspect the locally verified outputs before manually copying them to RetroNAS.\n'
   echo 'Results: /var/lib/retrodb/patches/patch-apply.json'
 }
@@ -625,7 +653,7 @@ menu() {
     echo ' Main menu'
     echo
     echo '  1) Audit games       - Check RA support and export reports'
-    echo '  2) Patch PS2 game    - Verify and preserve original'
+    echo '  2) Patch PS1 / PS2   - Crash Bash or all verified patches'
     echo '  3) Rename games      - PS1 preview / PS2 confirmed changes'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
