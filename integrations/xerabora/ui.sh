@@ -130,5 +130,5 @@ xr_follow_log() {
         print; fflush(); context--
       }
     }
-  '
+  ' || true
 }
