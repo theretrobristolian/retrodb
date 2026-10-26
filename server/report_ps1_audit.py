@@ -52,6 +52,122 @@ def read_cue(path: Path) -> tuple[list[str], list[str]]:
     return refs, errors
 
 
+
+def disc_serial(binfile: Path) -> str:
+    """Inspect ISO9660 SYSTEM.CNF inside a raw Mode 1/Mode 2 PS1 BIN."""
+    try:
+        with binfile.open("rb") as stream:
+            for sector_size, data_offset in ((2352, 16), (2352, 24), (2048, 0)):
+                stream.seek(16 * sector_size + data_offset)
+                pvd = stream.read(2048)
+                if len(pvd) != 2048 or pvd[0] != 1 or pvd[1:6] != b"CD001":
+                    continue
+                root = pvd[156:190]
+                lba = int.from_bytes(root[2:6], "little")
+                size = int.from_bytes(root[10:14], "little")
+                if not 0 < lba < 1000000 or not 0 < size < 4 * 1024 * 1024:
+                    continue
+                stream.seek(lba * sector_size + data_offset)
+                directory = stream.read(size)
+                offset = 0
+                while offset < len(directory):
+                    length = directory[offset]
+                    if not length:
+                        offset = ((offset // 2048) + 1) * 2048
+                        continue
+                    entry = directory[offset:offset + length]
+                    if len(entry) < 34:
+                        break
+                    count = entry[32]
+                    filename = entry[33:33 + count].decode("ascii", "replace").upper().split(";")[0]
+                    if filename == "SYSTEM.CNF":
+                        start = int.from_bytes(entry[2:6], "little")
+                        amount = int.from_bytes(entry[10:14], "little")
+                        if not 0 < amount <= 65536:
+                            return ""
+                        stream.seek(start * sector_size + data_offset)
+                        raw = stream.read(amount).decode("latin1", "replace")
+                        match = SERIAL.search(raw)
+                        if match:
+                            return serial_from_name(match.group(1))
+                        return ""
+                    offset += length
+    except (OSError, ValueError):
+        pass
+    return ""
+
+
+def plan(root: Path) -> list[dict[str, str]]:
+    """Generate a non-mutating, disc-level audit and conservative rename proposal."""
+    rows = []
+    referenced: set[Path] = set()
+    cues = sorted((p for p in root.rglob("*") if p.suffix.lower() == ".cue" and p.is_file() and not p.is_symlink()), key=lambda p: str(p).casefold())
+    for cue in cues:
+        refs, issues = read_cue(cue)
+        paths = []
+        for ref in refs:
+            if ref != Path(ref).name or Path(ref).is_absolute() or ".." in Path(ref.replace("\\", "/")).parts:
+                continue
+            target = cue.parent / ref
+            if target.is_file() and not target.is_symlink():
+                paths.append(target)
+                referenced.add(target)
+            else:
+                issues.append("MISSING_REFERENCE:" + ref)
+        if len(set(refs)) > 1:
+            issues.append("MULTI_BIN_REVIEW")
+        if len(refs) == 1 and not refs[0].lower().endswith(".bin"):
+            issues.append("NON_BIN_REFERENCE")
+        filename_serial = serial_from_name(cue.stem) or (serial_from_name(paths[0].stem) if len(paths) == 1 else "")
+        internal_serial = disc_serial(paths[0]) if len(paths) == 1 and paths[0].suffix.lower() == ".bin" else ""
+        if filename_serial and internal_serial and filename_serial != internal_serial:
+            issues.append("DISC_ID_MISMATCH")
+        selected_serial = internal_serial or filename_serial
+        is_homebrew = bool(re.search(r"240p.?test.?suite", cue.stem, re.I))
+        if not selected_serial and not is_homebrew:
+            issues.append("ID_MISSING")
+        title = BRACKET_ID.sub("", cue.stem)
+        title = SERIAL.sub("", title).strip(" ._-")
+        title = BAD_CHARS.sub(" ", title)
+        title = " ".join(title.split())
+        if not title:
+            issues.append("TITLE_MISSING")
+        proposed = f"{title} [{selected_serial}]" if title and selected_serial else (title if is_homebrew else "")
+        dest_cue = cue.with_name(proposed + ".cue") if proposed else None
+        dest_bin = cue.with_name(proposed + ".bin") if proposed and len(paths) == 1 else None
+        if proposed and dest_cue != cue and dest_cue.exists():
+            issues.append("CUE_DESTINATION_EXISTS")
+        if dest_bin and paths and dest_bin != paths[0] and dest_bin.exists():
+            issues.append("BIN_DESTINATION_EXISTS")
+        if len(paths) == 1 and paths[0].stem != cue.stem:
+            issues.append("BASENAME_MISMATCH")
+        if not internal_serial and not is_homebrew:
+            issues.append("INTERNAL_ID_UNVERIFIED")
+        blockers = {"DISC_ID_MISMATCH", "MULTI_BIN_REVIEW", "NON_BIN_REFERENCE",
+                    "ID_MISSING", "TITLE_MISSING", "CUE_DESTINATION_EXISTS",
+                    "BIN_DESTINATION_EXISTS", "INTERNAL_ID_UNVERIFIED"}
+        broken = any(x.startswith(("CUE_FILE_SYNTAX", "NO_FILE_REFERENCES", "MISSING_REFERENCE", "UNSAFE_REFERENCE", "CUE_UNREADABLE")) for x in issues)
+        if len(refs) != 1 or len(paths) != 1:
+            blockers.add("PAIR_NOT_SINGLE_BIN")
+            issues.append("PAIR_NOT_SINGLE_BIN")
+        status = "BROKEN" if broken else "REVIEW" if any(x in blockers for x in issues) else "WARNING" if issues else "VALID"
+        if status == "VALID" and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
+            status = "RENAME_CANDIDATE"
+        rows.append(dict(status=status, relative_cue=cue.relative_to(root).as_posix(),
+                         relative_bin=paths[0].relative_to(root).as_posix() if len(paths) == 1 else "",
+                         filename_serial=filename_serial, internal_serial=internal_serial,
+                         selected_serial=selected_serial, homebrew="YES" if is_homebrew else "NO",
+                         file_references=" | ".join(refs), file_count=str(len(set(refs))),
+                         proposed_cue=dest_cue.relative_to(root).as_posix() if dest_cue else "",
+                         proposed_bin=dest_bin.relative_to(root).as_posix() if dest_bin else "",
+                         ra_compatibility="NOT_CHECKED", issues=" | ".join(dict.fromkeys(issues))))
+    for binfile in sorted((p for p in root.rglob("*") if p.suffix.lower() == ".bin" and p.is_file() and not p.is_symlink() and p not in referenced), key=lambda p: str(p).casefold()):
+        rows.append(dict(status="REVIEW", relative_cue="", relative_bin=binfile.relative_to(root).as_posix(),
+                         filename_serial=serial_from_name(binfile.name), internal_serial=disc_serial(binfile),
+                         selected_serial="", homebrew="NO", file_references="", file_count="1",
+                         proposed_cue="", proposed_bin="", ra_compatibility="NOT_CHECKED", issues="ORPHAN_BIN"))
+    return rows
+
 def audit(root: Path) -> list[dict[str, str]]:
     rows = []
     cues = sorted(root.rglob("*.cue"), key=lambda p: str(p).casefold())
@@ -126,9 +242,9 @@ def main() -> None:
         parser.error("--root must be a directory")
     if output.is_relative_to(root):
         parser.error("CSV output must be outside the PlayStation 1 ROM directory")
-    rows = audit(root)
+    rows = plan(root)
     output.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["status", "relative_cue", "relative_bin", "disc_id_from_filename", "file_references", "file_count", "proposed_cue", "proposed_bin", "issues"]
+    fields = ["status", "relative_cue", "relative_bin", "filename_serial", "internal_serial", "selected_serial", "homebrew", "file_references", "file_count", "proposed_cue", "proposed_bin", "ra_compatibility", "issues"]
     with output.open("w", newline="", encoding="utf-8-sig") as out:
         writer = csv.DictWriter(out, fieldnames=fields)
         writer.writeheader()
