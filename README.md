@@ -1,3 +1,32 @@
+## Library region flags and verified xeRAbora v1.0.0 PS2 ELF (26 October 2026)
+
+The PS1/PS2 library view now shows **Game · Disc ID · Region · RetroAchievements**. The previously displayed RA game ID and file format columns were removed from the main list (the RA ID is still used internally). Region uses a conservative *serial-prefix hint*, not verified release metadata: 🇺🇸 SLUS/SCUS; 🇪🇺 SLES/SCES/SCED; 🇯🇵 SLPS/SLPM/SCPS; 🌐 other or missing prefixes. The flag is the size of the trophy icon. For non-PS1/PS2 platforms the region is unknown. The game-details page still retains technical collection details behind an expandable panel.
+
+### Getting an authoritative v1.0.0 OPL-RA ELF for the physical PS2
+
+The **PS2 ELF is distinct from the Linux xeRAbora server executable**. The official [xeRAbora v1.0.0 release](https://github.com/hacan359/xerabora/releases/tag/v1.0.0) (24 October 2026) contains `OPL-RA.ELF`, `OPL-RA-debug.ELF`, and `SHA256SUMS`. A manually installed Linux v1 client does **not** guarantee `/opt/xerabora/OPL-RA.ELF` is the matching version; do not reinstall or replace the working server binary just to retrieve the ELF.
+
+Download the official *PS2 loader* and validate its checksum on the Debian VM without overwriting anything:
+
+```bash
+mkdir -p ~/xerabora-v1-ps2
+cd ~/xerabora-v1-ps2
+BASE=https://github.com/hacan359/xerabora/releases/download/v1.0.0
+curl -fL --retry 3 -o OPL-RA.ELF "$BASE/OPL-RA.ELF"
+curl -fL --retry 3 -o SHA256SUMS "$BASE/SHA256SUMS"
+grep -E '^[[:xdigit:]]{64} [* ]OPL-RA\.ELF$' SHA256SUMS | sha256sum -c -
+ls -lh OPL-RA.ELF
+sha256sum OPL-RA.ELF /opt/xerabora/OPL-RA.ELF 2>/dev/null || true
+```
+
+The two displayed hashes reveal whether the server's existing ELF is the same as upstream v1.0.0. On a Mac, obtain the verified ELF from the VM (edit hostname if needed):
+
+```bash
+scp david@retrodb.it.gattaca.house:~/xerabora-v1-ps2/OPL-RA.ELF ~/Downloads/OPL-RA.ELF
+```
+
+Then copy `OPL-RA.ELF` to your PS2's launch location and update the FMCB menu entry/path only if needed. Don't overwrite the old console ELF until backed up. This updates **only the PS2 loader**, not the service or its player profiles. Cold-boot the console to test the new loader.
+
 ### GameDB batch progression and unresolved matches (26 October 2026)
 
 The first live 25-item dry run completed: 13 matches and 12 safe skips (ambiguous or unmatched). The importer now writes `<library_item_id>.review.json` in `/var/cache/retrodb/providers/lizardbyte/` **only during `--apply`** for no-match, ambiguous-title or wrong-platform results. Automatic runs skip those review markers and advance through the collection rather than becoming stuck on the same first 25 entries. No review marker is interpreted as an accepted match and the UI ignores them. Dry runs remain read-only. An explicit `--item-id ... --game-id ... --apply` can later resolve a reviewed item after manual verification. Transient network failures are not marked resolved and are retried in subsequent batches. The reviewed metadata and any existing RA cache are preserved.
