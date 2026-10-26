@@ -209,6 +209,12 @@ PS1_DISC_NUMBERS = {
     "SLUS-00710": 1, "SLUS-00731": 2,  # Abe's Exoddus
     "SLPS-01995": 1, "SLPS-01996": 2,  # Geppy-X (four discs)
     "SLPS-01997": 3, "SLPS-01998": 4,
+    "SLUS-01201": 1, "SLUS-01377": 2,  # Alone in the Dark: The New Nightmare (USA)
+    "SLES-02801": 1, "SLES-12801": 2,  # UK / English
+    "SLES-02802": 1, "SLES-12802": 2,  # French
+    "SLES-02803": 1, "SLES-12803": 2,  # German
+    "SLES-02804": 1, "SLES-12804": 2,  # Spanish
+    "SLES-02805": 1, "SLES-12805": 2,  # Italian
 }
 DISC_MARKER = re.compile(r"\\((?:Disc|Disk|CD)\\s*(\\d+)(?:\\s*(?:of|/)\\s*\\d+)?\\)", re.I)
 REV_MARKER = re.compile(r"\\s*\\((?:Rev(?:ision)?\\s*\\d+(?:\\.\\d+)?|v\\d+(?:\\.\\d+)?)\\)", re.I)
