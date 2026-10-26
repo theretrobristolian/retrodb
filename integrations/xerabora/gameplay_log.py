@@ -76,12 +76,12 @@ def show_live_game(state):
     console = state.get("console") or {}
     game = state.get("game") or {}
     connected = bool(console.get("connected"))
-    running = connected and not game.get("checked_only") and bool(game.get("id"))
+    running = connected and not game.get("checked_only") and bool(game.get("id")) and game.get("source") != "web"
     label = "Connected" if connected else "Not connected"
     print(f"Console now:   {label}")
     if running:
         print(f"Live game:     {game.get('title') or 'Unknown'} (RA ID {game['id']})")
-        print("Compatibility: pointer-chain failures are counted by xeRAbora but their achievement IDs are not exposed by /state.")
+        print("Compatibility: unsupported count comes from xeRAbora; exact pointer-chain IDs need --trace on game load.")
     else:
         print("Live game:     None verified; awaiting console game data.")
 
@@ -141,10 +141,10 @@ def follow(path):
                 state = live_state()
                 game = state.get("game") or {}
                 console = state.get("console") or {}
-                current = (game.get("id"), game.get("title")) if console.get("connected") and game.get("id") and not game.get("checked_only") else None
+                current = (game.get("id"), game.get("title")) if console.get("connected") and game.get("id") and not game.get("checked_only") and game.get("source") != "web" else None
                 if current and current != last_game:
                     print(f"[LIVE GAME] {current[1] or 'Unknown'} (RA game ID {current[0]})", flush=True)
-                    print("[INFO] Unsupported achievement IDs/titles can appear with xeRAbora --trace at game load.", flush=True)
+                    print("[INFO] Watching xeRAbora for pointer-chain compatibility results for this game.", flush=True)
                 last_game = current
             line = file.readline()
             if line:
