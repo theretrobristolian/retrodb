@@ -297,6 +297,29 @@ PYCHECK
   echo '[COMPLETE] Local verified outputs: /var/lib/retrodb/patches/verified/'
   echo 'Journal: /var/lib/retrodb/patches/patch-apply.json'
 }
+deploy_ps1_patch() {
+  local game_id answer source journal result=0
+  mount_ready || return 1
+  read -rp 'Enter the single PS1 RA game ID to deploy (e.g. 10907): ' game_id
+  [[ "$game_id" =~ ^[0-9]{1,8}$ ]] || { echo 'Cancelled.'; return 0; }
+  echo 'This retains the original BIN and CUE as OLD_ copies and replaces the active pair.'
+  echo 'Patch must already be locally RA-verified. Existing OLD_ files are never overwritten.'
+  read -rp "Type DEPLOY-$game_id to confirm NAS changes: " answer
+  [[ "$answer" == "DEPLOY-$game_id" ]] || { echo 'Cancelled.'; return 0; }
+  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  [[ "$source" == //* ]] || { echo "[STOP] Invalid CIFS source: $source"; return 1; }
+  mountpoint -q "$PILOT_ROOT" && { echo '[STOP] Writable mount already active.'; return 1; }
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
+  journal="$OPL_JOURNAL_DIR/ps1-deploy-$(date -u +%Y%m%dT%H%M%SZ)-$game_id-$BASHPID.json"
+  sudo env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    "$HERE/deploy_ps1_patch.py" --game-id "$game_id" --ro-mount "$MOUNT" \
+    --rw-mount "$PILOT_ROOT" --journal "$journal" || result=$?
+  sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active.'; return 1; }
+  echo "Deployment journal: $journal"
+  return "$result"
+}
 # Separate, temporary CIFS write mount; the audit mount remains read-only.
 PILOT_ROOT=/mnt/retrodb-retronas-pilot-rw
 PILOT_CSV="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
@@ -664,7 +687,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Select ONE verified game by RA ID'
-    echo '  3) Rename games      - PS1 preview / PS2 confirmed changes'
+    echo '  3) Rename games      - PS1 preview / PS2 confirmed changes\n  5) Deploy PS1 patch  - Verified BIN/CUE with OLD_ backups'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
