@@ -105,30 +105,21 @@ xr_draw_footer() {
 }
 xr_pause() { local unused; read -rp 'Press Enter to return to the menu...' unused || true; }
 xr_follow_log() {
-  local log
+  local log event_pattern
   if [[ -s "$HOME/.config/xerabora-profiles/active" ]]; then
     log="$HOME/.config/xerabora-profiles/$(cat "$HOME/.config/xerabora-profiles/active")/xerabora/xerabora.log"
   else
     log="$HOME/.config/xerabora/xerabora.log"
   fi
   [[ -f "$log" ]] || { echo "No log file yet: $log"; return 0; }
-  printf 'Relevant gameplay events: %s\n' "$log"
-  printf 'Showing achievements, games, leaderboards, connections and warnings.\n'
-  printf 'Full log stays on disk. Ctrl+C returns to the menu.\n\n'
-  # tail -F follows log rotation; awk filters only presentation, never changes the log.
-  # Keep next-line achievement descriptions, but suppress routine HTTP, heartbeats,
-  # periodic snapshot stats and protocol chatter.
-  tail -n 80 -F -- "$log" | awk '
-    BEGIN { context=0 }
-    {
-      line=tolower($0)
-      if (index(line,"http get ") || index(line,"http post ") || index(line,"http put ") || index(line,"http delete ") || index(line,"console heartbeat:") || index(line," snapshots |") || index(line,"rx fifo") || index(line,"badge chunks") || line ~ /^[[:space:]]*$/) next
-      if (line ~ /achievement unlocked:|achievements:|leaderboard|console (found|connected|disconnected|lost|acknowledged)|game (found|detected|identified|loaded|unsupported)|unsupported|cannot unlock|pointer chain|failed|error|warning|warn|timeout|timed out|unauthorized|authentication|login|hash|no achievements|wrong dump|server stopped|server started|connection refused|first complete snapshot/) {
-        print; fflush()
-        context=(line ~ /achievement unlocked:/ ? 2 : 0)
-      } else if (context > 0) {
-        print; fflush(); context--
-      }
-    }
-  ' || true
+  event_pattern='achievement unlocked|unlock notice|leaderboard|console (found|connected|disconnected|lost|asked about)|game (found|detected|identified|loaded|unsupported)|achievements:|cannot unlock|pointer chain|unsupported|failed|error|warning|timeout|unauthorized|wrong dump|no achievements|first complete snapshot'
+  printf 'Gameplay events: %s\n' "$log"
+  printf 'Showing recent events, then new events live (HTTP polling and heartbeats hidden).\n'
+  printf 'Full log is unchanged. Ctrl+C returns to the menu.\n\n'
+  # Print recent matching events even when the last 80 lines are all HTTP polls.
+  tail -n 1000 -- "$log" | grep -Ei -- "$event_pattern" | tail -n 20 || true
+  printf '%s\n' '--- Listening for new events ---'
+  # grep --line-buffered is critical: standard grep buffers output to a pipe.
+  # tail -n 0 avoids dumping repetitive HTTP traffic on startup.
+  tail -n 0 -F -- "$log" | grep --line-buffered -Ei -- "$event_pattern" || true
 }
