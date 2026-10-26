@@ -619,7 +619,8 @@ def match_collection(
                 observed_title = (gamedb_title or friendly_local_title(item.relative_path)).casefold()
                 if "supersonic racers" in observed_title or "dare devil derby 3d" in observed_title:
                     curated_id = 16649
-                elif "assault" in observed_title and "retribution" in observed_title:
+                elif serial == "SLES-01244":
+                    # European Assault: verified catalogue identity from manual review.
                     curated_id = 26626
                 else:
                     curated_id = None
