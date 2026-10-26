@@ -153,3 +153,10 @@ def test_mobile_navigation_wraps_without_horizontal_overflow():
     assert 'href="/management"' in html
     assert 'href="/online-services"' in html
     assert 'action="/logout"' in html
+
+def test_game_detail_layout_wraps_long_paths():
+    from retrodb.web_ui import CSS
+    assert ".detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere" in CSS
+    assert ".detail .card p{overflow-wrap:anywhere" in CSS
+    assert "overflow-x:clip" in CSS
+    assert "grid-template-columns:minmax(0,1fr)" in CSS
