@@ -181,3 +181,11 @@ def test_compact_game_ui_has_feature_and_technical_styles():
     assert ".technical-details summary{" in CSS
     assert ".detail{columns:2;" in CSS
     assert "header nav a:hover" in CSS
+
+def test_disc_region_flags_are_conservative():
+    from retrodb.web_ui import disc_region
+    assert disc_region("SLUS-12345", "playstation-2")[0] == "🇺🇸"
+    assert disc_region("SLES-12345", "playstation")[0] == "🇪🇺"
+    assert disc_region("SLPM-12345", "playstation-2")[0] == "🇯🇵"
+    assert disc_region("SCKA-12345", "playstation-2")[0] == "🌐"
+    assert disc_region("SLUS-12345", "gamecube")[0] == "🌐"
