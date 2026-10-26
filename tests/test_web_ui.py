@@ -147,7 +147,7 @@ def test_mobile_catalogue_css_and_trophy_only_status():
 def test_mobile_navigation_wraps_without_horizontal_overflow():
     from retrodb.web_ui import page
     html = page("Navigation", "<p>Test</p>").body.decode("utf-8")
-    assert "grid-template-columns:repeat(2,minmax(0,1fr))" in html
+    assert "class=\"mobile-nav\"" in html
     assert "header nav form button" in html
     assert 'href="/profile"' in html
     assert 'href="/management"' in html
@@ -159,7 +159,7 @@ def test_game_detail_layout_wraps_long_paths():
     assert ".detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere" in CSS
     assert ".detail .card p{overflow-wrap:anywhere" in CSS
     assert "overflow-x:clip" in CSS
-    assert "grid-template-columns:minmax(0,1fr)" in CSS
+    assert ".detail{columns:1}" in CSS
 
 def test_mobile_bottom_navigation_and_compact_header():
     from retrodb.web_ui import page, CSS
@@ -173,3 +173,11 @@ def test_mobile_bottom_navigation_and_compact_header():
     guest_html = page("Guest", "<p>Body</p>", guest=True).body.decode("utf-8")
     assert 'data-nav="/profile"' not in guest_html
     assert 'data-nav="/management"' not in guest_html
+
+def test_compact_game_ui_has_feature_and_technical_styles():
+    from retrodb.web_ui import CSS
+    assert ".feature-strip{" in CSS
+    assert ".feature-chip{" in CSS
+    assert ".technical-details summary{" in CSS
+    assert ".detail{columns:2;" in CSS
+    assert "header nav a:hover" in CSS
