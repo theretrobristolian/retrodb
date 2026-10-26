@@ -65,6 +65,18 @@ class PS1RenameTests(unittest.TestCase):
         expected=self.original_cue.replace(self.bin.name.encode(), newbin.name.encode())
         self.assertEqual(newcue.read_bytes(), expected)
         self.assertEqual(json.loads(journal.read_text())["operations"][0]["state"], "applied")
+    def test_rollback_restores_original_files(self):
+        ops = self.proposals()
+        journal = self.root / "journal.json"
+        with patch.object(ps1_rename, "disc_serial", return_value=SERIAL):
+            ps1_rename.apply(ops, journal)
+            ps1_rename.rollback(journal)
+        self.assertEqual(self.cue.read_bytes(), self.original_cue)
+        self.assertTrue(self.bin.exists())
+        self.assertFalse((self.iso / (self.target + ".cue")).exists())
+        self.assertFalse((self.iso / (self.target + ".bin")).exists())
+        self.assertEqual(json.loads(journal.read_text())["operations"][0]["state"], "rolled_back")
+
     def test_mismatch_skips_rename(self):
         self.row["internal_serial"] = "SLUS-99999"
         self.write_csv()
