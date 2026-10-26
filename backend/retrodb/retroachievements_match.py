@@ -651,6 +651,17 @@ def match_collection(
                     no_set_game = None
                     confidence = "supported-alternative-edition"
                     score = 1.0
+            if item.ra_match_status == "unmatched" and slug == "playstation" and not special_disc and not recommendation and not no_set_game:
+                # Manually cross-referenced retail PS1 releases. Identity only;
+                # hash matching remains the sole RA-compatible criterion.
+                reviewed_ps1 = {"SCES-01706": 11305, "SCES-00242": 5332}
+                reviewed_id = reviewed_ps1.get(serial)
+                if reviewed_id is not None:
+                    reviewed_game = next((g for g in with_sets if g.game_id == reviewed_id), None)
+                    if reviewed_game is not None:
+                        recommendation = reviewed_game
+                        confidence = "reviewed-disc-id"
+                        score = 1.0
             if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game and serial not in reviewed_no_listing:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
