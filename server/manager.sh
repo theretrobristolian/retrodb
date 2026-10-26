@@ -241,51 +241,61 @@ patch_download() {
   echo 'No ISO has been patched and RetroNAS has not been modified.'
 }
 patch_apply() {
-  local answer
+  local game_id confirm
   mount_ready || return 1
-  cat <<'INFO'
-This action applies patches ONLY to locally verified clean source images.
-It writes verified outputs to:
-  /var/lib/retrodb/patches/verified/
-
-The original RetroNAS collection remains read-only.
-You must review the patched outputs and manually transfer selected files
-to RetroNAS yourself, replacing nothing automatically.
-INFO
-  read -rp 'Type APPLY to proceed, or press Enter to cancel: ' answer
-  [[ "$answer" == APPLY ]] || { echo 'Cancelled.'; return 0; }
-  step "1/2" "Verify candidate source checksums against patch instructions" sudo bash "$HERE/retronas.sh" patch-prepare || return 1
-  local choice game_id
-  echo '  1) Crash Bash only (PS1)'
-  echo '  2) All verified, patch-ready games (PS1 and PS2)'
-  read -rp 'Patch selection [1/2]: ' choice
-  case "$choice" in
-    1)
-      game_id="$(sudo python3 - <<'PYPATCH'
+  echo 'Checking checksum-verified patch sources for PS1 and PS2...'
+  step "1/2" "Refresh verified patch source list" sudo bash "$HERE/retronas.sh" patch-prepare || return 1
+  echo
+  echo 'READY TO PATCH (verified original checksum; no RetroNAS writes):'
+  sudo python3 - <<'PYREADY'
 import json
 from pathlib import Path
-path = Path("/var/lib/retrodb/patches/patch-plan.json")
+w = Path('/var/lib/retrodb/patches')
 try:
-    data = json.loads(path.read_text())
-    matches = {str(r.get("ra_game_id")) for r in data
-               if r.get("platform") == "Sony PlayStation" and
-               "crash bash" in str(r.get("title", "")).casefold() and r.get("ra_game_id")}
-    print(next(iter(matches)) if len(matches) == 1 else "")
-except (OSError, ValueError, TypeError):
-    pass
-PYPATCH
-)"
-      [[ -n "$game_id" ]] || { echo '[STOP] Crash Bash has no unambiguous PS1 patch plan.'; return 1; }
-      echo "Applying only Crash Bash (RA game ID $game_id)."
-      step "2/2" "Apply Crash Bash patch and verify resulting RA hash" sudo bash "$HERE/retronas.sh" patch-apply --game-id "$game_id" || return 1
-      ;;
-    2)
-      step "2/2" "Apply all ready patches and verify RA hashes" sudo bash "$HERE/retronas.sh" patch-apply || return 1
-      ;;
-    *) echo 'Cancelled.'; return 0 ;;
-  esac
-  printf '\n[COMPLETE] Inspect the locally verified outputs before manually copying them to RetroNAS.\n'
-  echo 'Results: /var/lib/retrodb/patches/patch-apply.json'
+    plans = json.loads((w / 'patch-plan.json').read_text())
+    prepared = json.loads((w / 'patch-prepare.json').read_text())
+except (OSError, ValueError) as exc:
+    print(f'[ERROR] Cannot load patch manifest: {exc}')
+    raise SystemExit(1)
+by_title = {str(p.get('title')): p for p in plans}
+ready = {}
+for entry in prepared:
+    if entry.get('state') != 'clean-base-verified-ready-to-patch':
+        continue
+    plan = by_title.get(str(entry.get('title')), {})
+    game_id = str(plan.get('ra_game_id', ''))
+    if not game_id.isdecimal() or plan.get('platform') not in ('Sony PlayStation', 'Sony PlayStation 2'):
+        continue
+    if entry.get('candidate_path') != entry.get('collection_source'):
+        continue
+    ready.setdefault(game_id, []).append((plan, entry))
+for game_id, variants in sorted(ready.items(), key=lambda x: int(x[0])):
+    for plan, entry in variants:
+        print(f"  RA ID {game_id} [{plan['platform']}]: {plan.get('required_release') or plan.get('title')} ")
+if not ready:
+    print('  None ready. Review patch-download.json and patch-prepare.json.')
+PYREADY
+  read -rp 'Enter ONE RA game ID to patch (Enter cancels): ' game_id
+  [[ "$game_id" =~ ^[0-9]{1,8}$ ]] || { echo 'Cancelled / invalid RA ID.'; return 0; }
+  sudo python3 - "$game_id" <<'PYCHECK' || { echo '[STOP] No checksum-verified source for that RA game ID.'; return 1; }
+import json, sys
+from pathlib import Path
+w=Path('/var/lib/retrodb/patches')
+plans=json.loads((w/'patch-plan.json').read_text())
+ready=json.loads((w/'patch-prepare.json').read_text())
+titles={str(x.get('title')) for x in plans if str(x.get('ra_game_id')) == sys.argv[1]
+        and x.get('platform') in ('Sony PlayStation', 'Sony PlayStation 2')}
+ok=any(r.get('state')=='clean-base-verified-ready-to-patch'
+       and r.get('title') in titles
+       and r.get('candidate_path')==r.get('collection_source') for r in ready)
+sys.exit(0 if ok else 1)
+PYCHECK
+  echo 'Only this game will be patched to a LOCAL output; RetroNAS remains read-only.'
+  read -rp "Type PATCH-$game_id to confirm: " confirm
+  [[ "$confirm" == "PATCH-$game_id" ]] || { echo 'Cancelled.'; return 0; }
+  step "2/2" "Apply selected patch and verify its RA hash" sudo bash "$HERE/retronas.sh" patch-apply --game-id "$game_id" || return 1
+  echo '[COMPLETE] Local verified outputs: /var/lib/retrodb/patches/verified/'
+  echo 'Journal: /var/lib/retrodb/patches/patch-apply.json'
 }
 # Separate, temporary CIFS write mount; the audit mount remains read-only.
 PILOT_ROOT=/mnt/retrodb-retronas-pilot-rw
@@ -653,7 +663,7 @@ menu() {
     echo ' Main menu'
     echo
     echo '  1) Audit games       - Check RA support and export reports'
-    echo '  2) Patch PS1 / PS2   - Crash Bash or all verified patches'
+    echo '  2) Patch PS1 / PS2   - Select ONE verified game by RA ID'
     echo '  3) Rename games      - PS1 preview / PS2 confirmed changes'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
