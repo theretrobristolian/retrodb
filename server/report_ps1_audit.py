@@ -152,10 +152,12 @@ def plan(root: Path) -> list[dict[str, str]]:
         proposed = f"{title} [{selected_serial}]" if title and selected_serial else (title if is_homebrew else "")
         dest_cue = cue.with_name(proposed + ".cue") if proposed else None
         dest_bin = cue.with_name(proposed + ".bin") if proposed and len(paths) == 1 else None
-        if proposed and dest_cue != cue and dest_cue.exists():
+        if proposed and dest_cue != cue and dest_cue.exists() and dest_cue.samefile(cue) is False:
             issues.append("CUE_DESTINATION_EXISTS")
-        if dest_bin and paths and dest_bin != paths[0] and dest_bin.exists():
+        if dest_bin and paths and dest_bin != paths[0] and dest_bin.exists() and dest_bin.samefile(paths[0]) is False:
             issues.append("BIN_DESTINATION_EXISTS")
+        if cue.suffix != ".cue" or (len(paths) == 1 and paths[0].suffix != ".bin"):
+            issues.append("EXTENSION_CASE_NORMALIZATION")
         if len(paths) == 1 and paths[0].stem != cue.stem:
             issues.append("BASENAME_MISMATCH")
         if not internal_serial and not is_homebrew:
@@ -168,7 +170,7 @@ def plan(root: Path) -> list[dict[str, str]]:
             blockers.add("PAIR_NOT_SINGLE_BIN")
             issues.append("PAIR_NOT_SINGLE_BIN")
         status = "BROKEN" if broken else "REVIEW" if any(x in blockers for x in issues) else "WARNING" if issues else "VALID"
-        if status == "VALID" and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
+        if status in ("VALID", "WARNING") and all(x == "EXTENSION_CASE_NORMALIZATION" for x in issues) and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
             status = "RENAME_CANDIDATE"
         rows.append(dict(status=status, relative_cue=cue.relative_to(root).as_posix(),
                          relative_bin=paths[0].relative_to(root).as_posix() if len(paths) == 1 else "",
