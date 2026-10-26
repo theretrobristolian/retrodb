@@ -152,6 +152,7 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
             issues.append("ID_MISSING")
         catalogue_title = gamedb.get(selected_serial, "")
         title = cleaned_ps1_title(catalogue_title) if catalogue_title else cleaned_ps1_title(cue.stem)
+        title = re.sub(r"\s*\((?:Rev(?:ision)?\s*\d+(?:\.\d+)?|v\d+(?:\.\d+)?)\)", "", title, flags=re.I).strip()
         if selected_serial in MULTIDISC_IDS and not DISC_SUFFIX.search(title):
             title += f" (Disc {MULTIDISC_IDS[selected_serial]})"
         if not title:
@@ -180,9 +181,9 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
                      and filename_serial == "SLUS-00694"
                      and internal_serial == "SLUS-00594"
                      and dest_cue is not None
-                     and dest_cue.name == "Metal Gear Solid (Disc 1) (Rev 1) [SLUS-00594].cue"
+                     and dest_cue.name == "Metal Gear Solid (Disc 1) [SLUS-00594].cue"
                      and dest_bin is not None
-                     and dest_bin.name == "Metal Gear Solid (Disc 1) (Rev 1) [SLUS-00594].bin")
+                     and dest_bin.name == "Metal Gear Solid (Disc 1) [SLUS-00594].bin")
         if mgs_disc1:
             blockers.discard("DISC_ID_MISMATCH")
         if len(refs) != 1 or len(paths) != 1:
