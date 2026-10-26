@@ -82,6 +82,8 @@ def main() -> int:
     ):
         patch_parser = subparsers.add_parser(command, help=help_text)
         patch_parser.add_argument("--root", type=Path, required=True)
+        if command == "patch-apply":
+            patch_parser.add_argument("--game-id", default="", help="Apply only this RA game ID")
         patch_parser.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
         patch_parser.add_argument("--report", type=Path, default=Path("/var/lib/retrodb/reports/retroachievements-compatibility.csv"))
         patch_parser.add_argument("--workspace", type=Path, default=Path("/var/lib/retrodb/patches"))
@@ -117,7 +119,7 @@ def main() -> int:
             print(f"[+] Details: {args.workspace / 'patch-prepare.json'}")
             return 0
         if args.command == "patch-apply":
-            summary = apply_verified_patches(args.workspace, args.hasher)
+            summary = apply_verified_patches(args.workspace, args.hasher, args.game_id)
             print(f"[OK] Processed {summary.ready} verified clean base images.")
             print(f"[+] Patched and RA-verified: {summary.verified}; failed: {summary.failed}.")
             print(f"[+] Verified output: {args.workspace / 'verified'}")
