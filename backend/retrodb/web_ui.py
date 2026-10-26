@@ -450,6 +450,11 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                    '<p class="muted" hidden>Cover art unavailable for this release.</p>')
     else:
         artwork = '<p class="muted">Cover art unavailable for this release.</p>'
+    from retrodb.providers.lizardbyte import load as game_db_extra
+    extra = game_db_extra(item.id)
+    ratings = extra.get("age_ratings", [])
+    modes = extra.get("game_modes", [])
+    release_years = extra.get("release_dates", [])
     release = (detail("Released", meta.get("Released")) +
                detail("Publisher", meta.get("Publisher")) +
                detail("Developer", meta.get("Developer")) +
@@ -468,12 +473,24 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
         players = str(online.get("max_players") or "").strip()
         if players and players.lower() not in ("unknown", "n/a", "none"):
             badge("♟", "Online players: " + players)
+    for mode in modes:
+        if mode in ("Single player", "Multiplayer", "Co-operative"):
+            badge("♟", mode)
+    for age in ratings:
+        badge("▣", str(age.get("system", "")) + " " + str(age.get("rating", "")))
     capabilities = ('<div class="feature-strip" aria-label="Known game features">' +
                     "".join(flags) + '</div>') if flags else ""
+    extra_info = ""
+    if release_years:
+        years = sorted({int(v["year"]) for v in release_years if isinstance(v.get("year"), int)})
+        if years:
+            extra_info += detail("Platform release year", ", ".join(map(str, years)))
+    if not meta.get("Genre") and extra.get("genres"):
+        extra_info += detail("Genres", ", ".join(extra["genres"][:4]))
     meta_panel = ('<div class="info-pairs">' + release + '</div>') if release else '<p class="muted">No release metadata available yet.</p>'
     online_panel = online_details(online) if online else ""
     game_panel = (f'<section class="card"><h2>Game information</h2>{meta_panel}'
-                  '<p class="muted meta-source">Source: RetroAchievements · game-level metadata</p></section>')
+                  f'{extra_info}<p class="muted meta-source">Sources: RetroAchievements' + (' + GameDB/IGDB' if extra else '') + '</p></section>')
     collection_panel = (f'<section class="card"><h2>Your copy</h2>'
                         f'{detail("Console", platform.name if platform else None)}'
                         f'{detail("Disc ID", serial)}'
