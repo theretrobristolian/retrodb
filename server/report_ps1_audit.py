@@ -36,6 +36,8 @@ MULTIDISC_IDS = {
     "SLUS-00594": 1, "SLUS-00776": 2,  # Metal Gear Solid
     "SLUS-00544": 1, "SLUS-00556": 2,  # G-Police
     "SLUS-00710": 1, "SLUS-00731": 2,  # Abe's Exoddus
+    "SLPS-01995": 1, "SLPS-01996": 2,  # Geppy-X (four discs)
+    "SLPS-01997": 3, "SLPS-01998": 4,
 }
 
 
