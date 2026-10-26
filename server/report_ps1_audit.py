@@ -173,11 +173,23 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
                     "ID_MISSING", "TITLE_MISSING", "CUE_DESTINATION_EXISTS",
                     "BIN_DESTINATION_EXISTS", "INTERNAL_ID_UNVERIFIED"}
         broken = any(x.startswith(("CUE_FILE_SYNTAX", "NO_FILE_REFERENCES", "MISSING_REFERENCE", "UNSAFE_REFERENCE", "CUE_UNREADABLE")) for x in issues)
+        # This known RA-verified Metal Gear Solid Disc 1 release has a typo in
+        # its filename (00694), while the on-disc boot ID is SLUS-00594.
+        # The executor independently checks its exact RA hash before renaming.
+        mgs_disc1 = (cue.name == "Metal Gear Solid [SLUS_006.94].cue"
+                     and filename_serial == "SLUS-00694"
+                     and internal_serial == "SLUS-00594"
+                     and dest_cue is not None
+                     and dest_cue.name == "Metal Gear Solid (Disc 1) (Rev 1) [SLUS-00594].cue"
+                     and dest_bin is not None
+                     and dest_bin.name == "Metal Gear Solid (Disc 1) (Rev 1) [SLUS-00594].bin")
+        if mgs_disc1:
+            blockers.discard("DISC_ID_MISMATCH")
         if len(refs) != 1 or len(paths) != 1:
             blockers.add("PAIR_NOT_SINGLE_BIN")
             issues.append("PAIR_NOT_SINGLE_BIN")
         status = "BROKEN" if broken else "REVIEW" if any(x in blockers for x in issues) else "WARNING" if issues else "VALID"
-        if status in ("VALID", "WARNING") and all(x in ("EXTENSION_CASE_NORMALIZATION", "BASENAME_MISMATCH") for x in issues) and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
+        if status in ("VALID", "WARNING") and all(x in ("EXTENSION_CASE_NORMALIZATION", "BASENAME_MISMATCH") or (mgs_disc1 and x == "DISC_ID_MISMATCH") for x in issues) and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
             status = "RENAME_CANDIDATE"
         if status == "VALID" and dest_cue and dest_bin and paths and (dest_cue != cue or dest_bin != paths[0]):
             status = "RENAME_CANDIDATE"
