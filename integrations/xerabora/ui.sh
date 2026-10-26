@@ -105,21 +105,17 @@ xr_draw_footer() {
 }
 xr_pause() { local unused; read -rp 'Press Enter to return to the menu...' unused || true; }
 xr_follow_log() {
-  local log event_pattern noise_pattern
+  local log profile service
   if [[ -s "$HOME/.config/xerabora-profiles/active" ]]; then
-    log="$HOME/.config/xerabora-profiles/$(cat "$HOME/.config/xerabora-profiles/active")/xerabora/xerabora.log"
+    profile="$(cat "$HOME/.config/xerabora-profiles/active")"
+    log="$HOME/.config/xerabora-profiles/$profile/xerabora/xerabora.log"
   else
+    profile="default (legacy)"
     log="$HOME/.config/xerabora/xerabora.log"
   fi
   [[ -f "$log" ]] || { echo "No log file yet: $log"; return 0; }
-  event_pattern='achievement unlocked|console acknowledged unlock notice|leaderboard|console (found|connected|disconnected|lost|asked about)|game (found|detected|identified|loaded|unsupported)|achievements:|cannot unlock|pointer chain|unsupported|failed|error|warning|timeout|unauthorized|wrong dump|no achievements|first complete snapshot'
-  noise_pattern='console heartbeat:|http (get|post|put|delete) |[0-9]+ snapshots[[:space:]]*\\|'
-  printf 'Gameplay events: %s\n' "$log"
-  printf 'Showing recent events, then new events live (HTTP polling and heartbeats hidden).\n'
-  printf 'Full log is unchanged. Ctrl+C returns to the menu.\n\n'
-  # Remove noisy lines BEFORE searching for events: heartbeat counters mention
-  # "unlock notices" and must not be mistaken for actual unlock events.
-  tail -n 1000 -- "$log" | grep -Eiv -- "$noise_pattern" | grep -Ei -- "$event_pattern" | tail -n 20 || true
-  printf '%s\n' '--- Listening for new events ---'
-  tail -n 0 -F -- "$log" | grep --line-buffered -Eiv -- "$noise_pattern" | grep --line-buffered -Ei -- "$event_pattern" || true
+  [[ -f "$SCRIPT_DIR/gameplay_log.py" ]] || { echo "Missing gameplay_log.py; update the entire xerabora directory."; return 1; }
+  command -v python3 >/dev/null || { echo "python3 required for the gameplay monitor."; return 1; }
+  service="$(xr_service_status)"
+  python3 -u "$SCRIPT_DIR/gameplay_log.py" "$log" "$profile" "$service"
 }
