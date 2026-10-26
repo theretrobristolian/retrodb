@@ -269,10 +269,23 @@ ps1_rename_all() {
   [[ -r "$csv" ]] || { echo 'Export reports first to generate a current PS1 audit.'; return 1; }
   mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
   mkdir -p -m 0700 "$journal_dir" || return 1
-  if find "$journal_dir" -maxdepth 1 -name '*.json' -type f | grep -q .; then
-    echo '[STOP] Existing PS1 rename journal(s) found. Inspect/recover before a new write run.'
-    return 1
-  fi
+  local prior
+  while IFS= read -r prior; do
+    if python3 - "$prior" <<'PYJ'
+import json, sys
+try:
+    operations = json.load(open(sys.argv[1], encoding='utf-8'))['operations']
+    incomplete = any(op.get('state') != 'applied' for op in operations)
+except (OSError, ValueError, KeyError):
+    incomplete = True
+sys.exit(0 if incomplete else 1)
+PYJ
+    then
+      echo "[STOP] Incomplete PS1 rename journal: $prior"
+      echo 'Inspect or recover the files before attempting another batch.'
+      return 1
+    fi
+  done < <(find "$journal_dir" -maxdepth 1 -name '*.json' -type f | sort)
   python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
   echo '[IMPORTANT] This is an experimental PS1 renamer. Review the proposals before proceeding.'
   read -rp 'Type RENAMEPS1 to apply paired BIN/CUE renames: ' answer
