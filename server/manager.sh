@@ -105,6 +105,20 @@ ART
   echo '----------------------------------------------------------------'
 }
 pause() { read -rp 'Press Enter to return...' ignored || true; }
+# Resolve the actual CIFS filesystem, never the enclosing systemd automount.
+# --target without -t cifs can return both systemd-1 and //server/share.
+retronas_cifs_source() {
+  local source
+  # Trigger automount before querying the nested CIFS filesystem.
+  ls -ld "$MOUNT/." >/dev/null 2>&1 || return 1
+  source="$(findmnt -rn -t cifs -o SOURCE -M "$MOUNT" 2>/dev/null)" || return 1
+  [[ "$source" == //* && "$source" != *$'\\n'* ]] || {
+    echo "[STOP] Could not resolve a single CIFS source for $MOUNT: $source" >&2
+    return 1
+  }
+  printf '%s\\n' "$source"
+}
+
 mount_ready() {
   mountpoint -q "$MOUNT" && return 0
   read -rp 'RetroNAS unmounted. Mount it now? [y/n] (default: no) ' ans
@@ -352,7 +366,7 @@ PYPATCH
   echo 'Patch must already be locally RA-verified. Existing OLD_ files are never overwritten.'
   read -rp "Type DEPLOY-$game_id to confirm NAS changes: " answer
   [[ "$answer" == "DEPLOY-$game_id" ]] || { echo 'Cancelled.'; return 0; }
-  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  source="$(retronas_cifs_source)" || return 1
   [[ "$source" == //* ]] || { echo "[STOP] Invalid CIFS source: $source"; return 1; }
   mountpoint -q "$PILOT_ROOT" && { echo '[STOP] Writable mount already active.'; return 1; }
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
@@ -418,7 +432,7 @@ PYCOUNT
   echo '[BULK] All currently eligible PS1 BIN/CUE pairs displayed above will be renamed.'
   read -rp 'Type RENAMEPS1 to rename ALL eligible pairs: ' answer
   [[ "$answer" == RENAMEPS1 ]] || { echo 'Cancelled'; return 0; }
-  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  source="$(retronas_cifs_source)" || return 1
   [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
   if mountpoint -q "$PILOT_ROOT"; then
@@ -466,7 +480,7 @@ PYJOURNAL
   echo 'Original filenames are recorded in a NEW rollback manifest before any rename.'
   read -rp 'Type RENAMEALL to proceed (anything else cancels): ' answer
   [[ "$answer" == RENAMEALL ]] || { echo 'Cancelled'; return 0; }
-  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  source="$(retronas_cifs_source)" || return 1
   [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
   if mountpoint -q "$PILOT_ROOT"; then
@@ -515,7 +529,7 @@ PYREADY
   echo 'and atomically replace the original filename. OLD_ is NEVER deleted.'
   read -rp "Type PATCH-$game_id to proceed, or Enter to cancel: " confirm
   [[ "$confirm" == "PATCH-$game_id" ]] || { echo 'Cancelled: dry-run journal retained.'; return 0; }
-  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  source="$(retronas_cifs_source)" || return 1
   [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
   mountpoint -q "$PILOT_ROOT" && { echo '[STOP] Temporary RW mount already active.'; return 1; }
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
@@ -560,7 +574,7 @@ opl_recover() {
   sudo python3 "$HERE/opl_pilot.py" status --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
   read -rp 'Type RESUME to finish pending renames, or press Enter to cancel: ' answer
   [[ "$answer" == RESUME ]] || return 0
-  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  source="$(retronas_cifs_source)" || return 1
   [[ "$source" == //* ]] || return 1
   sudo install -d -m 0700 "$PILOT_ROOT" || return 1
   mountpoint -q "$PILOT_ROOT" && { echo 'Temporary RW mount already active.'; return 1; }
