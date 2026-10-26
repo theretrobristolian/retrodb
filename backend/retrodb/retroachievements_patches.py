@@ -554,6 +554,7 @@ def prepare_patch_sources(
     incoming.mkdir(parents=True, exist_ok=True)
     candidates = [path for path in incoming.rglob("*") if path.is_file() and path.suffix.casefold() in {".cue", ".iso"}]
     already_verified = candidate_count = mismatched = missing = 0
+    no_source_checksum = 0
     results = []
     console_ids = {"Sony PlayStation": 12, "Sony PlayStation 2": 21}
     digest_cache_file = workspace / "source-digest-cache.json"
@@ -618,8 +619,12 @@ def prepare_patch_sources(
                     state = "already-patched-and-verified"
                     already_verified += 1
                 else:
-                    state = "source-found-but-checksum-mismatch"
-                    mismatched += 1
+                    if checksum_type == "checksum":
+                        state = "source-checksum-unavailable"
+                        no_source_checksum += 1
+                    else:
+                        state = "source-found-but-checksum-mismatch"
+                        mismatched += 1
             if valid or state == "already-patched-and-verified":
                 break
             # Try the next plausible source rather than stopping after one
@@ -649,6 +654,9 @@ def prepare_patch_sources(
     except OSError as exc:
         print(f"[WARN] Could not persist digest cache: {exc}", flush=True)
     print(f"[CACHE] Reused {cache_stats['hits']} file digests; calculated {cache_stats['reads']} new digests.", flush=True)
+    print(f"[SUMMARY] Verified: {candidate_count}; already patched: {already_verified}; "
+          f"checksum mismatches: {mismatched}; missing expected checksums: {no_source_checksum}; "
+          f"missing sources: {missing}.", flush=True)
     (workspace / "patch-prepare.json").write_text(
         json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
