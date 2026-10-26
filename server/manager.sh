@@ -667,7 +667,7 @@ menu() {
     read -rp 'Choose an option: ' choice || break
     case "$choice" in
       1) run audit; pause ;;
-      2) run patch_retronas_one; pause ;;
+      2) run patch_apply; pause ;;
       3)
         echo '  1) PlayStation 1 - Rename all eligible BIN/CUE pairs'
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
