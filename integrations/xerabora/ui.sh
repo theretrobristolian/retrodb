@@ -105,21 +105,21 @@ xr_draw_footer() {
 }
 xr_pause() { local unused; read -rp 'Press Enter to return to the menu...' unused || true; }
 xr_follow_log() {
-  local log event_pattern
+  local log event_pattern noise_pattern
   if [[ -s "$HOME/.config/xerabora-profiles/active" ]]; then
     log="$HOME/.config/xerabora-profiles/$(cat "$HOME/.config/xerabora-profiles/active")/xerabora/xerabora.log"
   else
     log="$HOME/.config/xerabora/xerabora.log"
   fi
   [[ -f "$log" ]] || { echo "No log file yet: $log"; return 0; }
-  event_pattern='achievement unlocked|unlock notice|leaderboard|console (found|connected|disconnected|lost|asked about)|game (found|detected|identified|loaded|unsupported)|achievements:|cannot unlock|pointer chain|unsupported|failed|error|warning|timeout|unauthorized|wrong dump|no achievements|first complete snapshot'
+  event_pattern='achievement unlocked|console acknowledged unlock notice|leaderboard|console (found|connected|disconnected|lost|asked about)|game (found|detected|identified|loaded|unsupported)|achievements:|cannot unlock|pointer chain|unsupported|failed|error|warning|timeout|unauthorized|wrong dump|no achievements|first complete snapshot'
+  noise_pattern='console heartbeat:|http (get|post|put|delete) |[0-9]+ snapshots[[:space:]]*\\|'
   printf 'Gameplay events: %s\n' "$log"
   printf 'Showing recent events, then new events live (HTTP polling and heartbeats hidden).\n'
   printf 'Full log is unchanged. Ctrl+C returns to the menu.\n\n'
-  # Print recent matching events even when the last 80 lines are all HTTP polls.
-  tail -n 1000 -- "$log" | grep -Ei -- "$event_pattern" | tail -n 20 || true
+  # Remove noisy lines BEFORE searching for events: heartbeat counters mention
+  # "unlock notices" and must not be mistaken for actual unlock events.
+  tail -n 1000 -- "$log" | grep -Eiv -- "$noise_pattern" | grep -Ei -- "$event_pattern" | tail -n 20 || true
   printf '%s\n' '--- Listening for new events ---'
-  # grep --line-buffered is critical: standard grep buffers output to a pipe.
-  # tail -n 0 avoids dumping repetitive HTTP traffic on startup.
-  tail -n 0 -F -- "$log" | grep --line-buffered -Ei -- "$event_pattern" || true
+  tail -n 0 -F -- "$log" | grep --line-buffered -Eiv -- "$noise_pattern" | grep --line-buffered -Ei -- "$event_pattern" || true
 }
