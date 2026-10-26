@@ -10,7 +10,7 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from online_catalogue import ONLINE_COLUMNS, load as load_online, load_xlink, report_row as online_report_row, enrich_with_xlink
 
-COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning']
+COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning','Internal disc ID','Disc ID source','ID conflict']
 VERIFIED = 'clean-base-verified-ready-to-patch'
 def patch_sources(path):
     """Index precisely checksum-verified patchable collection sources by RA ID."""
@@ -93,7 +93,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
         reason += ' — ' + warning
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             r['ra_game_id'] or r['recommended_ra_game_id'], release,
-            r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning]
+            r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
 def apply_collection_dedup(entries):
     """Discount only demonstrably redundant noncompatible copies.
 
@@ -183,14 +183,15 @@ def xml_sheet(rows):
          '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
          '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
          '<cols>']
-    for i,width in enumerate(([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28,64,18,32,65]),1):
+    widths = ([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28,64,18,32,65])
+    for i,width in enumerate((widths + [20] * max(0, len(rows[0]) - len(widths)))[:len(rows[0])],1):
         xml.append('<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i,i,width))
     xml.append('</cols><sheetData>')
     for n,row in enumerate(rows,1):
         xml.append('<row r="%d">' % n)
         for i,val in enumerate(row):
             style = 1 if n == 1 else (2 if n%2 == 0 else 0)
-            if n > 1 and len(row) in (18, 21) and i == 3:
+            if n > 1 and len(row) in (18, 21, 24) and i == 3:
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6,'NO SET':5}.get(val,style)
             if n > 1 and len(row) == 16 and i == 4 and val == 'YES': style = 3
             xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
