@@ -109,13 +109,19 @@ pause() { read -rp 'Press Enter to return...' ignored || true; }
 # --target without -t cifs can return both systemd-1 and //server/share.
 retronas_cifs_source() {
   local source
-  # Trigger automount before querying the nested CIFS filesystem.
-  ls -ld "$MOUNT/." >/dev/null 2>&1 || return 1
-  source="$(findmnt -rn -t cifs -o SOURCE -M "$MOUNT" 2>/dev/null)" || return 1
-  [[ "$source" == //* && "$source" != ** ]] || {
-    echo "[STOP] Could not resolve a single CIFS source for $MOUNT: $source" >&2
+  # Activate systemd automount and query only its actual CIFS child.
+  ls -ld "$MOUNT/." >/dev/null 2>&1 || {
+    echo "[STOP] RetroNAS automount unavailable: $MOUNT" >&2
     return 1
   }
+  source="$(findmnt -rn -M "$MOUNT" -t cifs -o SOURCE 2>/dev/null)" || {
+    echo "[STOP] Could not find the mounted CIFS share beneath $MOUNT" >&2
+    return 1
+  }
+  if [[ "$source" != //* ]] || [[ "$source" == *$'\n'* ]]; then
+    echo "[STOP] Expected exactly one //server/share source, got: $source" >&2
+    return 1
+  fi
   printf '%s\n' "$source"
 }
 
@@ -766,7 +772,7 @@ menu() {
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
-          1) ps1_rename_all ;;
+          1) run ps1_rename_all ;;
           2) run opl_update_all ;;
           *) echo 'Cancelled' ;;
         esac
