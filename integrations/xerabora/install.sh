@@ -615,7 +615,7 @@ release_status_line() {
   elif [[ "$installed" == "$upstream" ]]; then
     echo " Upstream version: $installed (current)"
   elif blocked_cpu_release "$upstream"; then
-    echo " Upstream version: $upstream available, BLOCKED on this CPU (installed $installed)"
+    echo " Official upstream $upstream: update blocked by CPU compatibility guard (recorded: $installed)"
   else
     echo " Upstream version: $upstream available (installed $installed; manual install)"
   fi
