@@ -90,7 +90,12 @@ def show_history(path, now, profile, service):
     unlocks = [line for line in recent if UNLOCK.search(line)]
     connections = [line for line in recent if CONNECT.search(line)]
     games = [line for line in recent if GAME.search(line)]
-    unsupported = {}\n    for line in recent:\n        match = UNSUPPORTED_NAME.search(line)\n        if match:\n            unsupported[match.group(1)] = match.group(2)\n    print("xeRAbora Gameplay Monitor")
+    unsupported = {}
+    for line in recent:
+        match = UNSUPPORTED_NAME.search(line)
+        if match:
+            unsupported[match.group(1)] = match.group(2)
+    print("xeRAbora Gameplay Monitor")
     print("-" * 58)
     print(f"Service:       {service}")
     print(f"Player:        {profile}")
@@ -98,7 +103,13 @@ def show_history(path, now, profile, service):
     print(f"Last link:     {connections[-1] if connections else 'No connection event in past hour'}")
     print(f"Last game:     {games[-1] if games else 'Not identified in past hour'}")
     print(f"Last unlock:   {unlocks[-1] if unlocks else 'None observed in past hour'}")
-    print(f"Events:        {len(recent)} relevant log lines in past hour")\n    if unsupported:\n        print(f"Cannot unlock: {len(unsupported)} achievement(s) identified in trace:")\n        for ach_id, title in unsupported.items():\n            print(f"  - {title} (RA achievement {ach_id})")\n    else:\n        print("Cannot unlock: specific names require xeRAbora trace logging at game load")
+    print(f"Events:        {len(recent)} relevant log lines in past hour")
+    if unsupported:
+        print(f"Cannot unlock: {len(unsupported)} achievement(s) identified in trace:")
+        for ach_id, title in unsupported.items():
+            print(f"  - {title} (RA achievement {ach_id})")
+    else:
+        print("Cannot unlock: specific names require xeRAbora trace logging at game load")
     print("-" * 58)
     print("Past hour's gameplay events:")
     if not recent:
