@@ -733,7 +733,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 preview / PS2 confirmed changes\n  5) Deploy PS1 patch  - Verified BIN/CUE with OLD_ backups'
+    echo '  3) Rename games      - PS1 preview / PS2 confirmed changes'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
