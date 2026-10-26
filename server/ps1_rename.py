@@ -5,6 +5,7 @@ import csv
 import json
 import os
 import re
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,7 +22,16 @@ def parse(args):
         # Restrict automatic updates to independently verified clean one-BIN records.
         if row["status"] not in ("RENAME_CANDIDATE", "VALID"):
             continue
-        if any(issue.strip() not in ("EXTENSION_CASE_NORMALIZATION", "BASENAME_MISMATCH") for issue in row.get("issues", "").split("|") if issue.strip()):
+        issue_set = {x.strip() for x in row.get("issues", "").split("|") if x.strip()}
+        mgs_disc1 = (
+            row.get("relative_cue", "").endswith("Metal Gear Solid [SLUS_006.94].cue")
+            and row.get("filename_serial") == "SLUS-00694"
+            and row.get("internal_serial") == row.get("selected_serial") == "SLUS-00594"
+            and Path(row.get("proposed_cue", "")).name == "Metal Gear Solid (Disc 1) (Rev 1) [SLUS-00594].cue"
+            and Path(row.get("proposed_bin", "")).name == "Metal Gear Solid (Disc 1) (Rev 1) [SLUS-00594].bin"
+            and issue_set == {"DISC_ID_MISMATCH"}
+        )
+        if issue_set - {"EXTENSION_CASE_NORMALIZATION", "BASENAME_MISMATCH"} - ({"DISC_ID_MISMATCH"} if mgs_disc1 else set()):
             continue
         if not row.get("internal_serial") or row["internal_serial"] != row.get("selected_serial"):
             continue
@@ -42,6 +52,18 @@ def parse(args):
             continue
         if disc_serial(oldbin) != row["internal_serial"]:
             continue
+        if mgs_disc1:
+            # RA-verified Disc 1 hash from the user's latest RetroDB audit.
+            # No other mismatched disc ID is accepted.
+            try:
+                hashed = subprocess.run(
+                    ["/opt/retrodb-tools/RAHasher", "12", str(oldcue)],
+                    capture_output=True, text=True, timeout=180, check=False
+                )
+                if hashed.returncode != 0 or "8c8db8c41e2a4c7d0ef7fc1c2f74ef7a" not in (hashed.stdout + hashed.stderr).lower():
+                    continue
+            except (OSError, subprocess.TimeoutExpired):
+                continue
         if ((newcue != oldcue and newcue.exists() and not newcue.samefile(oldcue))
                 or (newbin != oldbin and newbin.exists() and not newbin.samefile(oldbin))):
             continue
