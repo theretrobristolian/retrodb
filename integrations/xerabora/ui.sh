@@ -119,10 +119,10 @@ xr_follow_log() {
   # Keep next-line achievement descriptions, but suppress routine HTTP, heartbeats,
   # periodic snapshot stats and protocol chatter.
   tail -n 80 -F -- "$log" | awk '
-    BEGIN { IGNORECASE=1; context=0 }
+    BEGIN { context=0 }
     {
       line=tolower($0)
-      if (line ~ /http (get|post|put|delete)|console heartbeat:| snapshots[[:space:]]*\\|| rx fifo|badge chunks|^ *$/) next
+      if (index(line,"http get ") || index(line,"http post ") || index(line,"http put ") || index(line,"http delete ") || index(line,"console heartbeat:") || index(line," snapshots |") || index(line,"rx fifo") || index(line,"badge chunks") || line ~ /^[[:space:]]*$/) next
       if (line ~ /achievement unlocked:|achievements:|leaderboard|console (found|connected|disconnected|lost|acknowledged)|game (found|detected|identified|loaded|unsupported)|unsupported|cannot unlock|pointer chain|failed|error|warning|warn|timeout|timed out|unauthorized|authentication|login|hash|no achievements|wrong dump|server stopped|server started|connection refused|first complete snapshot/) {
         print; fflush()
         context=(line ~ /achievement unlocked:/ ? 2 : 0)
