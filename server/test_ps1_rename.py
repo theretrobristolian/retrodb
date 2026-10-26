@@ -77,6 +77,27 @@ class PS1RenameTests(unittest.TestCase):
         self.assertFalse((self.iso / (self.target + ".bin")).exists())
         self.assertEqual(json.loads(journal.read_text())["operations"][0]["state"], "rolled_back")
 
+    def test_uppercase_extensions_are_renamed_to_lowercase(self):
+        uppercue = self.cue.with_suffix(".CUE")
+        upperbin = self.bin.with_suffix(".BIN")
+        self.cue.rename(uppercue)
+        self.bin.rename(upperbin)
+        self.cue, self.bin = uppercue, upperbin
+        self.original_cue = self.original_cue.replace(b".bin", b".BIN")
+        self.cue.write_bytes(self.original_cue)
+        self.row["relative_cue"] = "iso/" + uppercue.name
+        self.row["relative_bin"] = "iso/" + upperbin.name
+        self.row["issues"] = "EXTENSION_CASE_NORMALIZATION"
+        self.write_csv()
+        ops = self.proposals()
+        self.assertEqual(len(ops), 1)
+        with patch.object(ps1_rename, "disc_serial", return_value=SERIAL):
+            ps1_rename.apply(ops, self.root / "upper-journal.json")
+        self.assertTrue((self.iso / (self.target + ".cue")).is_file())
+        self.assertTrue((self.iso / (self.target + ".bin")).is_file())
+        self.assertIn((self.target + ".bin").encode(),
+                      (self.iso / (self.target + ".cue")).read_bytes())
+
     def test_mismatch_skips_rename(self):
         self.row["internal_serial"] = "SLUS-99999"
         self.write_csv()
