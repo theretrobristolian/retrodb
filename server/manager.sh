@@ -193,7 +193,8 @@ step() {
 }
 sync_gamedb() {
   sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
-  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-2
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-2 || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation
 }
 
 audit() {
@@ -202,7 +203,7 @@ audit() {
   sudo test -x /opt/retrodb-tools/RAHasher || { echo '[ERROR] RAHasher unavailable.' >&2; return 1; }
   printf '[OK] RetroNAS mounted; RAHasher available.\n'
   step "2/8" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
-  step "3/8" "Synchronise PS2 GameDB serial catalogue (cache-aware)" sync_gamedb || return 1
+  step "3/8" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
   step "4/8" "Inventory PS1 / PS2 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
   step "5/8" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
   step "6/8" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
@@ -286,6 +287,8 @@ PYJ
       return 1
     fi
   done < <(find "$journal_dir" -maxdepth 1 -name '*.json' -type f | sort)
+  # Require GameDB titles from the same authoritative catalogue as PS2 naming.
+  sync_gamedb || return 1
   # Always rescan before a rename; cached proposals can be stale after a prior run.
   ( umask 077; sudo python3 "$HERE/report_ps1_audit.py" --root "$MOUNT/roms/sony/playstation1" --output "$csv" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$csv" || return 1
