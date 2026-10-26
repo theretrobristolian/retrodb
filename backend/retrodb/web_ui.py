@@ -174,7 +174,7 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
         return ("🇺🇸", "North America (disc prefix)")
     if prefix in ("SLES", "SCES", "SCED"):
         return ("🇪🇺", "Europe / PAL (disc prefix)")
-    if prefix in ("SLPS", "SLPM", "SCPS", "SCAJ"):
+    if prefix in ("SLPS", "SLPM", "SCPS"):
         return ("🇯🇵", "Japan (disc prefix)")
     return ("🌐", "Region unknown")
 
@@ -340,7 +340,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
 <div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">Disc ID</th>
 <th data-column="region">Region</th><th data-column="ra" title="RetroAchievements">RA</th></tr></thead>
-<tbody>{''.join(rows) or '<tr><td colspan="5">No games match the current filters.</td></tr>'}</tbody></table></div>
+<tbody>{''.join(rows) or '<tr><td colspan="4">No games match the current filters.</td></tr>'}</tbody></table></div>
 <p class="muted">Region flags are inferred from recognised PS1/PS2 disc prefixes; unknown prefixes show 🌐. Gold 🏆 means a verified RA disc hash and RA game ID; muted crossed trophy means no verified match in the current audit (not necessarily unsupported). Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
