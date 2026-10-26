@@ -121,12 +121,27 @@ export_csv() {
   local excel="$HOME/retrodb-exports/RetroDB-Compatibility.xlsx"
   local prepare="/var/lib/retrodb/patches/patch-prepare.json"
   local prepared_copy="$HOME/retrodb-exports/patch-prepare.json"
+  local ps1_csv="$HOME/retrodb-exports/RetroDB-PS1-Audit.csv"
+  local ps1_root="$MOUNT/roms/sony/playstation1"
+  if sudo test -d "$ps1_root"; then
+    ( umask 077; sudo python3 "$HERE/report_ps1_audit.py" --root "$ps1_root" --output "$ps1_csv" ) || return 1
+    sudo chown "$(id -un):$(id -gn)" "$ps1_csv" || return 1
+    chmod 0600 "$ps1_csv" || return 1
+  else
+    echo '[WARNING] PS1 folder unavailable; export will omit the PS1 file audit.'
+    rm -f "$ps1_csv"
+  fi
+  local prep_arg="-"
   if sudo -n test -f "$prepare" 2>/dev/null || sudo test -f "$prepare"; then
     sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$prepare" "$prepared_copy" || return 1
-    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prepared_copy" ) || return 1
+    prep_arg="$prepared_copy"
   else
-    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" ) || return 1
-    echo '[INFO] Patchable verification unavailable; run patch-plan, patch-download and patch-prepare to identify verified patch sources.'
+    echo '[INFO] Patch preparation unavailable; verified patch evidence omitted.'
+  fi
+  if [[ -f "$ps1_csv" ]]; then
+    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_csv" ) || return 1
+  else
+    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" ) || return 1
   fi
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
@@ -141,6 +156,7 @@ export_csv() {
   printf ' Compatibility Excel : %s\n' "$excel"
   printf ' OPL proposals Excel  : %s\n' "$rename_xlsx"
   printf ' OPL proposals CSV    : %s (rename-engine input)\n' "$rename_report"
+  printf ' PS1 file audit CSV   : %s\n' "$ps1_csv"
   printf ' Raw audit CSV        : %s\n' "$EXPORT"
   echo '------------------------------------------------------------'
   local remote
@@ -547,7 +563,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS2 game    - Verify and preserve original'
-    echo '  3) Rename PS2 games  - Preview and confirm changes'
+    echo '  3) Rename games      - PS1 preview / PS2 confirmed changes'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
@@ -561,7 +577,16 @@ menu() {
     case "$choice" in
       1) run audit; pause ;;
       2) run patch_retronas_one; pause ;;
-      3) run opl_update_all; pause ;;
+      3)
+        echo '  1) PlayStation 1 - Read-only proposal export'
+        echo '  2) PlayStation 2 - Existing confirmed rename workflow'
+        read -rp 'Platform: ' platform_choice
+        case "$platform_choice" in
+          1) export_csv; echo '[INFO] Open the PS1 File Audit and Action Required Excel sheets. PS1 write execution is not yet implemented.' ;;
+          2) run opl_update_all ;;
+          *) echo 'Cancelled' ;;
+        esac
+        pause ;;
       4) more_menu ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
