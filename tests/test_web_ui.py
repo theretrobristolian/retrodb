@@ -160,3 +160,16 @@ def test_game_detail_layout_wraps_long_paths():
     assert ".detail .card p{overflow-wrap:anywhere" in CSS
     assert "overflow-x:clip" in CSS
     assert "grid-template-columns:minmax(0,1fr)" in CSS
+
+def test_mobile_bottom_navigation_and_compact_header():
+    from retrodb.web_ui import page, CSS
+    html = page("Game", "<p>Body</p>").body.decode("utf-8")
+    assert 'class="mobile-nav"' in html
+    assert 'class="mobile-actions"' in html
+    assert 'data-nav="/profile"' in html
+    assert 'data-nav="/management"' in html
+    assert "position:fixed;z-index:40;bottom:0" in CSS
+    assert "env(safe-area-inset-bottom)" in CSS
+    guest_html = page("Guest", "<p>Body</p>", guest=True).body.decode("utf-8")
+    assert 'data-nav="/profile"' not in guest_html
+    assert 'data-nav="/management"' not in guest_html
