@@ -16,9 +16,10 @@ EVENT = re.compile(
     r"console (?:found|connected|disconnected|lost|asked about)|"
     r"game (?:found|detected|identified|loaded|unsupported)|"
     r"achievements:|cannot unlock|pointer chain|unsupported|failed|error|"
-    r"warning|timeout|unauthorized|wrong dump|no achievements|first complete snapshot",
+    r"warning|timeout|unauthorized|wrong dump|no achievements|first complete snapshot|reads through a chain the console cannot follow",
     re.I,
 )
+UNSUPPORTED_NAME = re.compile(r'achievement\s+(\d+)\s+"([^"]+)"\s+reads through a chain the console cannot follow', re.I)
 UNLOCK = re.compile(r"achievement unlocked:\s*(.+)", re.I)
 CONNECT = re.compile(r"console (?:connected|disconnected|lost)", re.I)
 GAME = re.compile(r"(?:game (?:found|detected|identified|loaded):|game title:)\s*(.+)", re.I)
@@ -89,7 +90,7 @@ def show_history(path, now, profile, service):
     unlocks = [line for line in recent if UNLOCK.search(line)]
     connections = [line for line in recent if CONNECT.search(line)]
     games = [line for line in recent if GAME.search(line)]
-    print("xeRAbora Gameplay Monitor")
+    unsupported = {}\n    for line in recent:\n        match = UNSUPPORTED_NAME.search(line)\n        if match:\n            unsupported[match.group(1)] = match.group(2)\n    print("xeRAbora Gameplay Monitor")
     print("-" * 58)
     print(f"Service:       {service}")
     print(f"Player:        {profile}")
@@ -97,7 +98,7 @@ def show_history(path, now, profile, service):
     print(f"Last link:     {connections[-1] if connections else 'No connection event in past hour'}")
     print(f"Last game:     {games[-1] if games else 'Not identified in past hour'}")
     print(f"Last unlock:   {unlocks[-1] if unlocks else 'None observed in past hour'}")
-    print(f"Events:        {len(recent)} relevant log lines in past hour")
+    print(f"Events:        {len(recent)} relevant log lines in past hour")\n    if unsupported:\n        print(f"Cannot unlock: {len(unsupported)} achievement(s) identified in trace:")\n        for ach_id, title in unsupported.items():\n            print(f"  - {title} (RA achievement {ach_id})")\n    else:\n        print("Cannot unlock: specific names require xeRAbora trace logging at game load")
     print("-" * 58)
     print("Past hour's gameplay events:")
     if not recent:
@@ -125,7 +126,7 @@ def follow(path):
                 current = (game.get("id"), game.get("title")) if console.get("connected") and game.get("id") and not game.get("checked_only") else None
                 if current and current != last_game:
                     print(f"[LIVE GAME] {current[1] or 'Unknown'} (RA game ID {current[0]})", flush=True)
-                    print("[LIMITATION] Pointer-chain achievement names are not exposed by xeRAbora.", flush=True)
+                    print("[INFO] Unsupported achievement IDs/titles can appear with xeRAbora --trace at game load.", flush=True)
                 last_game = current
             line = file.readline()
             if line:
