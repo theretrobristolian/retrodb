@@ -6,7 +6,6 @@
 
 ```bash
 cd ~/retrodb
-git switch main
 git pull --ff-only
 sudo bash server/deploy.sh
 curl -fsS http://127.0.0.1:8000/health
@@ -27,7 +26,22 @@ This updates the RetroDB application and its configured service. It does **not**
 | Cached artwork prefetch | `server/prefetch-artwork.py` |
 | xeRAbora service/profile management | [Integration guide](../integrations/xerabora/README.md) |
 
-Before running any bulk patch, rename, import or enrichment, review that tool's options and start in its preview/dry-run mode if available. GameDB matching deliberately leaves ambiguous releases unresolved for manual inspection.
+Patching is **one RA game ID at a time**, never a bulk patch operation. Review the selected game's source, expected RA hash and the separate NAS-write confirmation. For renames, review the preview before the explicit apply confirmation. Imported metadata and uncertain identity matches require manual review. GameDB matching deliberately leaves ambiguous releases unresolved for manual inspection.
+
+## Current interactive manager
+
+Run `retrodb` as your normal user:
+
+| Menu | Operation |
+|---|---|
+| 1 | Full PS1/PS2 read-only audit and Excel/CSV export |
+| 2 | Patch one verified RA game ID locally; for PS1, offer confirmed deployment to RetroNAS with verified `OLD_` BIN/CUE backups |
+| 3 | PS1 paired BIN/CUE renames or PS2 OPL rename workflow, with preview and explicit confirmation |
+| 4 | More options: exports, diagnostics, maintenance and connection settings |
+
+The normal collection mount stays read-only. The confirmed PS1 deployment temporarily mounts the same share writable, validates the supplied patched CUE/BIN pair, copies and checksum-verifies `OLD_` backups, then publishes the verified patch. The PS2 legacy network deployment code still exists but is **not** part of the current menu-2 completion path. Check journals before retrying an interrupted write. Detailed instructions: [RetroNAS scanning](../docs/retronas-scanning.md).
+
+PS1 friendly titles show verified disc numbers, including the four Geppy-X discs; unknown disc numbering is not invented. Revision labels are omitted from friendly titles.
 
 ## Operations
 
