@@ -66,7 +66,10 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     patch_state = ('VERIFIED' if verified_output else 'READY' if patchable else
                    'AVAILABLE' if patch else 'NONE')
     patch_status = 'YES' if patchable else 'NO'
-    if yes: status, reason = 'YES', 'Verified RA hash; ready to play'
+    if (r.get('platform') == 'Sony PlayStation' and
+            '240ptest' in Path(r['path']).stem.casefold().replace(' ', '').replace('-', '').replace('_', '')):
+        status, reason = 'OTHER SOFTWARE', 'Homebrew video calibration utility; achievements are not expected and no RA action is required'
+    elif yes: status, reason = 'YES', 'Verified RA hash; ready to play'
     elif patchable: status, reason = 'NO', 'READY: exact local source checksum verified; apply patch to a separate copy, then verify output RA hash'
     elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
     elif suggested:
@@ -135,7 +138,7 @@ def action_rows(entries, platform):
         if r[3] == 'YES' and str(r[6]).strip():
             verified_by_id.setdefault(str(r[6]).strip(), []).append(r[1])
     for r in entries:
-        if r[3] in ('YES', 'NO SET') or str(r[13]).startswith('EXCLUDE'):
+        if r[3] in ('YES', 'NO SET', 'OTHER SOFTWARE') or str(r[13]).startswith('EXCLUDE'):
             continue
         if r[3] == 'ERROR':
             action = 'Fix disc hash error'
@@ -239,6 +242,9 @@ def main(source,destination,preparation=None,ps1_audit=None):
         entries_console=sorted((row_for(r, sources, verified_outputs=outputs) for r in entries if r['platform']==platform),
                                key=lambda r:(r[0].casefold(),r[1].casefold()))
         apply_collection_dedup(entries_console)
+        for r in entries_console:
+            if r[3] == 'OTHER SOFTWARE':
+                r[13] = 'EXCLUDE — other software'
         active=[r for r in entries_console if not r[13].startswith('EXCLUDE')]
         excluded=len(entries_console)-len(active)
         counts=Counter(r[3] for r in active)
