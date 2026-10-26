@@ -514,6 +514,34 @@ def apply_verified_patches(workspace: Path, hasher: Path) -> PatchApplySummary:
     return PatchApplySummary(len(ready), verified, failed)
 
 
+def _cached_disc_digest(path: Path, algorithm: str, console_id: int, hasher: Path,
+                        cache: dict, stats: dict) -> str:
+    """Reuse content digests for unchanged files across separate audits.
+
+    A changed size, mtime, ctime, inode or device invalidates cached data.
+    For RA hashes, the hasher executable's stat also participates in the key.
+    """
+    st = path.stat()
+    signature = [str(path.resolve()), st.st_size, st.st_mtime_ns,
+                 st.st_ctime_ns, st.st_dev, st.st_ino, algorithm]
+    if algorithm == "ra_hash":
+        tool_stat = hasher.stat()
+        signature.extend([console_id, tool_stat.st_size, tool_stat.st_mtime_ns])
+    key = json.dumps(signature, separators=(",", ":"))
+    if key in cache:
+        stats["hits"] += 1
+        return cache[key]
+    print(f"  [READ] {path.name} ({st.st_size / (1024**3):.2f} GiB) — {algorithm.upper()}", flush=True)
+    value = (hash_file(hasher, console_id, path) if algorithm == "ra_hash"
+             else _raw_checksum(path, algorithm))
+    if not isinstance(value, str) or not re.fullmatch(
+            r"[0-9a-fA-F]{32}" if algorithm in ("md5", "ra_hash") else r"[0-9a-fA-F]{8}", value):
+        raise PatchError(f"Unexpected {algorithm} result for {path}")
+    cache[key] = value.casefold()
+    stats["reads"] += 1
+    return cache[key]
+
+
 def prepare_patch_sources(
     report_path: Path,
     cache_dir: Path,
@@ -528,7 +556,15 @@ def prepare_patch_sources(
     already_verified = candidate_count = mismatched = missing = 0
     results = []
     console_ids = {"Sony PlayStation": 12, "Sony PlayStation 2": 21}
-    checksum_cache = {}
+    digest_cache_file = workspace / "source-digest-cache.json"
+    try:
+        raw_cache = json.loads(digest_cache_file.read_text(encoding="utf-8"))
+        checksum_cache = raw_cache.get("digests", {}) if raw_cache.get("version") == 1 else {}
+        if not isinstance(checksum_cache, dict):
+            checksum_cache = {}
+    except (OSError, ValueError, AttributeError):
+        checksum_cache = {}
+    cache_stats = {"hits": 0, "reads": 0}
     print(f"[INFO] Verifying {len(rows)} patch source entries; large network ISOs can take time.", flush=True)
 
     for index, row in enumerate(rows, 1):
@@ -555,20 +591,16 @@ def prepare_patch_sources(
             try:
                 algorithm = next((a for a in ("md5", "crc32") if a in requirements), None)
                 raw_path = _cue_data_file(path) if path.suffix.casefold() == ".cue" else path
-                if algorithm and "ra_hash" not in requirements and raw_path:
-                    st = raw_path.stat()
-                    key = (str(raw_path.resolve()), st.st_size, st.st_mtime_ns, algorithm)
-                    if key not in checksum_cache:
-                        print(f"  [READ] {raw_path.name} ({st.st_size / (1024**3):.2f} GiB) — {algorithm.upper()}", flush=True)
-                        checksum_cache[key] = _raw_checksum(raw_path, algorithm)
-                    else:
-                        print(f"  [CACHE] {raw_path.name} — {algorithm.upper()}", flush=True)
-                    checksum_type, actual_hash = algorithm, checksum_cache[key]
+                if "ra_hash" in requirements:
+                    checksum_type = "ra_hash"
+                    actual_hash = _cached_disc_digest(path, "ra_hash", console_id, hasher, checksum_cache, cache_stats)
+                    valid = actual_hash == requirements["ra_hash"]
+                elif algorithm and raw_path and raw_path.is_file():
+                    checksum_type = algorithm
+                    actual_hash = _cached_disc_digest(raw_path, algorithm, console_id, hasher, checksum_cache, cache_stats)
                     valid = actual_hash == requirements[algorithm]
                 else:
-                    valid, checksum_type, actual_hash = _validate_source(
-                        path, requirements, hasher, console_id
-                    )
+                    valid, checksum_type, actual_hash = _validate_source(path, requirements, hasher, console_id)
             except (PatchError, TypeError, ValueError) as exc:
                 state = "source-validation-error"
                 checksum_type = "error"
@@ -580,7 +612,7 @@ def prepare_patch_sources(
             else:
                 patched_hash = (
                     actual_hash if checksum_type == "ra_hash"
-                    else hash_file(hasher, console_id, path)
+                    else _cached_disc_digest(path, "ra_hash", console_id, hasher, checksum_cache, cache_stats)
                 )
                 if patched_hash == row.get("preferred_ra_hash", "").casefold():
                     state = "already-patched-and-verified"
@@ -610,6 +642,13 @@ def prepare_patch_sources(
             "collection_source": str(collection_source),
         })
 
+    try:
+        temporary = digest_cache_file.with_suffix(".json.tmp")
+        temporary.write_text(json.dumps({"version": 1, "digests": checksum_cache}), encoding="utf-8")
+        temporary.replace(digest_cache_file)
+    except OSError as exc:
+        print(f"[WARN] Could not persist digest cache: {exc}", flush=True)
+    print(f"[CACHE] Reused {cache_stats['hits']} file digests; calculated {cache_stats['reads']} new digests.", flush=True)
     (workspace / "patch-prepare.json").write_text(
         json.dumps(results, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
