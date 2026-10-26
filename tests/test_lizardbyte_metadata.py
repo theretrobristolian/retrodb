@@ -16,3 +16,17 @@ def test_importer_uses_orm_session_for_entity_and_slug_rows():
     source = (Path(__file__).resolve().parents[1] / "server" / "enrich-gamedb.py").read_text()
     assert "with Session(get_engine()) as db:" in source
     assert "select(LibraryItem, Platform.slug)" in source
+
+def test_review_marker_is_non_destructive(tmp_path, monkeypatch):
+    import importlib.util
+    import json
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("enrich_gamedb", Path(__file__).resolve().parents[1] / "server" / "enrich-gamedb.py")
+    importer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(importer)
+    monkeypatch.setattr(importer, "CACHE", tmp_path)
+    importer.mark_review(9, "Ape Escape", "ambiguous", [1, 2, 3])
+    record = json.loads((tmp_path / "9.review.json").read_text())
+    assert record["status"] == "needs-review"
+    assert record["candidates"] == [1, 2, 3]
+    assert not (tmp_path / "9.json").exists()
