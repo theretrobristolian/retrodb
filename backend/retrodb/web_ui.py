@@ -210,6 +210,7 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     label = PurePosixPath(item.filename).stem
     label = re.sub(r"^(?:OLD_|NEW_)", "", label, flags=re.I)
     label = SERIAL_RE.sub("", label)
+    label = re.sub(r"\[\s*\]|\{\s*\}|\(\s*\)", " ", label)
     label = label.replace("_", " ")
     label = re.sub(r"\s*\((?:USA|Europe|Japan|World|En|Fr|De|Rev[^)]*)\)\s*$", "", label, flags=re.I)
     return re.sub(r"\s{2,}", " ", label).strip(" -._") or PurePosixPath(item.filename).stem
@@ -247,6 +248,12 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         if platform is None:
             raise HTTPException(404, "Console not found")
     stmt = select(LibraryItem).where(LibraryItem.is_missing.is_(False))
+    # A PS1 BIN is a track payload, not an additional game. Display its CUE
+    # entry point instead; keep BIN records in storage for diagnostics.
+    ps1_id = db.scalar(select(Platform.id).where(Platform.slug == "playstation"))
+    if ps1_id is not None:
+        stmt = stmt.where(or_(LibraryItem.platform_id != ps1_id,
+                              func.lower(LibraryItem.extension) != "bin"))
     if platform:
         stmt = stmt.where(LibraryItem.platform_id == platform.id)
     # Sort on the same basic cleanup used to display filename fallbacks.
@@ -319,7 +326,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
     heading = escape(platform.name if platform else "All games")
     return page(heading, f"""<div class="crumb"><a href="/">Consoles</a> / {heading}</div>
-<h1>{heading}</h1><p class="muted">{count:,} indexed game files · Up to 100 per page</p>
+<h1>{heading}</h1><p class="muted">{count:,} indexed game entries · Up to 100 per page</p>
 <form class="toolbar" action="{base}">
 <input name="q" value="{escape(q,quote=True)}" placeholder="Search games or serials">
 <input type="hidden" name="letter" value="{escape(letter,quote=True)}">
