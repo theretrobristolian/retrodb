@@ -25,9 +25,9 @@ CSS = """
 :root{color-scheme:dark;font:16px system-ui,-apple-system,Segoe UI,sans-serif;background:#0b1020;color:#eaf0fc}
 *{box-sizing:border-box}html{width:100%;max-width:100%;overflow-x:clip}body{margin:0;width:100%;max-width:100%;overflow-x:clip}a{color:inherit;text-decoration:none}a:hover{color:#9ebeff}
 header{position:sticky;top:0;z-index:20;border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
-header .bar{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
-.brand{font-size:24px;font-weight:800;letter-spacing:-1px;color:#f6f8ff}
-.mobile-nav,.mobile-actions{display:none}nav{display:flex;flex-wrap:wrap;gap:12px 18px;min-width:0;max-width:100%;color:#afc0da;font-size:14px}nav a,nav button{overflow-wrap:normal}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
+header .bar{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.brand{font-size:22px;font-weight:800;letter-spacing:-1px;color:#f6f8ff;white-space:nowrap}
+.mobile-nav,.mobile-actions{display:none}nav{display:flex;flex-wrap:wrap;gap:5px;min-width:0;max-width:100%;color:#afc0da;font-size:13px;align-items:center}header nav a,header nav button{padding:9px 11px;border-radius:9px}header nav a:hover,header nav button:hover{background:#21314f;color:#fff}nav a,nav button{overflow-wrap:normal}main{max-width:1200px;margin:auto;padding:24px 24px 70px}
 h1{font-size:34px;letter-spacing:-1.3px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 16px}
 p{line-height:1.6}.muted{color:#9daeca}.eyebrow{color:#7caeff;text-transform:uppercase;font-size:12px;font-weight:700;letter-spacing:1.7px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
@@ -83,14 +83,20 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
 .game-title-row{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:center;gap:16px;margin-bottom:18px;min-width:0;max-width:100%}.game-title-row:not(:has(.game-ra-icon)){grid-template-columns:minmax(0,1fr)}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
-.detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;min-width:0;max-width:100%}.detail .card{min-height:0;min-width:0;max-width:100%}.detail .card p{overflow-wrap:anywhere;word-break:normal}.detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal}.game-title-row>div{min-width:0;max-width:100%;overflow-wrap:anywhere}.game-title-row .muted{margin:8px 0 0}.game-title-row h1,.crumb{overflow-wrap:anywhere}
+.detail{columns:2;column-gap:18px;min-width:0;max-width:100%}.detail>section{break-inside:avoid;display:inline-block;width:100%;vertical-align:top;margin-bottom:18px}.detail .card{min-height:0;min-width:0;max-width:100%}.detail .card p{overflow-wrap:anywhere;word-break:normal}.detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal}.game-title-row>div{min-width:0;max-width:100%;overflow-wrap:anywhere}.game-title-row .muted{margin:8px 0 0}.game-title-row h1,.crumb{overflow-wrap:anywhere}
+.feature-strip{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px}.feature-chip{display:inline-flex;align-items:center;gap:7px;background:#1c2c45;border:1px solid #395476;border-radius:9px;padding:9px 12px;font-size:13px;color:#d6e5ff}.feature-chip .feature-glyph{font-size:18px;color:#91c5ff}.info-pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}.info-pairs .detail-field{margin:5px 0;padding:7px 0}.meta-source{font-size:12px;margin:8px 0 0}.technical-details summary{cursor:pointer;font-weight:600;color:#bfd2f1;padding:9px 0}.technical-details .detail-field{margin:9px 0}.detail .card{padding:20px}.detail .card h2{margin:0 0 14px}header nav form{margin:0}
 @media(max-width:760px){
- .detail{grid-template-columns:minmax(0,1fr)}
+ .detail{columns:1}
  .game-title-row{grid-template-columns:64px minmax(0,1fr);gap:12px;align-items:center}
  .game-title-row:not(:has(.game-ra-icon)){grid-template-columns:minmax(0,1fr)}
  .game-title-row .game-ra-icon{width:64px;height:64px}
  .game-title-row h1{font-size:clamp(19px,5.5vw,27px);line-height:1.18;letter-spacing:-.5px}
  .game-title-row .muted{font-size:12px;line-height:1.35}
+ .info-pairs{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+ .detail .card{padding:16px}
+ .detail .card h2{margin-bottom:10px}
+ .feature-strip{gap:6px;margin:9px 0 14px}
+ .feature-chip{font-size:11px;padding:7px 9px}
  .game-art-card{padding:18px 16px}
  .game-art-card h2{margin-bottom:12px}
  .game-cover{max-height:230px;max-width:min(100%,230px)}
@@ -411,13 +417,13 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     platform = db.get(Platform, item.platform_id)
     label = escape(name(item, platform.slug if platform else None))
     def detail(k, v):
-        return f"<p class='detail-field'><span class='label'>{escape(k)}</span><br>{escape(str(v if v is not None and v != '' else 'Not available'))}</p>"
-    info = (detail("Console", platform.name if platform else None)
-            + detail("Filename", item.filename) + detail("File format", item.extension.upper())
-            + detail("Size (GiB)", f"{item.size_bytes / 1024**3:.2f}")
-            + detail("RetroAchievements ID", item.ra_game_id)
-            + detail("RA hash status", item.ra_match_status)
-            + detail("Collection path", item.relative_path))
+        if v is None or v == "":
+            return ""
+        return f"<p class='detail-field'><span class='label'>{escape(k)}</span><br>{escape(str(v))}</p>"
+    technical = (detail("Filename", item.filename) +
+                 detail("File format", item.extension.upper()) +
+                 detail("Size (GiB)", f"{item.size_bytes / 1024**3:.2f}") +
+                 detail("Collection path", item.relative_path))
     from retrodb.artwork import game_metadata, art_location, serial_key
     meta = game_metadata(item.ra_game_id)
     serial = serial_key(item.filename) or serial_key(item.relative_path)
@@ -444,21 +450,47 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                    '<p class="muted" hidden>Cover art unavailable for this release.</p>')
     else:
         artwork = '<p class="muted">Cover art unavailable for this release.</p>'
-    release = (detail("Release date", meta.get("Released"))
-               + detail("Publisher", meta.get("Publisher"))
-               + detail("Developer", meta.get("Developer"))
-               + detail("Genre", meta.get("Genre")))
+    release = (detail("Released", meta.get("Released")) +
+               detail("Publisher", meta.get("Publisher")) +
+               detail("Developer", meta.get("Developer")) +
+               detail("Genre", meta.get("Genre")))
+    online = online_record(item)
+    flags = []
+    def badge(symbol, text):
+        flags.append(f'<span class="feature-chip"><span class="feature-glyph" aria-hidden="true">{symbol}</span>{escape(text)}</span>')
+    if item.ra_game_id and (item.ra_match_status or "").lower() == "matched":
+        badge("🏆", "RetroAchievements")
+    if online:
+        if str(online.get("historical_online", "")).upper() in ("YES", "TRUE", "SUPPORTED"):
+            badge("◎", "Original online play")
+        if str(online.get("xlink_kai", "")).upper() in ("YES", "TRUE", "SUPPORTED"):
+            badge("⇄", "XLink Kai listed")
+        players = str(online.get("max_players") or "").strip()
+        if players and players.lower() not in ("unknown", "n/a", "none"):
+            badge("♟", "Online players: " + players)
+    capabilities = ('<div class="feature-strip" aria-label="Known game features">' +
+                    "".join(flags) + '</div>') if flags else ""
+    meta_panel = ('<div class="info-pairs">' + release + '</div>') if release else '<p class="muted">No release metadata available yet.</p>'
+    online_panel = online_details(online) if online else ""
+    game_panel = (f'<section class="card"><h2>Game information</h2>{meta_panel}'
+                  '<p class="muted meta-source">Source: RetroAchievements · game-level metadata</p></section>')
+    collection_panel = (f'<section class="card"><h2>Your copy</h2>'
+                        f'{detail("Console", platform.name if platform else None)}'
+                        f'{detail("Disc ID", serial)}'
+                        f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
+    online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
+    ra_link = (f'<a href="https://retroachievements.org/game/{int(item.ra_game_id)}"'
+               ' target="_blank" rel="noopener noreferrer">View achievements on RetroAchievements ↗</a>'
+               if item.ra_game_id else "")
     body = f"""<div class="crumb"><a href="/">Consoles</a> /
 <a href="/library/{quote(platform.slug) if platform else ''}">{escape(platform.name if platform else 'Library')}</a> / {label}</div>
-<div class="game-title-row">{header_icon}<div><h1>{label}</h1><p class="muted">Library record and release information</p></div></div>
+<div class="game-title-row">{header_icon}<div><h1>{label}</h1>
+<p class="muted">{escape(platform.name if platform else 'Game library')}{' · ' + escape(serial) if serial else ''}</p></div></div>
+{capabilities}
 <div class="detail"><section class="card game-art-card"><h2>Cover art</h2><div class="game-art-grid">{artwork}</div></section>
-<section class="card"><h2>Game information</h2>{release}
-<p class="muted">These fields come from RetroAchievements and can describe the game generally, rather than your specific regional release.</p></section>
-<section class="card"><h2>Release and collection</h2>{info}</section>
-<section class="card"><h2>Achievements</h2>{detail("RA game title", item.ra_game_title)}
-{detail("RA game ID", item.ra_game_id)}</section>
-<section class="card"><h2>Online play</h2>{online_details(online_record(item))}</section>
-<section class="card"><h2>Co-op and player counts</h2><p class="muted">Verified player limits and accessories are not yet indexed. Online compatibility does not automatically mean co-op is supported.</p><p><a href="https://www.co-optimus.com/system/6/playstation-2.html" target="_blank" rel="noopener">Browse PS2 co-op listings ↗</a></p></section></div>"""
+{game_panel}{collection_panel}
+{f'<section class="card"><h2>Achievements</h2>{ra_link}</section>' if ra_link else ''}
+{online_section}</div>"""
     return page(name(item, platform.slug if platform else None), body, guest=is_guest(request))
 
 @router.get("/management", response_class=HTMLResponse)
