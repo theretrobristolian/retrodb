@@ -290,10 +290,25 @@ ok=any(r.get('state')=='clean-base-verified-ready-to-patch'
        and r.get('candidate_path')==r.get('collection_source') for r in ready)
 sys.exit(0 if ok else 1)
 PYCHECK
-  echo 'Only this game will be patched to a LOCAL output; RetroNAS remains read-only.'
-  read -rp "Type PATCH-$game_id to confirm: " confirm
-  [[ "$confirm" == "PATCH-$game_id" ]] || { echo 'Cancelled.'; return 0; }
-  step "2/2" "Apply selected patch and verify its RA hash" sudo bash "$HERE/retronas.sh" patch-apply --game-id "$game_id" || return 1
+  if sudo python3 - "$game_id" <<'PYEXIST'
+import json, sys
+from pathlib import Path
+try:
+    entries=json.loads(Path('/var/lib/retrodb/patches/patch-apply.json').read_text())
+    found=[e for e in entries if str(e.get('ra_game_id'))==sys.argv[1] and e.get('status')=='patched-and-verified'
+           and Path(e.get('output','')).is_file() and Path(e.get('cue','')).is_file()]
+    sys.exit(0 if len(found)==1 else 1)
+except (OSError, ValueError):
+    sys.exit(1)
+PYEXIST
+  then
+    echo '[OK] Existing verified local BIN/CUE available; skipping unnecessary patch repeat.'
+  else
+    echo 'Patch selected game locally; RetroNAS stays read-only until deployment confirmation.'
+    read -rp "Type PATCH-$game_id to confirm local patch: " confirm
+    [[ "$confirm" == "PATCH-$game_id" ]] || { echo 'Cancelled.'; return 0; }
+    step "2/2" "Apply selected patch and verify its RA hash" sudo bash "$HERE/retronas.sh" patch-apply --game-id "$game_id" || return 1
+  fi
   echo '[OK] Local patch RA-verified.'
   sudo python3 - "$game_id" <<'PYPLATFORM'
 import json,sys
