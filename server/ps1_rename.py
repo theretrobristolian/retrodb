@@ -21,7 +21,7 @@ def parse(args):
         # Restrict automatic updates to independently verified clean one-BIN records.
         if row["status"] not in ("RENAME_CANDIDATE", "VALID"):
             continue
-        if row.get("issues"):
+        if any(issue.strip() != "EXTENSION_CASE_NORMALIZATION" for issue in row.get("issues", "").split("|") if issue.strip()):
             continue
         if not row.get("internal_serial") or row["internal_serial"] != row.get("selected_serial"):
             continue
@@ -42,7 +42,8 @@ def parse(args):
             continue
         if disc_serial(oldbin) != row["internal_serial"]:
             continue
-        if (newcue != oldcue and newcue.exists()) or (newbin != oldbin and newbin.exists()):
+        if ((newcue != oldcue and newcue.exists() and not newcue.samefile(oldcue))
+                or (newbin != oldbin and newbin.exists() and not newbin.samefile(oldbin))):
             continue
         if any(str(p).casefold() in used for p in (newcue, newbin)):
             continue
