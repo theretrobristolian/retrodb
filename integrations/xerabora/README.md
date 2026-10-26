@@ -36,7 +36,7 @@ After installation, launch the menu with `xerabora` if its launcher was register
 |---|---|
 | **1 Switch player** | Select a previously configured RetroAchievements profile |
 | **2 Manage players** | Add/import profiles and manage credentials |
-| **3 Follow game log** | Watch achievements, connections and leaderboard events; Ctrl+C returns |
+| **3 Follow game log** | See the last hour of achievements, leaderboards and connections, then follow new events; Ctrl+C returns |
 | **4 Service controls** | Show status, start, stop or restart |
 | **5 Binary check/install** | Check the latest release; install only after confirmation |
 | **6 Update manager scripts** | Refresh community scripts separately from the xeRAbora binary |
@@ -71,7 +71,7 @@ systemctl cat xerabora.service
 
 ## Troubleshooting
 
-Run `bash integrations/xerabora/install.sh doctor` to inspect networking, service health, UDP listener and logs. Check the PS2's **OPL-RA → Triangle → RA: test PC connection** workflow. A listening port alone does not prove console connectivity. Watch live activity using menu option **3**.
+Run `bash integrations/xerabora/install.sh doctor` to inspect networking, service health, UDP listener and logs. Check the PS2's **OPL-RA → Triangle → RA: test PC connection** workflow. A listening port alone does not prove console connectivity. Menu option **3** scans the full log for events from the previous hour, shows a service/profile summary, then follows new gameplay events without HTTP polling or heartbeat noise. The full log remains unchanged.
 
 For service logs:
 
