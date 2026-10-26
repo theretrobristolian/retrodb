@@ -40,27 +40,27 @@ th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#
 .library-scroll thead th{position:sticky;top:0;z-index:2;box-shadow:0 1px #344760}
 .library-scroll table{min-width:0;table-layout:fixed}
 .library-scroll td[data-column="title"]{overflow-wrap:anywhere;word-break:normal;line-height:1.4}
-.library-scroll th[data-column="title"]{width:43%}
-.library-scroll th[data-column="disc"]{width:25%}
-.library-scroll th[data-column="id"]{width:13%}
-.library-scroll th[data-column="ra"]{width:14%}
-.library-scroll th[data-column="format"]{width:9%}
+.library-scroll th[data-column="title"]{width:47%}
+.library-scroll th[data-column="disc"]{width:31%}
+.library-scroll th[data-column="region"]{width:11%}
+.library-scroll th[data-column="ra"]{width:11%}
+
 .library-scroll td[data-column="disc"]{overflow-wrap:anywhere}
 .library-scroll .pill.serial{white-space:normal;overflow-wrap:anywhere;line-height:1.3}
-.ra-icon{display:inline-block;position:relative;font-size:19px;line-height:1;white-space:nowrap}
+.region-icon{font-size:19px;line-height:1;white-space:nowrap}.ra-icon{display:inline-block;position:relative;font-size:19px;line-height:1;white-space:nowrap}
 .ra-icon.yes{filter:sepia(1) saturate(3);color:#f5ca65}
 .ra-icon.no{filter:grayscale(1);opacity:.35}
 .ra-icon.no::after{content:"×";position:absolute;right:-4px;bottom:-7px;font-size:15px;font-weight:900;color:#e4e8f0;text-shadow:0 0 2px #10192d}
 @media(max-width:760px){
  .library-scroll table{width:100%;min-width:0;font-size:12px}
  .library-scroll th,.library-scroll td{padding:9px 4px}
- .library-scroll th[data-column="title"]{width:42%}
- .library-scroll th[data-column="disc"]{width:31%}
- .library-scroll th[data-column="id"]{width:13%}
- .library-scroll th[data-column="ra"]{width:14%}
- .library-scroll th[data-column="format"]{width:12%}
+ .library-scroll th[data-column="title"]{width:44%}
+ .library-scroll th[data-column="disc"]{width:30%}
+ .library-scroll th[data-column="region"]{width:13%}
+ .library-scroll th[data-column="ra"]{width:13%}
+
  .library-scroll .pill.serial{padding:3px 5px;font-size:11px}
- .library-scroll td[data-column="id"]{overflow-wrap:anywhere}
+ .library-scroll td[data-column="region"]{text-align:center}
  .library-scroll td[data-column="ra"],.library-scroll th[data-column="ra"]{text-align:center}
 }
 .library-scroll [hidden]{display:none}
@@ -164,6 +164,19 @@ SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED
 def disc_id(item: LibraryItem) -> str:
     match = SERIAL_RE.search(item.filename) or SERIAL_RE.search(item.relative_path)
     return f"{match.group(1).upper()}-{match.group(2)}{match.group(3)}" if match else ""
+
+def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
+    """Conservative PS1/PS2 disc-prefix region hints, not guaranteed disc origin."""
+    if platform_slug not in ("playstation", "playstation-2") or not serial:
+        return ("🌐", "Region unknown")
+    prefix = serial.split("-", 1)[0].upper()
+    if prefix in ("SLUS", "SCUS"):
+        return ("🇺🇸", "North America (disc prefix)")
+    if prefix in ("SLES", "SCES", "SCED"):
+        return ("🇪🇺", "Europe / PAL (disc prefix)")
+    if prefix in ("SLPS", "SLPM", "SCPS", "SCAJ"):
+        return ("🇯🇵", "Japan (disc prefix)")
+    return ("🌐", "Region unknown")
 
 GAMEDB_CACHE = Path("/var/cache/retrodb/providers/gamedb")
 
@@ -294,12 +307,13 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item)
+        region_flag, region_label = disc_region(disc, item_slug(item))
         badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
-<td data-column="id">{item.ra_game_id or '—'}</td>
+<td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
 <td data-column="ra"><span class="ra-icon {'yes' if supported else 'no'}" role="img" aria-label="{escape(badge,quote=True)}" title="{escape(badge,quote=True)}">🏆</span></td>
-<td data-column="format">{escape(item.extension.upper())}</td></tr>""")
+</tr>""")
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
     heading = escape(platform.name if platform else "All games")
@@ -320,14 +334,14 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <button class="btn" type="submit">Apply</button><a class="btn" href="{base}">Reset</a></form>
 <div class="column-picker"><span class="label">Columns</span>
 <label><input type="checkbox" data-toggle="disc" checked> Disc ID</label>
-<label><input type="checkbox" data-toggle="id" checked> RA ID</label>
+<label><input type="checkbox" data-toggle="region" checked> Region</label>
 <label><input type="checkbox" data-toggle="ra" checked> Achievements</label>
-<label><input type="checkbox" data-toggle="format"> Format</label></div>
+</div>
 <div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
 <div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">Disc ID</th>
-<th data-column="id">RA ID</th><th data-column="ra" title="RetroAchievements">RA</th><th data-column="format">Format</th></tr></thead>
+<th data-column="region">Region</th><th data-column="ra" title="RetroAchievements">RA</th></tr></thead>
 <tbody>{''.join(rows) or '<tr><td colspan="5">No games match the current filters.</td></tr>'}</tbody></table></div>
-<p class="muted">Gold 🏆 means a verified RA disc hash and RA game ID; muted crossed trophy means no verified match in the current audit (not necessarily unsupported). Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
+<p class="muted">Region flags are inferred from recognised PS1/PS2 disc prefixes; unknown prefixes show 🌐. Gold 🏆 means a verified RA disc hash and RA game ID; muted crossed trophy means no verified match in the current audit (not necessarily unsupported). Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
