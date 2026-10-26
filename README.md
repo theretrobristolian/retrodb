@@ -1,3 +1,13 @@
+## Desktop and game-detail UI refinement (26 October 2026)
+
+Desktop header styling now follows the compact mobile branding more closely (tighter navigation spacing, modest RetroDB logo). Game detail panels use two compact content-height columns on desktop, and one full-width column on mobile, reducing tall blank stretches between uneven cards. The game title subline shows console/disc identifier instead of a redundant generic description.
+
+Game detail cards now prioritise a single centralised **Cover art**, consolidated **Game information** from existing RetroAchievements metadata, **Your copy** with an expandable file/path section, optional **Achievements** link and an optional **Online compatibility** card when there is a corresponding PS2 compatibility record. Repeated RA identifiers and verbose unfinished co-op/metadata placeholder cards were removed.
+
+A compact **game features** strip has been introduced, inspired by PS1/PS2 packaging: trophy for a verified RA match, historical online play where explicitly reported, XLink Kai if reported, and online player count where a value is present. Crucially, **these are evidence-based badges, not guesses**. Offline player count, couch co-op, peripherals (mouse, keyboard, GunCon), and age ratings are not in the current reliable per-release dataset, so they are deliberately not labelled or invented yet. Those features can be added once release-level metadata ingestion exists.
+
+Deploy with `cd ~/retrodb && git pull --ff-only && sudo bash server/deploy.sh`. Source changes and regression checks are committed; browser layout has not yet been validated on the live VM.
+
 ## OPL artwork archive import and streamlined game cover (October 2026)
 
 Game details display **exactly one centred cover** beneath the heading **Cover art**: RetroAchievements artwork is preferred; if the image fails, a PSBBN serial-matched image is tried instead. No duplicate side-by-side covers or per-image captions.
