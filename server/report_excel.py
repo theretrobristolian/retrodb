@@ -265,10 +265,38 @@ def main(source,destination,preparation=None,ps1_audit=None):
                     'internal_serial', 'selected_serial', 'homebrew',
                     'file_references', 'file_count', 'proposed_cue', 'proposed_bin',
                     'ra_compatibility', 'issues']
-        sheets.append(('PS1 File Audit', [ps1_cols] +
-                       [[r.get(k, '') for k in ps1_keys] for r in ps1_rows]))
-        all_actions.extend(ps1_action_row(r) for r in ps1_rows
-                           if r.get('status') != 'VALID')
+        # CUE is the RA entry point. Join using the original relative path,
+        # never a proposed destination or a guessed title.
+        ra_by_path = {}
+        for entry in entries:
+            if entry.get('platform') != 'Sony PlayStation':
+                continue
+            path = (entry.get('path') or '').replace('\\\\', '/')
+            key = path.casefold()
+            if key and (key.endswith('.cue') or key.endswith('.chd')):
+                ra_by_path[key] = entry
+        ps1_extra = ['RA compatible', 'RA game ID', 'RA game title', 'RA hash', 'RA match status']
+        ps1_rows_out = []
+        for r in ps1_rows:
+            cue = r.get('relative_cue', '').replace('\\\\', '/')
+            matches = [entry for key, entry in ra_by_path.items()
+                       if cue and (key.endswith('/' + cue.casefold())
+                                   or key == cue.casefold())]
+            match = matches[0] if len(matches) == 1 else {}
+            ra_status = match.get('ra_compatible') or match.get('ra_status') or match.get('local_ra_status') or ''
+            if not ra_status and match:
+                ra_status = match.get('ra_match_status', '')
+            columns = [ra_status or ('AMBIGUOUS' if len(matches) > 1 else 'NOT_MATCHED'),
+                       match.get('ra_game_id', ''), match.get('ra_game_title', ''),
+                       match.get('local_ra_hash', ''), match.get('ra_match_status', '')]
+            ps1_rows_out.append([r.get(k, '') for k in ps1_keys] + columns)
+        sheets.append(('PS1 File Audit', [ps1_cols + ps1_extra] + ps1_rows_out))
+        # Rename suggestions belong on the file audit, not the urgent Action sheet.
+        # Deduplicate orphan BIN + broken CUE cases when both refer to same disc.
+        for r in ps1_rows:
+            if r.get('status') not in ('BROKEN', 'REVIEW', 'WARNING'):
+                continue
+            all_actions.append(ps1_action_row(r))
         print(f'[INFO] PS1 file audit: {len(ps1_rows)} disc/file records integrated.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
