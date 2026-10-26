@@ -262,6 +262,35 @@ INFO
 PILOT_ROOT=/mnt/retrodb-retronas-pilot-rw
 PILOT_CSV="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
 OPL_JOURNAL_DIR="$HOME/retrodb-exports/opl-rename-journals"
+ps1_rename_all() {
+  local csv="$HOME/retrodb-exports/RetroDB-PS1-Audit.csv"
+  local journal_dir="$HOME/retrodb-exports/ps1-rename-journals"
+  local journal source result=0 answer
+  [[ -r "$csv" ]] || { echo 'Export reports first to generate a current PS1 audit.'; return 1; }
+  mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
+  mkdir -p -m 0700 "$journal_dir" || return 1
+  if find "$journal_dir" -maxdepth 1 -name '*.json' -type f | grep -q .; then
+    echo '[STOP] Existing PS1 rename journal(s) found. Inspect/recover before a new write run.'
+    return 1
+  fi
+  python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
+  echo '[IMPORTANT] This is an experimental PS1 renamer. Review the proposals before proceeding.'
+  read -rp 'Type RENAMEPS1 to apply paired BIN/CUE renames: ' answer
+  [[ "$answer" == RENAMEPS1 ]] || { echo 'Cancelled'; return 0; }
+  source="$(findmnt -n -o SOURCE --target "$MOUNT")"
+  [[ "$source" == //* ]] || { echo "Unexpected CIFS source: $source"; return 1; }
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo 'Temporary writable mount already active; refusing to proceed.'; return 1
+  fi
+  sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  journal="$journal_dir/ps1-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+  python3 "$HERE/ps1_rename.py" apply --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
+  sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active!'; return 1; }
+  echo "PS1 journal: $journal"
+  [[ "$result" -eq 0 ]] || echo '[WARNING] Incomplete operation: inspect journal before any rerun.'
+  return "$result"
+}
 opl_update_all() {
   local source answer result=0 journal
   [[ -r "$PILOT_CSV" ]] || { echo 'Generate a current rename CSV with option 4 first.'; return 1; }
@@ -582,7 +611,7 @@ menu() {
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
-          1) export_csv; echo '[INFO] Open the PS1 File Audit and Action Required Excel sheets. PS1 write execution is not yet implemented.' ;;
+          1) ps1_rename_all ;;
           2) run opl_update_all ;;
           *) echo 'Cancelled' ;;
         esac
