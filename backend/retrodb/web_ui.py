@@ -27,7 +27,7 @@ CSS = """
 header{position:sticky;top:0;z-index:20;border-bottom:1px solid #263047;background:#11192c;padding:18px max(24px,calc((100vw - 1200px)/2))}
 header .bar{display:flex;gap:25px;align-items:center;flex-wrap:wrap}
 .brand{font-size:24px;font-weight:800;letter-spacing:-1px;color:#f6f8ff}
-nav{display:flex;flex-wrap:wrap;gap:12px 18px;min-width:0;max-width:100%;color:#afc0da;font-size:14px}nav a,nav button{overflow-wrap:normal}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
+.mobile-nav,.mobile-actions{display:none}nav{display:flex;flex-wrap:wrap;gap:12px 18px;min-width:0;max-width:100%;color:#afc0da;font-size:14px}nav a,nav button{overflow-wrap:normal}main{max-width:1200px;margin:auto;padding:38px 24px 70px}
 h1{font-size:34px;letter-spacing:-1.3px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 16px}
 p{line-height:1.6}.muted{color:#9daeca}.eyebrow{color:#7caeff;text-transform:uppercase;font-size:12px;font-weight:700;letter-spacing:1.7px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
@@ -89,19 +89,25 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
  .game-art-card{padding:18px 16px}
  .game-art-card h2{margin-bottom:12px}
  .game-cover{max-height:230px;max-width:min(100%,230px)}
- main{padding:24px 14px;min-width:0;max-width:100%;overflow-x:clip}
+ main{padding:14px 14px calc(92px + env(safe-area-inset-bottom));min-width:0;max-width:100%;overflow-x:clip}
+ h1{font-size:27px;letter-spacing:-.7px}
+ h2{font-size:19px}
  th,td{padding:9px 6px}
- header{padding:12px 14px}
- header .bar{display:flex;flex-direction:column;align-items:stretch;gap:12px;min-width:0}
- header .brand{display:block;align-self:flex-start}
- header nav{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;width:100%;font-size:13px}
- header nav a,header nav form{min-width:0;width:100%;margin:0}
- header nav a,header nav form button{display:flex;justify-content:center;align-items:center;text-align:center;min-height:42px;width:100%;padding:8px 6px;border:1px solid #293952!important;border-radius:9px;background:#19263e!important;color:#c4d3ee!important;line-height:1.3;white-space:normal;overflow-wrap:anywhere;font:inherit}
- header nav a:active,header nav form button:active{background:#2b4268!important}
+ header{position:relative;padding:10px 14px;border-bottom:1px solid #263047}
+ header .bar{display:flex;flex-direction:row;justify-content:space-between;align-items:center;gap:8px;min-width:0}
+ header .brand{font-size:20px;letter-spacing:-.6px;white-space:nowrap}
+ header nav{display:none}
+ .mobile-actions{display:flex;align-items:center;gap:10px;font-size:12px;color:#afc0da}
+ .mobile-actions form{margin:0}
+ .mobile-actions button{font:inherit;color:#afc0da;background:transparent;border:0;padding:8px 3px;cursor:pointer}
+ .mobile-nav{display:grid;position:fixed;z-index:40;bottom:0;left:0;right:0;width:100%;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;align-items:stretch;padding:7px 5px calc(7px + env(safe-area-inset-bottom));border-top:1px solid #2a3851;background:#10192df5;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+ .mobile-nav a{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;padding:8px 2px;border-radius:10px;color:#afc0da;min-width:0;font-size:10px;line-height:1.15;overflow-wrap:anywhere}
+ .mobile-nav a .nav-icon{font-size:19px;line-height:1}
+ .mobile-nav a[aria-current="page"]{background:#294671;color:#fff}
+ .crumb{font-size:13px}
 }
-@media(min-width:520px) and (max-width:760px){
- header nav{grid-template-columns:repeat(3,minmax(0,1fr))}
-}
+@media(max-width:360px){.mobile-nav a{font-size:9px}.mobile-nav a .nav-icon{font-size:17px}}
+
 """
 
 def is_guest(request: Request) -> bool:
@@ -114,6 +120,19 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
     private_nav = '' if guest else '<a href="/profile">My profile</a><a href="/management">Management</a><a href="/online-services">Online services</a>'
     logout_label = "Leave guest view" if guest else "Sign out"
     heading = escape(title)
+    mobile_links = [
+        ("/", "⌂", "Consoles"),
+        ("/library", "▤", "Games"),
+        ("/profile", "♙", "Profile"),
+        ("/online-services", "◉", "Online"),
+        ("/management", "⚙", "Manage"),
+    ]
+    if guest:
+        mobile_links = [item for item in mobile_links if item[0] not in ("/profile", "/online-services", "/management")]
+    mobile_nav = ''.join(
+        f'<a href="{path}" data-nav="{path}"><span class="nav-icon" aria-hidden="true">{icon}</span><span>{label}</span></a>'
+        for path, icon, label in mobile_links
+    )
     return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>{heading} · RetroDB</title>
 <meta name="theme-color" content="#10192d">
@@ -124,10 +143,10 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
-<style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a>
+<style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a><div class="mobile-actions"><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit">{logout_label}</button></form></div>
 <nav><a href="/">Consoles</a><a href="/library">All games</a>{private_nav}
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
-<main>{body}</main></body></html>""")
+<main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/library"&&(p.startsWith("/library")||p.startsWith("/game/")))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
 
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
