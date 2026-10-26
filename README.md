@@ -1,3 +1,5 @@
+> **Current instructions:** See [RetroDB current status](docs/CURRENT-STATUS.md) before following older dated notes in this README. Some sections below are historical and may describe superseded procedures. The maintained branch is **main**; xeRAbora's upstream v1.0.0 is **not** a RetroDB release tag.
+
 ## Library region flags and verified xeRAbora v1.0.0 PS2 ELF (26 October 2026)
 
 The PS1/PS2 library view now shows **Game · Disc ID · Region · RetroAchievements**. The previously displayed RA game ID and file format columns were removed from the main list (the RA ID is still used internally). Region uses a conservative *serial-prefix hint*, not verified release metadata: 🇺🇸 SLUS/SCUS; 🇪🇺 SLES/SCES/SCED; 🇯🇵 SLPS/SLPM/SCPS; 🌐 other or missing prefixes. The flag is the size of the trophy icon. For non-PS1/PS2 platforms the region is unknown. The game-details page still retains technical collection details behind an expandable panel.
