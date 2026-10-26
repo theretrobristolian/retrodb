@@ -2,6 +2,12 @@
 
 Updated: 26 October 2026. **This page takes precedence over dated development notes elsewhere in the repository.** Deployment-specific configuration on the actual Debian VM must still be checked before changing a running service.
 
+## Patch source checksum caching (26 October 2026)
+
+Patch-preparation Stage 7 now persists calculated MD5, CRC32 and RetroAchievements source hashes in `/var/lib/retrodb/patches/source-digest-cache.json` (under the configured patch workspace). Previously digests were cached only within a single run, so each audit could reread multiple gigabytes from RetroNAS. Cache entries are reused only while the path, file size, modification time, change time and file identity agree; RA hashes also include the hasher executable signature, and PS1 CUE hashes include every referenced track's stat. The first audit after this update will still read uncached files; **later audits should be significantly quicker** if files are unchanged. This is a metadata-based cache, not a cryptographic proof that an adversarially replaced file is unchanged. For an independent fresh verification, remove the digest cache file and rerun a read-only audit.
+
+Stage 7's terminal output reports **digest cache hits and new reads**, and distinguishes patch sources lacking an expected checksum from actual checksum mismatches. Lack of checksum does not make a patch safe to apply; the normal reviewed/verified patching constraints remain in place. This change does not modify the collection, patches, or ROM images. Runtime timing and cache hits have not yet been verified on the deployed VM.
+
 ## Supported and working
 
 - Debian 13 VM, PostgreSQL, systemd RetroDB API and responsive web interface.
