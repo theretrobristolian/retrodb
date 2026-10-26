@@ -283,12 +283,15 @@ def main(source,destination,preparation=None,ps1_audit=None):
                        if cue and (key.endswith('/' + cue.casefold())
                                    or key == cue.casefold())]
             match = matches[0] if len(matches) == 1 else {}
-            ra_status = match.get('ra_compatible') or match.get('ra_status') or match.get('local_ra_status') or ''
-            if not ra_status and match:
-                ra_status = match.get('ra_match_status', '')
-            columns = [ra_status or ('AMBIGUOUS' if len(matches) > 1 else 'NOT_MATCHED'),
-                       match.get('ra_game_id', ''), match.get('ra_game_title', ''),
-                       match.get('local_ra_hash', ''), match.get('ra_match_status', '')]
+            raw_status = str(match.get('status', '')).lower()
+            ra_status = ('YES' if raw_status == 'matched' else
+                         'NO' if raw_status == 'unmatched' else
+                         'ERROR' if raw_status in ('error', 'failed') else
+                         'NOT_CHECKED' if not match else
+                         raw_status.upper())
+            columns = [ra_status, match.get('ra_game_id', ''),
+                       match.get('ra_game_title', ''),
+                       match.get('local_ra_hash', ''), match.get('status', '')]
             ps1_rows_out.append([r.get(k, '') for k in ps1_keys] + columns)
         sheets.append(('PS1 File Audit', [ps1_cols + ps1_extra] + ps1_rows_out))
         # Rename suggestions belong on the file audit, not the urgent Action sheet.
