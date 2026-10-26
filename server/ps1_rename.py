@@ -66,7 +66,7 @@ def parse(args):
                         original_cue_hex=raw.hex(), encoding=encoding,
                         serial=row["internal_serial"],
                         state="pending"))
-    return ops
+    return ops[:args.limit] if args.limit else ops
 
 def sync(journal, operations):
     temp = journal.with_suffix(".json.tmp")
@@ -159,6 +159,7 @@ def main():
     p.add_argument("--csv", type=Path)
     p.add_argument("--root", type=Path)
     p.add_argument("--journal", type=Path)
+    p.add_argument("--limit", type=int, choices=range(1, 4), metavar="{1,2,3}", help="Pilot limit: one to three pairs")
     args = p.parse_args()
     if args.mode == "rollback":
         if not args.journal:
