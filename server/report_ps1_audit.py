@@ -153,7 +153,12 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
         catalogue_title = gamedb.get(selected_serial, "")
         title = cleaned_ps1_title(catalogue_title) if catalogue_title else cleaned_ps1_title(cue.stem)
         title = re.sub(r"\s*\((?:Rev(?:ision)?\s*\d+(?:\.\d+)?|v\d+(?:\.\d+)?)\)", "", title, flags=re.I).strip()
-        # Preserve disc numbering already evidenced by this individual file even\n        # if GameDB supplies the same plain title for every disc.\n        file_disc = DISC_SUFFIX.search(cue.stem)\n        if file_disc and not DISC_SUFFIX.search(title):\n            title += " " + file_disc.group(0).strip()\n        if selected_serial in MULTIDISC_IDS and not DISC_SUFFIX.search(title):
+        # Preserve disc numbering already evidenced by this individual file even
+        # if GameDB supplies the same plain title for every disc.
+        file_disc = DISC_SUFFIX.search(cue.stem)
+        if file_disc and not DISC_SUFFIX.search(title):
+            title += " " + file_disc.group(0).strip()
+        if selected_serial in MULTIDISC_IDS and not DISC_SUFFIX.search(title):
             title += f" (Disc {MULTIDISC_IDS[selected_serial]})"
         if not title:
             issues.append("TITLE_MISSING")
