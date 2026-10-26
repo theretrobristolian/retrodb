@@ -108,28 +108,37 @@ def main():
         raise ValueError("An OLD_ backup already exists: refusing overwrite/redeployment")
     if args.journal.exists():
         raise ValueError("Journal already exists")
+    # A PS1 patch may change the boot structure. Keep its known-good CUE/BIN
+    # pair intact: changing either basename caused RAHasher to fail. The NAS
+    # original is retained under OLD_; the patched CUE is published as-is.
+    target_cue = active_cue.parent / patched_cue.name
+    target_bin = active_cue.parent / patched_bin.name
+    if target_cue == active_cue or target_bin == active_bin:
+        raise ValueError("Patched filename collides with original; refusing")
+    if target_cue.exists() or target_bin.exists():
+        raise ValueError("Patched destination already exists; refusing overwrite")
+    if not target_cue.parent.samefile(active_cue.parent):
+        raise ValueError("Patched destination must share original directory")
     token = uuid.uuid4().hex
     stage_dir = active_cue.parent / ("retrodb-patch-stage-" + token)
     stage_dir.mkdir(mode=0o700)
-    stage_bin = stage_dir / active_bin.name
-    stage_cue = stage_dir / active_cue.name
-    # Keep the exact live BIN filename in the temporary CUE. The RAHasher
-    # uses disc-file identity while locating the PlayStation executable;
-    # randomised/hidden temporary BIN names can make it reject a valid disc.
-    def rewrite_cue(new_bin_name):
-        _, text, encoding, match = cue_bin(patched_cue)
-        updated = text[:match.start()] + match.group(1) + '"' + new_bin_name + '"' + match.group(4) + text[match.end():]
-        return updated.encode(encoding)
+    stage_bin, stage_cue = stage_dir / patched_bin.name, stage_dir / patched_cue.name
     record.update(source=str(active_cue), source_bin=str(active_bin),
                   backup=str(old_cue), backup_bin=str(old_bin),
+                  destination=str(target_cue), destination_bin=str(target_bin),
                   expected_ra_hash=expected, state="staging")
     save(args.journal, record)
-    switched_bin = switched_cue = False
+    original_moved = False
+    published = False
     try:
         shutil.copyfile(patched_bin, stage_bin)
-        stage_cue.write_bytes(rewrite_cue(active_bin.name))
+        shutil.copyfile(patched_cue, stage_cue)
+        record["state"] = "verifying-staged-copy"
+        save(args.journal, record)
+        if digest(stage_bin) != digest(patched_bin) or digest(stage_cue) != digest(patched_cue):
+            raise ValueError("Staged NAS copy failed SHA256 verification")
         if hash_file(args.hasher, 12, stage_cue) != expected:
-            raise ValueError("Staged NAS BIN/CUE RA hash mismatch")
+            raise ValueError("Staged NAS pair failed RAHasher; originals untouched")
         record["state"] = "creating-backups"
         save(args.journal, record)
         shutil.copy2(active_bin, old_bin)
@@ -138,37 +147,41 @@ def main():
             raise ValueError("OLD_ BIN/CUE SHA256 verification failed")
         record["state"] = "backups-verified"
         save(args.journal, record)
-        record["state"] = "switching-pair"
+        # Publish exact verified names; no CUE rewrite and no partial CUE
+        # pointing at an unverified/missing BIN.
+        os.replace(stage_bin, target_bin)
+        os.replace(stage_cue, target_cue)
+        published = True
+        record["state"] = "verifying-published-pair"
         save(args.journal, record)
-        os.replace(stage_bin, active_bin)
-        switched_bin = True
-        os.replace(stage_cue, active_cue)
-        switched_cue = True
-        record["state"] = "verifying-active-pair"
+        if hash_file(args.hasher, 12, target_cue) != expected:
+            raise ValueError("Published NAS pair failed RAHasher")
+        record["state"] = "retiring-original"
         save(args.journal, record)
-        if hash_file(args.hasher, 12, active_cue) != expected:
-            raise ValueError("Final active CUE/BIN RA hash mismatch")
+        # Backups already verified. Move original pair out of scanner's
+        # active filenames, retaining the OLD_ copies on NAS.
+        active_cue.unlink()
+        active_bin.unlink()
+        original_moved = True
         record.update(state="verified-on-retronas", actual_ra_hash=expected)
         save(args.journal, record)
-        print("[OK] RA verified on RetroNAS:", active_cue)
-        print("[SAFE] Original BIN/CUE retained as OLD_ backups")
+        print("[OK] Patched game RA-verified on RetroNAS:", target_cue)
+        print("[SAFE] Original BIN/CUE preserved as OLD_ backups")
     except Exception as exc:
         record["error"] = str(exc)
-        if switched_bin or switched_cue:
-            # Keep OLD_ backups, restore active filenames from verified backup.
-            try:
-                for original, backup in ((active_bin, old_bin), (active_cue, old_cue)):
-                    temp = original.with_name(".retrodb-restore-" + uuid.uuid4().hex)
-                    shutil.copyfile(backup, temp)
-                    if digest(temp) != digest(backup):
-                        raise ValueError("Restoration SHA256 check failed")
-                    os.replace(temp, original)
-                record["state"] = "restored-from-old"
-            except Exception as restore_exc:
-                record["state"] = "MANUAL-RECOVERY-REQUIRED"
-                record["restore_error"] = str(restore_exc)
-        else:
-            record["state"] = "failed-before-switch"
+        try:
+            if not active_bin.exists() and old_bin.exists():
+                shutil.copy2(old_bin, active_bin)
+            if not active_cue.exists() and old_cue.exists():
+                shutil.copy2(old_cue, active_cue)
+            if (target_cue.exists() and not original_moved):
+                target_cue.unlink()
+            if (target_bin.exists() and not original_moved):
+                target_bin.unlink()
+            record["state"] = "failed-original-preserved"
+        except Exception as restore_exc:
+            record["state"] = "MANUAL-RECOVERY-REQUIRED"
+            record["restore_error"] = str(restore_exc)
         save(args.journal, record)
         raise
     finally:
