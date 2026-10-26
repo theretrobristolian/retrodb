@@ -432,7 +432,7 @@ def _current_xdelta(workspace: Path, game_id: str, title: str) -> Path:
     return patches[0]
 
 
-def apply_verified_patches(workspace: Path, hasher: Path) -> PatchApplySummary:
+def apply_verified_patches(workspace: Path, hasher: Path, game_id_filter: str = "") -> PatchApplySummary:
     prepare_path = workspace / "patch-prepare.json"
     plan_path = workspace / "patch-plan.json"
     try:
@@ -441,7 +441,8 @@ def apply_verified_patches(workspace: Path, hasher: Path) -> PatchApplySummary:
     except (OSError, ValueError) as exc:
         raise PatchError("Cannot read patch plan/preparation; run patch-plan and patch-prepare first") from exc
     plan_by_title = {entry.get("title", ""): entry for entry in plan}
-    ready = [entry for entry in prepared if entry.get("state") == "clean-base-verified-ready-to-patch"]
+    ready = [entry for entry in prepared if entry.get("state") == "clean-base-verified-ready-to-patch"
+             and (not game_id_filter or str(plan_by_title.get(entry.get("title", ""), {}).get("ra_game_id", "")) == game_id_filter)]
     verified = failed = 0
     results = []
     console_ids = {"Sony PlayStation": 12, "Sony PlayStation 2": 21}
