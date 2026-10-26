@@ -105,17 +105,30 @@ xr_draw_footer() {
 }
 xr_pause() { local unused; read -rp 'Press Enter to return to the menu...' unused || true; }
 xr_follow_log() {
-  local log pid
+  local log
   if [[ -s "$HOME/.config/xerabora-profiles/active" ]]; then
     log="$HOME/.config/xerabora-profiles/$(cat "$HOME/.config/xerabora-profiles/active")/xerabora/xerabora.log"
   else
     log="$HOME/.config/xerabora/xerabora.log"
   fi
   [[ -f "$log" ]] || { echo "No log file yet: $log"; return 0; }
-  printf 'Monitoring: %s\nPress Ctrl+C to stop and return to the menu.\n\n' "$log"
-  tail -n 30 -F -- "$log" &
-  pid=$!
-  trap 'kill "$pid" 2>/dev/null || true' INT
-  wait "$pid" 2>/dev/null || true
-  trap - INT
+  printf 'Relevant gameplay events: %s\n' "$log"
+  printf 'Showing achievements, games, leaderboards, connections and warnings.\n'
+  printf 'Full log stays on disk. Ctrl+C returns to the menu.\n\n'
+  # tail -F follows log rotation; awk filters only presentation, never changes the log.
+  # Keep next-line achievement descriptions, but suppress routine HTTP, heartbeats,
+  # periodic snapshot stats and protocol chatter.
+  tail -n 80 -F -- "$log" | awk '
+    BEGIN { IGNORECASE=1; context=0 }
+    {
+      line=tolower($0)
+      if (line ~ /http (get|post|put|delete)|console heartbeat:| snapshots[[:space:]]*\\|| rx fifo|badge chunks|^ *$/) next
+      if (line ~ /achievement unlocked:|achievements:|leaderboard|console (found|connected|disconnected|lost|acknowledged)|game (found|detected|identified|loaded|unsupported)|unsupported|cannot unlock|pointer chain|failed|error|warning|warn|timeout|timed out|unauthorized|authentication|login|hash|no achievements|wrong dump|server stopped|server started|connection refused|first complete snapshot/) {
+        print; fflush()
+        context=(line ~ /achievement unlocked:/ ? 2 : 0)
+      } else if (context > 0) {
+        print; fflush(); context--
+      }
+    }
+  '
 }
