@@ -26,6 +26,24 @@ def serial_from_name(name: str) -> str:
     return raw[:4] + "-" + raw[4:]
 
 
+# Explicitly reviewed disc labels; never infer disc order by filename sorting.
+MULTIDISC_IDS = {
+    "SLUS-00594": 1, "SLUS-00776": 2,  # Metal Gear Solid
+    "SLUS-00544": 1, "SLUS-00556": 2,  # G-Police
+    "SLUS-00710": 1, "SLUS-00731": 2,  # Abe's Exoddus
+}
+
+
+def cleaned_ps1_title(stem: str) -> str:
+    """Remove an ID and surrounding punctuation, including malformed brackets."""
+    title = SERIAL.sub("", stem)
+    # Removing the serial may leave empty or mismatched delimiters.
+    title = re.sub(r"\[\s*\]|\{\s*\}|\(\s*\)", " ", title)
+    title = title.rstrip(" ._-[]{}()")
+    title = BAD_CHARS.sub(" ", title)
+    return " ".join(title.split())
+
+
 def read_cue(path: Path) -> tuple[list[str], list[str]]:
     errors = []
     try:
@@ -126,10 +144,9 @@ def plan(root: Path) -> list[dict[str, str]]:
         is_homebrew = bool(re.search(r"240p.?test.?suite", cue.stem, re.I))
         if not selected_serial and not is_homebrew:
             issues.append("ID_MISSING")
-        title = BRACKET_ID.sub("", cue.stem)
-        title = SERIAL.sub("", title).strip(" ._-")
-        title = BAD_CHARS.sub(" ", title)
-        title = " ".join(title.split())
+        title = cleaned_ps1_title(cue.stem)
+        if selected_serial in MULTIDISC_IDS and not DISC_SUFFIX.search(title):
+            title += f" (Disc {MULTIDISC_IDS[selected_serial]})"
         if not title:
             issues.append("TITLE_MISSING")
         proposed = f"{title} [{selected_serial}]" if title and selected_serial else (title if is_homebrew else "")
