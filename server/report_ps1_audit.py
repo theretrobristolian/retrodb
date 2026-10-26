@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import csv
 import re
+import sys
 from collections import Counter
 from pathlib import Path
 
@@ -15,6 +16,10 @@ CUE_FILE = re.compile(r'^\s*FILE\s+(?:"([^"]+)"|(\S+))\s+(BINARY|MOTOROLA|WAVE|A
 SERIAL = re.compile(r'(?<![A-Z0-9])((?:SCES|SCUS|SLES|SLUS|SLPS|SLPM|SCPS|SIPS|SCED|SLED|PAPX|PCPX|PBPX|SCZS)[-_ .]?[0-9]{3}[-_ .]?[0-9]{2})(?![0-9])', re.I)
 BRACKET_ID = re.compile(r'\s*\[([A-Z]{4}[-_ .]?[0-9]{3}[-_ .]?[0-9]{2})\]', re.I)
 DISC_SUFFIX = re.compile(r'\s*\((?:Disc|Disk|CD)\s*\d+\)', re.I)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
+from retrodb.providers.gamedb import load as load_gamedb
+
+GAMEDB_CACHE = Path("/var/cache/retrodb/providers/gamedb")
 BAD_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
@@ -115,9 +120,10 @@ def disc_serial(binfile: Path) -> str:
     return ""
 
 
-def plan(root: Path) -> list[dict[str, str]]:
+def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str]]:
     """Generate a non-mutating, disc-level audit and conservative rename proposal."""
     rows = []
+    gamedb = gamedb or {}
     referenced: set[Path] = set()
     cues = sorted((p for p in root.rglob("*") if p.suffix.lower() == ".cue" and p.is_file() and not p.is_symlink()), key=lambda p: str(p).casefold())
     for cue in cues:
@@ -144,7 +150,8 @@ def plan(root: Path) -> list[dict[str, str]]:
         is_homebrew = bool(re.search(r"240p.?test.?suite", cue.stem, re.I))
         if not selected_serial and not is_homebrew:
             issues.append("ID_MISSING")
-        title = cleaned_ps1_title(cue.stem)
+        catalogue_title = gamedb.get(selected_serial, "")
+        title = cleaned_ps1_title(catalogue_title) if catalogue_title else cleaned_ps1_title(cue.stem)
         if selected_serial in MULTIDISC_IDS and not DISC_SUFFIX.search(title):
             title += f" (Disc {MULTIDISC_IDS[selected_serial]})"
         if not title:
@@ -172,10 +179,12 @@ def plan(root: Path) -> list[dict[str, str]]:
         status = "BROKEN" if broken else "REVIEW" if any(x in blockers for x in issues) else "WARNING" if issues else "VALID"
         if status in ("VALID", "WARNING") and all(x == "EXTENSION_CASE_NORMALIZATION" for x in issues) and (cue.name != (dest_cue.name if dest_cue else "") or (paths and paths[0].name != (dest_bin.name if dest_bin else ""))):
             status = "RENAME_CANDIDATE"
+        if status == "VALID" and dest_cue and dest_bin and paths and (dest_cue != cue or dest_bin != paths[0]):
+            status = "RENAME_CANDIDATE"
         rows.append(dict(status=status, relative_cue=cue.relative_to(root).as_posix(),
                          relative_bin=paths[0].relative_to(root).as_posix() if len(paths) == 1 else "",
                          filename_serial=filename_serial, internal_serial=internal_serial,
-                         selected_serial=selected_serial, homebrew="YES" if is_homebrew else "NO",
+                         selected_serial=selected_serial, gamedb_title=catalogue_title, homebrew="YES" if is_homebrew else "NO",
                          file_references=" | ".join(refs), file_count=str(len(set(refs))),
                          proposed_cue=dest_cue.relative_to(root).as_posix() if dest_cue else "",
                          proposed_bin=dest_bin.relative_to(root).as_posix() if dest_bin else "",
@@ -261,9 +270,15 @@ def main() -> None:
         parser.error("--root must be a directory")
     if output.is_relative_to(root):
         parser.error("CSV output must be outside the PlayStation 1 ROM directory")
-    rows = plan(root)
+    try:
+        gamedb = load_gamedb(GAMEDB_CACHE, "playstation")
+    except (ValueError, OSError) as exc:
+        parser.error(f"GameDB PS1 cache invalid: {exc}")
+    if not gamedb:
+        parser.error("GameDB PS1 catalogue missing. Run RetroDB Audit games to synchronise it first.")
+    rows = plan(root, gamedb)
     output.parent.mkdir(parents=True, exist_ok=True)
-    fields = ["status", "relative_cue", "relative_bin", "filename_serial", "internal_serial", "selected_serial", "homebrew", "file_references", "file_count", "proposed_cue", "proposed_bin", "ra_compatibility", "issues"]
+    fields = ["status", "relative_cue", "relative_bin", "filename_serial", "internal_serial", "selected_serial", "gamedb_title", "homebrew", "file_references", "file_count", "proposed_cue", "proposed_bin", "ra_compatibility", "issues"]
     with output.open("w", newline="", encoding="utf-8-sig") as out:
         writer = csv.DictWriter(out, fieldnames=fields)
         writer.writeheader()
