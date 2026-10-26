@@ -108,18 +108,17 @@ pause() { read -rp 'Press Enter to return...' ignored || true; }
 # Resolve the actual CIFS filesystem, never the enclosing systemd automount.
 # --target without -t cifs can return both systemd-1 and //server/share.
 retronas_cifs_source() {
-  local source
-  # Activate systemd automount and query only its actual CIFS child.
-  ls -ld "$MOUNT/." >/dev/null 2>&1 || {
-    echo "[STOP] RetroNAS automount unavailable: $MOUNT" >&2
-    return 1
-  }
-  source="$(findmnt -rn -M "$MOUNT" -t cifs -o SOURCE 2>/dev/null)" || {
-    echo "[STOP] Could not find the mounted CIFS share beneath $MOUNT" >&2
-    return 1
-  }
-  if [[ "$source" != //* ]] || [[ "$source" == *$'\n'* ]]; then
-    echo "[STOP] Expected exactly one //server/share source, got: $source" >&2
+  local source unit
+  # The systemd .automount can shadow the actual CIFS mount, and the
+  # audit path may be inaccessible to the ordinary user. Ask the .mount
+  # unit for its configured What= instead of probing the directory.
+  unit="$(systemd-escape --path --suffix=mount "$MOUNT")" || return 1
+  source="$(systemctl show "$unit" -p What --value 2>/dev/null || true)"
+  if [[ "$source" != //* ]]; then
+    source="$(findmnt -rn -M "$MOUNT" -t cifs -o SOURCE 2>/dev/null || true)"
+  fi
+  if [[ "$source" != //* || "$source" == *$'\n'* || "$source" == *$'\r'* ]]; then
+    echo "[STOP] Could not resolve one SMB //server/share source from $unit: ${source:-none}" >&2
     return 1
   fi
   printf '%s\n' "$source"
