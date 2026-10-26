@@ -286,7 +286,7 @@ PYJ
       return 1
     fi
   done < <(find "$journal_dir" -maxdepth 1 -name '*.json' -type f | sort)
-  python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
+  sudo python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
   echo '[IMPORTANT] This is an experimental PS1 renamer. Review the proposals before proceeding.'
   read -rp 'Type RENAMEPS1 to apply paired BIN/CUE renames: ' answer
   [[ "$answer" == RENAMEPS1 ]] || { echo 'Cancelled'; return 0; }
