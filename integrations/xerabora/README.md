@@ -75,6 +75,14 @@ systemctl cat xerabora.service
 
 **Linux executable vs console ELF:** `xerabora-linux-x86_64` runs on the Linux server; `OPL-RA.ELF` runs on the PS2. Updating one does **not** update the other. Back up working files before replacing either.
 
+## Live game and unsupported achievements
+
+**Menu option 3** reads the local xeRAbora `/state` endpoint to identify the currently running **PS2 game**, shows the previous hour of meaningful events, and follows new achievements, leaderboards, and compatibility warnings without displaying routine HTTP polls. It does not modify the running xeRAbora process.
+
+xeRAbora's summary can report, for example, `3 cannot unlock here (pointer chains)`. That **count is authoritative for the loaded game, but it does not name the achievements**. The current xeRAbora source logs specific pointer-chain achievement IDs and titles only with its **`--trace` option enabled before the game loads**. With that option enabled, the manager will display lines naming those achievements as the set is loaded. The `/state` achievement list alone does not prove which pointer chains failed to compile.
+
+To use detailed compatibility traces, add `--trace` to the service's existing xeRAbora invocation during planned downtime, restart the service and relaunch the game. Because service overrides and executable flags vary, inspect `systemctl cat xerabora.service` first and **do not add a second ExecStart**. Trace can produce substantially more disk logging; remove the flag and restart after diagnosing the game. The monitor itself does not enable tracing or restart the service.
+
 ## Troubleshooting
 
 Run `bash integrations/xerabora/install.sh doctor` to inspect networking, service health, UDP listener and logs. Check the PS2's **OPL-RA → Triangle → RA: test PC connection** workflow. A listening port alone does not prove console connectivity. Menu option **3** scans the full log for events from the previous hour, shows a service/profile summary, then follows new gameplay events without HTTP polling or heartbeat noise. The full log remains unchanged.
