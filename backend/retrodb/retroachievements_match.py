@@ -611,6 +611,20 @@ def match_collection(
             elif serial == "USGR-00036" and not gamedb_title:
                 gamedb_title = "Shoot 'Em Up Collection (hack compilation)"
             no_set_game = None
+            # Curated PS1 crosswalks for different regional names / catalogue gaps.
+            # These are game identities, NOT assertions that this disc hash is
+            # RA-compatible. Only honour them when the RA catalogue confirms
+            # that the target has no achievement set.
+            if slug == "playstation" and item.ra_match_status == "unmatched":
+                observed_title = (gamedb_title or friendly_local_title(item.relative_path)).casefold()
+                if "supersonic racers" in observed_title or "dare devil derby 3d" in observed_title:
+                    curated_id = 16649
+                elif "assault" in observed_title and "retribution" in observed_title:
+                    curated_id = 26626
+                else:
+                    curated_id = None
+                if curated_id and curated_id in counts_by_id and counts_by_id[curated_id] == 0:
+                    no_set_game = next((g for g in no_sets if g.game_id == curated_id), None)
             recommendation = None
             confidence = ""
             score = 0.0
