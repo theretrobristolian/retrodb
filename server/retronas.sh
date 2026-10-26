@@ -26,7 +26,7 @@ case ${1:-} in
             "$APP_ROOT/.venv/bin/python" -m retrodb.cli \
             --env-file "$CONFIG_FILE" \
             "$( [[ $1 == match ]] && printf ra-match || printf %s "$1" )" \
-            --root "$MOUNT_POINT"
+            --root "$MOUNT_POINT" "${@:2}"
         ;;
     scan)
         [[ -x "$APP_ROOT/.venv/bin/python" ]] || die 'RetroDB is not deployed.'
