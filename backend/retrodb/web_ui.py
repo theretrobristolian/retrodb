@@ -485,8 +485,27 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     flags = []
     def badge(symbol, text):
         flags.append(f'<span class="feature-chip"><span class="feature-glyph" aria-hidden="true">{symbol}</span>{escape(text)}</span>')
-    if item.ra_game_id and (item.ra_match_status or "").lower() == "matched":
-        badge("🏆", "RetroAchievements")
+    if ra_supported(item):
+        badge("🏆", "RetroAchievements verified")
+    elif item.ra_game_id and platform and platform.slug in ("playstation", "playstation-2"):
+        # Only label redundant copies when BOTH records share a confirmed RA ID.
+        # Never infer coverage from matching titles or disc serials.
+        verified_copy = db.scalar(
+            select(LibraryItem).where(
+                LibraryItem.platform_id == item.platform_id,
+                LibraryItem.id != item.id,
+                LibraryItem.is_missing.is_(False),
+                LibraryItem.ra_game_id == item.ra_game_id,
+                func.lower(LibraryItem.ra_match_status) == "matched",
+            ).order_by(LibraryItem.id).limit(1)
+        )
+        if verified_copy is not None:
+            flags.append(
+                '<a class="feature-chip" href="/game/' + str(verified_copy.id) +
+                '" title="This image is not verified, but another copy of this RA game is. No additional RA copy is needed.">'
+                '<span class="feature-glyph" aria-hidden="true">▣</span>'
+                'RA covered by another copy</a>'
+            )
     if online:
         if str(online.get("historical_online", "")).upper() in ("YES", "TRUE", "SUPPORTED"):
             badge("◎", "Original online play")
