@@ -20,6 +20,7 @@ EVENT = re.compile(
     re.I,
 )
 UNSUPPORTED_NAME = re.compile(r'achievement\s+(\d+)\s+"([^"]+)"\s+reads through a chain the console cannot follow', re.I)
+COUNT = re.compile(r"achievements:\s*(\d+) total,\s*(\d+) unlocked,\s*(\d+) cannot unlock here", re.I)
 UNLOCK = re.compile(r"achievement unlocked:\s*(.+)", re.I)
 CONNECT = re.compile(r"console (?:connected|disconnected|lost)", re.I)
 GAME = re.compile(r"(?:game (?:found|detected|identified|loaded):|game title:)\s*(.+)", re.I)
@@ -103,6 +104,10 @@ def show_history(path, now, profile, service):
     print(f"Last link:     {connections[-1] if connections else 'No connection event in past hour'}")
     print(f"Last game:     {games[-1] if games else 'Not identified in past hour'}")
     print(f"Last unlock:   {unlocks[-1] if unlocks else 'None observed in past hour'}")
+    counts = [COUNT.search(line) for line in recent if COUNT.search(line)]
+    if counts:
+        match = counts[-1]
+        print(f"Achievements:  {match.group(1)} total / {match.group(2)} unlocked / {match.group(3)} unsupported (last game check)")
     print(f"Events:        {len(recent)} relevant log lines in past hour")
     if unsupported:
         print(f"Cannot unlock: {len(unsupported)} achievement(s) identified in trace:")
@@ -117,6 +122,7 @@ def show_history(path, now, profile, service):
     else:
         for line in recent:
             print(line)
+    print("A count alone cannot identify unsupported achievement names; xeRAbora trace lines can.")
     print("--- Listening for new events (Ctrl+C to return) ---", flush=True)
 
 
@@ -128,6 +134,7 @@ def follow(path):
         desc_pending = False
         last_game = None
         next_poll = 0
+        unsupported_seen = set()
         while True:
             if time.monotonic() >= next_poll:
                 next_poll = time.monotonic() + 3
@@ -151,6 +158,14 @@ def follow(path):
                         continue
                 if EVENT.search(clean):
                     print(clean, flush=True)
+                    count = COUNT.search(clean)
+                    if count and int(count.group(3)):
+                        print(f"[COMPATIBILITY] {count.group(3)} of {count.group(1)} achievements are unsupported on this PS2 (pointer chains).", flush=True)
+                        print("[COMPATIBILITY] Exact names require xeRAbora trace output.", flush=True)
+                    named = UNSUPPORTED_NAME.search(clean)
+                    if named and named.group(1) not in unsupported_seen:
+                        unsupported_seen.add(named.group(1))
+                        print(f"[UNSUPPORTED ACHIEVEMENT] {named.group(2)} (RA ID {named.group(1)})", flush=True)
                     desc_pending = bool(UNLOCK.search(clean))
                 continue
             time.sleep(0.3)
