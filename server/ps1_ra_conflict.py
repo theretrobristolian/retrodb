@@ -128,12 +128,15 @@ def apply(root, hasher, journal, expected):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("preview", "apply"))
+    p.add_argument("mode", choices=("preview", "apply", "count"))
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
     p.add_argument("--journal", type=Path)
     args = p.parse_args()
     operation = inspect(args.root, args.hasher)
+    if args.mode == "count":
+        print(1 if operation else 0)
+        return
     if operation is None:
         print("[INFO] No Alundra RA conflict requiring resolution")
         return
