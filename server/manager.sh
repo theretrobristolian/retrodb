@@ -392,7 +392,7 @@ OPL_JOURNAL_DIR="$HOME/retrodb-exports/opl-rename-journals"
 ps1_rename_all() {
   local csv="$HOME/retrodb-exports/RetroDB-PS1-Audit.csv"
   local journal_dir="$HOME/retrodb-exports/ps1-rename-journals"
-  local journal source result=0 answer
+  local journal="" source result=0 answer
   [[ -r "$csv" ]] || { echo 'Export reports first to generate a current PS1 audit.'; return 1; }
   mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
   mkdir -p -m 0700 "$journal_dir" || return 1
@@ -473,21 +473,26 @@ PYCONF
   done
   if [[ "$result" -eq 0 && "$conflict_count" != 0 ]]; then
     cj="$conflict_dir/ps1-conflict-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-    python3 "$HERE/ps1_ra_conflict.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$cj" || result=$?
-    echo "Conflict journal: $cj"
+    sudo python3 "$HERE/ps1_ra_conflict.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$cj" || result=$?
+    if [[ -f "$cj" ]]; then
+      sudo chown "$(id -un):$(id -gn)" "$cj" || result=1
+      echo "Conflict journal: $cj"
+    else
+      echo "[INFO] Conflict operation failed before creating a journal; no rename started." >&2
+    fi
   fi
   if [[ "$result" -eq 0 ]]; then
     # A resolved collision changes file names, so regenerate proposals using
     # the writable view before applying the ordinary non-collision renames.
     ( umask 077; sudo python3 "$HERE/report_ps1_audit.py" --root "$PILOT_ROOT/roms/sony/playstation1" --output "$csv" && sudo chown "$(id -un):$(id -gn)" "$csv" ) || result=$?
   fi
-  if [[ "$result" -eq 0 ]]; then
+  if [[ "$result" -eq 0 && "$eligible" != 0 ]]; then
     journal="$journal_dir/ps1-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
     python3 "$HERE/ps1_rename.py" apply --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
   fi
 
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active!'; return 1; }
-  echo "PS1 rename journal: $journal"
+  [[ -n "$journal" && -f "$journal" ]] && echo "PS1 rename journal: $journal"
   [[ "$result" -eq 0 ]] || echo '[WARNING] Incomplete operation: inspect journal before any rerun.'
   return "$result"
 }
