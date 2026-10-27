@@ -133,7 +133,7 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
     rows = []
     gamedb = gamedb or {}
     referenced: set[Path] = set()
-    cues = sorted((p for p in root.rglob("*") if p.suffix.lower() == ".cue" and p.is_file() and not p.is_symlink()), key=lambda p: str(p).casefold())
+    cues = sorted((p for p in root.rglob("*") if p.suffix.lower() == ".cue" and not p.name.upper().startswith("OLD_") and p.is_file() and not p.is_symlink()), key=lambda p: str(p).casefold())
     for cue in cues:
         refs, issues = read_cue(cue)
         paths = []
@@ -215,7 +215,7 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
                          proposed_cue=dest_cue.relative_to(root).as_posix() if dest_cue else "",
                          proposed_bin=dest_bin.relative_to(root).as_posix() if dest_bin else "",
                          ra_compatibility="NOT_CHECKED", issues=" | ".join(dict.fromkeys(issues))))
-    for binfile in sorted((p for p in root.rglob("*") if p.suffix.lower() == ".bin" and p.is_file() and not p.is_symlink() and p not in referenced), key=lambda p: str(p).casefold()):
+    for binfile in sorted((p for p in root.rglob("*") if p.suffix.lower() == ".bin" and not p.name.upper().startswith("OLD_") and p.is_file() and not p.is_symlink() and p not in referenced), key=lambda p: str(p).casefold()):
         rows.append(dict(status="REVIEW", relative_cue="", relative_bin=binfile.relative_to(root).as_posix(),
                          filename_serial=serial_from_name(binfile.name), internal_serial=disc_serial(binfile),
                          selected_serial="", homebrew="NO", file_references="", file_count="1",
