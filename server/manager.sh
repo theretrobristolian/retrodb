@@ -420,7 +420,9 @@ PYJ
   sudo chown "$(id -un):$(id -gn)" "$csv" || return 1
   chmod 0600 "$csv" || return 1
   sudo python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
-  local eligible
+  echo "[CHECK] RA-verified name conflicts (preview only):"
+  sudo python3 "$HERE/ps1_ra_conflict.py" preview --root "$MOUNT/roms/sony/playstation1" || return 1
+  local eligible conflict_count
   eligible="$(sudo python3 - "$HERE" "$csv" "$MOUNT/roms/sony/playstation1" <<'PYCOUNT'
 import sys
 from pathlib import Path
@@ -430,11 +432,12 @@ from ps1_rename import parse
 print(len(parse(SimpleNamespace(csv=Path(sys.argv[2]), root=Path(sys.argv[3]), limit=None))))
 PYCOUNT
 )" || return 1
-  if [[ "$eligible" == 0 ]]; then
+  conflict_count="$(sudo python3 "$HERE/ps1_ra_conflict.py" count --root "$MOUNT/roms/sony/playstation1")" || return 1
+  if [[ "$eligible" == 0 && "$conflict_count" == 0 ]]; then
     echo '[OK] No eligible PS1 renames remain; nothing changed and no journal created.'
     return 0
   fi
-  echo '[BULK] All currently eligible PS1 BIN/CUE pairs displayed above will be renamed.'
+  echo '[BULK] Eligible PS1 renames and explicitly previewed RA-confirmed collision resolutions will be applied.'
   read -rp 'Type RENAMEPS1 to rename ALL eligible pairs: ' answer
   [[ "$answer" == RENAMEPS1 ]] || { echo 'Cancelled'; return 0; }
   source="$(retronas_cifs_source)" || return 1
@@ -444,8 +447,45 @@ PYCOUNT
     echo 'Temporary writable mount already active; refusing to proceed.'; return 1
   fi
   sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
-  journal="$journal_dir/ps1-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-  python3 "$HERE/ps1_rename.py" apply --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
+  # Resolve the specific verified Alundra collision first. Keep its
+  # recovery journal separate from the ordinary PS1 bulk-rename journals.
+  # Never run a second collision operation with an incomplete journal.
+  local conflict_dir="$HOME/retrodb-exports/ps1-conflict-journals"
+  mkdir -p -m 0700 "$conflict_dir" || return 1
+  local cj
+  for cj in "$conflict_dir"/*.json; do
+    [[ -f "$cj" ]] || continue
+    if ! python3 - "$cj" <<'PYCONF'
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as f:
+        state = json.load(f).get("state")
+    sys.exit(0 if state == "applied" else 1)
+except (OSError, ValueError):
+    sys.exit(1)
+PYCONF
+    then
+      echo "[STOP] Incomplete PS1 collision journal: $cj" >&2
+      echo "[STOP] Inspect recovery before another writable rename." >&2
+      result=1
+      break
+    fi
+  done
+  if [[ "$result" -eq 0 && "$conflict_count" != 0 ]]; then
+    cj="$conflict_dir/ps1-conflict-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+    python3 "$HERE/ps1_ra_conflict.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$cj" || result=$?
+    echo "Conflict journal: $cj"
+  fi
+  if [[ "$result" -eq 0 ]]; then
+    # A resolved collision changes file names, so regenerate proposals using
+    # the writable view before applying the ordinary non-collision renames.
+    ( umask 077; python3 "$HERE/report_ps1_audit.py" --root "$PILOT_ROOT/roms/sony/playstation1" --output "$csv" ) || result=$?
+  fi
+  if [[ "$result" -eq 0 ]]; then
+    journal="$journal_dir/ps1-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+    python3 "$HERE/ps1_rename.py" apply --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
+  fi
+
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active!'; return 1; }
   echo "PS1 rename journal: $journal"
   [[ "$result" -eq 0 ]] || echo '[WARNING] Incomplete operation: inspect journal before any rerun.'
