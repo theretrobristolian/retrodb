@@ -76,8 +76,8 @@ def inspect(root, hasher):
         raise RuntimeError("Case-folded name collision")
     for cue, binary in ((a_cue, a_bin), (b_cue, b_bin)):
         verify_pair(cue, binary)
-    source_hash = ra_hash(hasher, a_cue)
-    target_hash = ra_hash(hasher, b_cue)
+    source_hash = ra_hash(hasher, a_bin)
+    target_hash = ra_hash(hasher, b_bin)
     if (source_hash, target_hash) != (RA_HASH, UNMATCHED_HASH):
         raise RuntimeError("RA hash evidence changed: source=" + source_hash + " target=" + target_hash)
     return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
@@ -120,7 +120,7 @@ def apply(root, hasher, journal, expected):
     write("verified-cue-promoted")
     operation["dest_cue"].write_bytes(rewritten(src_lines, src_match, operation["dest_bin"], src_enc))
     write("verified-cue-relinked")
-    if ra_hash(hasher, operation["dest_cue"]) != RA_HASH or ra_hash(hasher, operation["backup_cue"]) != UNMATCHED_HASH:
+    if ra_hash(hasher, operation["dest_bin"]) != RA_HASH or ra_hash(hasher, operation["backup_bin"]) != UNMATCHED_HASH:
         raise RuntimeError("Post-rename RA verification failed; inspect journal immediately")
     write("applied")
     print("[OK] Alundra: RA-compatible pair promoted; unmatched pair preserved as OLD_.")
@@ -146,8 +146,8 @@ def verify_completed(journal, ro_root, hasher):
     backup_bin = expected_dir / ("OLD_" + TARGET_NAME + ".bin")
     verify_pair(active_cue, active_bin)
     verify_pair(backup_cue, backup_bin)
-    active_hash = ra_hash(hasher, active_cue)
-    old_hash = ra_hash(hasher, backup_cue)
+    active_hash = ra_hash(hasher, active_bin)
+    old_hash = ra_hash(hasher, backup_bin)
     print("[VERIFY] Active:", active_hash, "expected:", record["verified_hash"])
     print("[VERIFY] OLD_  :", old_hash, "expected:", record["unmatched_hash"])
     if (active_hash, old_hash) != (record["verified_hash"], record["unmatched_hash"]):
