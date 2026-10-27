@@ -95,7 +95,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     if warning and not yes:
         reason += ' — ' + warning
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
-            r['ra_game_id'] or r['recommended_ra_game_id'], release,
+            (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', '')), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
 def apply_collection_dedup(entries):
     """Discount only demonstrably redundant noncompatible copies.
