@@ -126,13 +126,55 @@ def apply(root, hasher, journal, expected):
     print("[OK] Alundra: RA-compatible pair promoted; unmatched pair preserved as OLD_.")
 
 
+
+def verify_completed(journal, ro_root, hasher):
+    """Finish only post-rename verification; never rename or rewrite collection files."""
+    record = json.loads(journal.read_text(encoding="utf-8"))
+    if record.get("operation") != "alundra-ra-collision":
+        raise RuntimeError("Not an Alundra collision journal")
+    if record.get("state") not in ("verified-cue-relinked", "applied"):
+        raise RuntimeError("Journal is not ready for final verification: " + str(record.get("state")))
+    paths = record["paths"]
+    expected_dir = (ro_root / ROOT_REL).resolve()
+    for name in ("dest_cue", "dest_bin", "backup_cue", "backup_bin"):
+        candidate = Path(paths[name])
+        if candidate.name != (("OLD_" if name.startswith("backup_") else "") + TARGET_NAME + (".cue" if name.endswith("cue") else ".bin")):
+            raise RuntimeError("Journal contains unexpected filename for " + name)
+    active_cue = expected_dir / (TARGET_NAME + ".cue")
+    active_bin = expected_dir / (TARGET_NAME + ".bin")
+    backup_cue = expected_dir / ("OLD_" + TARGET_NAME + ".cue")
+    backup_bin = expected_dir / ("OLD_" + TARGET_NAME + ".bin")
+    verify_pair(active_cue, active_bin)
+    verify_pair(backup_cue, backup_bin)
+    active_hash = ra_hash(hasher, active_cue)
+    old_hash = ra_hash(hasher, backup_cue)
+    print("[VERIFY] Active:", active_hash, "expected:", record["verified_hash"])
+    print("[VERIFY] OLD_  :", old_hash, "expected:", record["unmatched_hash"])
+    if (active_hash, old_hash) != (record["verified_hash"], record["unmatched_hash"]):
+        raise RuntimeError("Final RA hash mismatch; journal unchanged")
+    if record["state"] == "applied":
+        print("[OK] Already verified and completed")
+        return
+    record["state"] = "applied"
+    record["verified_utc"] = datetime.now(timezone.utc).isoformat()
+    tmp = journal.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(record, indent=2), encoding="utf-8")
+    os.replace(tmp, journal)
+    print("[OK] Both hashes verified on read-only RetroNAS; existing journal completed.")
+
+
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("mode", choices=("preview", "apply", "count"))
+    p.add_argument("mode", choices=("preview", "apply", "count", "verify-journal"))
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
     p.add_argument("--journal", type=Path)
     args = p.parse_args()
+    if args.mode == "verify-journal":
+        if not args.journal:
+            p.error("--journal required for verify-journal")
+        verify_completed(args.journal, args.root, args.hasher)
+        return
     operation = inspect(args.root, args.hasher)
     if args.mode == "count":
         print(1 if operation else 0)
