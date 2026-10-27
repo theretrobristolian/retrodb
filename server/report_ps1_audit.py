@@ -159,6 +159,8 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
         if not selected_serial and not is_homebrew:
             issues.append("ID_MISSING")
         catalogue_title = gamedb.get(selected_serial, "")
+        if selected_serial == "SLES-03120":
+            catalogue_title = "3, 2, 1, Smurf! My First Racing Game"
         title = cleaned_ps1_title(catalogue_title) if catalogue_title else cleaned_ps1_title(cue.stem)
         title = re.sub(r"\s*\((?:Rev(?:ision)?\s*\d+(?:\.\d+)?|v\d+(?:\.\d+)?)\)", "", title, flags=re.I).strip()
         # Preserve disc numbering already evidenced by this individual file even
