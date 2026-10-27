@@ -258,11 +258,10 @@ def _ra_achievement_counts(slug: str, mtime_ns: int) -> dict[int, int]:
         return {}
 
 
-def ra_supported(item: LibraryItem) -> bool:
+def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
     """Gold means a matched disc AND a confirmed nonempty achievement set."""
     if not item.ra_game_id or (item.ra_match_status or "").lower() != "matched":
         return False
-    slug = item_slug(item)
     if slug not in ("playstation", "playstation-2"):
         return False
     path = RA_CACHE / f"{slug}.json"
@@ -323,7 +322,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         return platform.slug if platform else platform_names.get(item.platform_id)
     # GameDB cache lookup is local and deterministic. Resolve before paging so
     # alphabet filtering and sorting use exactly the title displayed to users.
-    if sort_by == "title" or letter or q:
+    if sort_by == "title" or letter or q or ra_filter in ("yes", "other"):
         candidate_items = db.scalars(stmt.order_by(LibraryItem.id.asc())).all()
         if q:
             term = q.casefold()
@@ -331,7 +330,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
                                or term in i.filename.casefold() or term in disc_id(i).casefold()]
         if letter:
             candidate_items = [i for i in candidate_items if name(i, item_slug(i)).casefold().startswith(letter.casefold())]
-        matched_filter = lambda i: ra_supported(i)
+        matched_filter = lambda i: ra_supported(i, item_slug(i))
         if ra_filter == "yes":
             candidate_items = [i for i in candidate_items if matched_filter(i)]
         elif ra_filter == "other":
@@ -368,7 +367,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     rows = []
     for item in items:
         disc = disc_id(item)
-        supported = ra_supported(item)
+        supported = ra_supported(item, item_slug(item))
         region_flag, region_label = disc_region(disc, item_slug(item))
         badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, item_slug(item)))}</a></td>
@@ -539,7 +538,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     flags = []
     def badge(symbol, text):
         flags.append(f'<span class="feature-chip"><span class="feature-glyph" aria-hidden="true">{symbol}</span>{escape(text)}</span>')
-    if ra_supported(item):
+    if ra_supported(item, platform.slug if platform else None):
         badge("🏆", "RetroAchievements verified")
     elif item.ra_game_id and platform and platform.slug in ("playstation", "playstation-2"):
         # Only label redundant copies when BOTH records share a confirmed RA ID.
