@@ -9,6 +9,7 @@ import csv
 import json
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import unicodedata
 
@@ -450,438 +451,33 @@ def release_guidance(
 
 
 def ps1_hash_target(cue: Path) -> Path:
-    """Hash the one BIN referenced by a PS1 CUE, never a guessed sibling.
-
-    RAHasher in this installation hashes the raw BIN correctly but may fail
-    locating the primary executable when passed a CUE file.
-    Multi-file and malformed CUE sheets are deliberately not guessed.
-    """
+    """Use the referenced BIN for single-BIN PS1 CUE sheets."""
     try:
-        content = cue.read_bytes()
-        try:
-            decoded = content.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            decoded = content.decode("cp1252")
+        lines = cue.read_text(encoding="utf-8-sig").splitlines()
+    except UnicodeDecodeError:
+        lines = cue.read_text(encoding="cp1252").splitlines()
     except OSError as exc:
-        raise MatchError(f"CUE unavailable: {exc}") from None
+        raise MatchError(f"Cannot read PS1 CUE: {exc}") from None
     refs = []
-    for line in decoded.splitlines():
-        if not re.match(r"^\\s*FILE\\s+", line, re.I):
+    for line in lines:
+        if not line.lstrip().upper().startswith("FILE "):
             continue
-        match = re.match(r'^\\s*FILE\\s+(?:"([^"]+)"|(\\S+))\\s+BINARY\\s*
-    try:
-        result = subprocess.run(
-            [str(hasher), str(console_id), str(path)],
-            capture_output=True, text=True, timeout=180, check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise MatchError(type(exc).__name__) from None
-    combined = f"{result.stdout}\n{result.stderr}"
-    try:
-        return extract_hash(combined)
-    except MatchError:
-        message = combined.strip().splitlines()
-        detail = message[-1][:160] if message else f"exit code {result.returncode}"
-        raise MatchError(detail) from None
-
-
-def load_reviewed_ps2_no_listings() -> set[str]:
-    """Manual RA search results; not proof the upstream catalogue cannot change."""
-    path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-no-listing.csv"
-    if not path.is_file():
-        return set()
-    with path.open(encoding="utf-8-sig", newline="") as source:
-        return {
-            str(row.get("disc_serial", "")).strip().upper()
-            for row in csv.DictReader(source)
-            if row.get("review_status") == "no-listing"
-            and re.fullmatch(r"[A-Z]{4}-[0-9]{5}", str(row.get("disc_serial", "")).strip().upper())
-        }
-
-
-def load_reviewed_ps2_alternatives() -> dict[str, int]:
-    """Recommend a different RA-supported edition without equating disc identities."""
-    path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-ra-identities.csv"
-    if not path.is_file():
-        return {}
-    with path.open(encoding="utf-8-sig", newline="") as source:
-        return {
-            str(row["disc_serial"]).strip().upper(): int(row["ra_game_id"])
-            for row in csv.DictReader(source)
-            if row.get("review_status") == "supported-alternative"
-        }
-
-
-def load_reviewed_ps2_identities() -> dict[str, int]:
-    """Disc-specific crosswalk; never treat manual identity as a verified hash."""
-    path = Path(__file__).resolve().parents[2] / "config" / "ps2-reviewed-ra-identities.csv"
-    if not path.is_file():
-        return {}
-    result: dict[str, int] = {}
-    with path.open(encoding="utf-8-sig", newline="") as source:
-        for row in csv.DictReader(source):
-            if row.get("review_status") != "reviewed":
-                continue
-            serial = (row.get("disc_serial") or "").strip().upper()
-            if not re.fullmatch(r"[A-Z]{4}-[0-9]{5}", serial):
-                continue
-            try:
-                result[serial] = int(row["ra_game_id"])
-            except (ValueError, KeyError, TypeError):
-                continue
-    return result
-
-
-def match_collection(
-    session: Session,
-    root: Path,
-    hasher: Path,
-    cache_dir: Path,
-    report_path: Path,
-    client: RetroAchievementsClient | None = None,
-) -> tuple[MatchSummary, ...]:
-    if not hasher.is_file():
-        raise MatchError(f"RAHasher is not installed: {hasher}")
-    if not root.is_dir():
-        raise MatchError(f"Collection mount is unavailable: {root}")
-
-    report_rows: list[dict[str, object]] = []
-    summaries: list[MatchSummary] = []
-    detail_cache: dict[int, list[dict[str, object]]] = {}
-    serial_aliases = load_serial_aliases()
-    reviewed_ps2 = load_reviewed_ps2_identities()
-    reviewed_alternatives = load_reviewed_ps2_alternatives()
-    reviewed_no_listing = load_reviewed_ps2_no_listings()
-    gamedb_cache = Path('/var/cache/retrodb/providers/gamedb')
-
-    for slug, extensions in HASH_TARGET_EXTENSIONS.items():
-        platform = session.scalar(select(Platform).where(Platform.slug == slug))
-        if platform is None:
-            raise MatchError(f"Platform is missing from the database: {slug}")
-        catalogue_path = cache_dir / f"{slug}.json"
-        console_id, catalogue, games = load_catalogue(catalogue_path)
-        records = json.loads(catalogue_path.read_text(encoding="utf-8"))
-        counts_by_id = {int(g["ID"]): int(g.get("NumAchievements", 0))
-                        for g in records if isinstance(g, dict) and "ID" in g}
-        with_sets = tuple(g for g in games if counts_by_id.get(g.game_id, 0) > 0)
-        no_sets = tuple(g for g in games if counts_by_id.get(g.game_id, 0) == 0)
-        print(f"[INFO] {platform.name}: {len(with_sets)} RA catalogue games with achievements; {len(no_sets)} without achievements.")
         try:
-            gamedb_titles = load_gamedb(gamedb_cache, slug)
-        except (OSError, ValueError) as exc:
-            print(f'[WARN] GameDB {slug} cache unavailable: {exc}')
-            gamedb_titles = {}
-        print(f'[+] GameDB {slug}: {len(gamedb_titles)} cached serial titles.')
-        items = list(session.scalars(select(LibraryItem).where(
-            LibraryItem.platform_id == platform.id,
-            LibraryItem.extension.in_(extensions),
-            LibraryItem.is_missing.is_(False),
-            ~LibraryItem.filename.ilike("OLD\\_%", escape="\\"),
-        ).order_by(LibraryItem.relative_path)))
-        counts = Counter()
-        no_set_evidence = Counter()
-        total = len(items)
-        print(f"[+] {platform.name}: {total} disc images to check.")
-
-        for number, item in enumerate(items, start=1):
-            path = root / item.relative_path
-            if item.ra_hash:
-                counts["cached"] += 1
-            else:
-                try:
-                    item.ra_hash = hash_file(hasher, console_id, ps1_hash_target(path) if slug == "playstation" else path)
-                    item.ra_hash_error = None
-                except MatchError as exc:
-                    item.ra_hash = None
-                    item.ra_hash_error = str(exc)[:500]
-                item.ra_hashed_at = datetime.now(timezone.utc)
-
-            match = catalogue.get(item.ra_hash or "")
-            if match:
-                item.ra_game_id, item.ra_game_title = match
-                item.ra_match_status = "matched"
-            elif item.ra_hash:
-                item.ra_game_id = None
-                item.ra_game_title = None
-                item.ra_match_status = "unmatched"
-            else:
-                item.ra_game_id = None
-                item.ra_game_title = None
-                item.ra_match_status = "failed"
-            session.commit()
-            counts[item.ra_match_status or "failed"] += 1
-
-            serial, local_region = identify_local_release(item.relative_path)
-            internal_serial = internal_disc_serial(path, slug)
-            # Preserve observed conflicts for review; never silently overwrite
-            # a filename serial with a different internal disc identity.
-            serial_conflict = bool(serial and internal_serial and serial != internal_serial)
-            identity_source = "filename" if serial else "unidentified"
-            if not serial and internal_serial:
-                serial = internal_serial
-                local_region = REGION_BY_PREFIX.get(serial.split("-", 1)[0], "")
-                identity_source = "system-cnf"
-            gamedb_title = gamedb_titles.get(serial, '')
-            # Non-retail discs are identified but never promoted from a retail
-            # title alone. Their hashes can still legitimately match RA.
-            special_disc = serial.startswith("USGR-") or serial == "SCPM-85101"
-            if serial == "SCPM-85101" and not gamedb_title:
-                gamedb_title = "McDonald's Original Happy Disc (promotional demo)"
-            elif serial == "USGR-00036" and not gamedb_title:
-                gamedb_title = "Shoot 'Em Up Collection (hack compilation)"
-            no_set_game = None
-            # Curated PS1 crosswalks for different regional names / catalogue gaps.
-            # These are game identities, NOT assertions that this disc hash is
-            # RA-compatible. Only honour them when the RA catalogue confirms
-            # that the target has no achievement set.
-            if slug == "playstation" and item.ra_match_status == "unmatched":
-                observed_title = (gamedb_title or friendly_local_title(item.relative_path)).casefold()
-                if "supersonic racers" in observed_title or "dare devil derby 3d" in observed_title:
-                    curated_id = 16649
-                elif serial == "SLES-01244":
-                    # European Assault: verified catalogue identity from manual review.
-                    curated_id = 26626
-                else:
-                    curated_id = None
-                if curated_id and curated_id in counts_by_id and counts_by_id[curated_id] == 0:
-                    no_set_game = next((g for g in no_sets if g.game_id == curated_id), None)
-            recommendation = None
-            confidence = ""
-            score = 0.0
-            alternatives = ""
-            if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc and serial not in reviewed_no_listing:
-                confirmed_id = reviewed_ps2.get(serial)
-                if confirmed_id is not None:
-                    reviewed_game = next((g for g in games if g.game_id == confirmed_id), None)
-                    if reviewed_game is None:
-                        print(f"[WARN] Reviewed ID {confirmed_id} for {serial} absent from cached RA catalogue; manual review retained.")
-                    elif counts_by_id.get(confirmed_id, 0) > 0:
-                        recommendation = reviewed_game
-                        confidence = "reviewed-disc-id"
-                        score = 1.0
-                    else:
-                        no_set_game = reviewed_game
-                        confidence = "reviewed-disc-id-no-set"
-            if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc and not recommendation:
-                alternative_id = reviewed_alternatives.get(serial)
-                alternative_game = next((g for g in with_sets if g.game_id == alternative_id), None)
-                if alternative_game:
-                    recommendation = alternative_game
-                    no_set_game = None
-                    confidence = "supported-alternative-edition"
-                    score = 1.0
-            if item.ra_match_status == "unmatched" and slug == "playstation" and not special_disc and not recommendation and not no_set_game:
-                # Manually cross-referenced retail PS1 releases. Identity only;
-                # hash matching remains the sole RA-compatible criterion.
-                reviewed_ps1 = {"SCES-01706": 11305, "SCES-00242": 5332, "SLUS-00893": 11357,
-                                "SLES-01761": 823}  # Action Man: Mission Xtreme = Operation Extreme (regional title)
-                reviewed_id = reviewed_ps1.get(serial)
-                if reviewed_id is not None:
-                    reviewed_game = next((g for g in with_sets if g.game_id == reviewed_id), None)
-                    if reviewed_game is not None:
-                        recommendation = reviewed_game
-                        confidence = "reviewed-disc-id"
-                        score = 1.0
-            if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game and serial not in reviewed_no_listing:
-                if slug == "playstation-2":
-                    recommendation, confidence, score = suggest_by_serial(
-                        serial, with_sets, serial_aliases
-                    )
-                gamedb_review = ""
-                if recommendation is None and gamedb_title:
-                    game, method, value, gamedb_review = resolve_catalogue_identity(
-                        gamedb_title, with_sets
-                    )
-                    if game:
-                        recommendation, confidence, score = game, method, value
-                    else:
-                        confidence = method
-                if recommendation is None and confidence not in ('serial-alias-no-unique-ra-title',):
-                    filename_game, filename_method, filename_score = suggest_game(
-                        item.relative_path, with_sets
-                    )
-                    # Do not silently override a different GameDB identification.
-                    if filename_game and gamedb_title and comparable_title(
-                        filename_game.title
-                    ) != comparable_title(gamedb_title):
-                        filename_game = None
-                    if filename_game:
-                        recommendation, confidence, score = (
-                            filename_game, filename_method, filename_score
-                        )
-                    elif not gamedb_title:
-                        confidence = filename_method
-                if recommendation is None:
-                    alternatives = gamedb_review or alternative_candidates(
-                        item.relative_path, with_sets
-                    )
-                if recommendation:
-                    counts["recommended"] += 1
-
-            if item.ra_match_status == "unmatched" and not recommendation and not no_set_game and not special_disc and serial not in reviewed_no_listing:
-                identity = gamedb_title or friendly_local_title(item.relative_path)
-                candidate, method, _, review = resolve_catalogue_identity(
-                    identity, no_sets
-                )
-                if candidate:
-                    no_set_game = candidate
-                    no_set_evidence[method] += 1
-                    confidence = confidence or method
-                elif review and not alternatives:
-                    alternatives = review
-
-            accepted_hashes: list[str] = []
-            accepted_names: list[str] = []
-            labels: list[str] = []
-            preferred_name = preferred_region = preferred_hash = preferred_labels = ""
-            preferred_patch_url = ""
-            if recommendation:
-                accepted_hashes = list(recommendation.hashes)
-                if client:
-                    try:
-                        if recommendation.game_id not in detail_cache:
-                            detail_cache[recommendation.game_id] = client.get_game_hashes(
-                                recommendation.game_id
-                            )
-                        details = detail_cache[recommendation.game_id]
-                        accepted_hashes = [
-                            str(entry.get("MD5", "")).casefold()
-                            for entry in details if entry.get("MD5")
-                        ] or accepted_hashes
-                        accepted_names = [
-                            str(entry.get("Name", "")).strip()
-                            for entry in details if entry.get("Name")
-                        ]
-                        labels = sorted({
-                            str(label)
-                            for entry in details
-                            for label in entry.get("Labels", [])
-                            if isinstance(label, str)
-                        })
-                        (
-                            preferred_name,
-                            preferred_region,
-                            preferred_hash,
-                            preferred_labels,
-                            preferred_patch_url,
-                        ) = preferred_release(details, recommendation.game_id)
-                    except RetroAchievementsError:
-                        confidence += "-metadata-unavailable"
-
-            manually_unlisted = (
-                slug == "playstation-2"
-                and serial in reviewed_no_listing
-                and item.ra_match_status == "unmatched"
-                and recommendation is None and no_set_game is None
-            )
-            if manually_unlisted:
-                confidence = "manual-no-ra-listing"
-                alternatives = ""
-
-            report_rows.append({
-                "platform": platform.name,
-                "status": item.ra_match_status,
-                "path": item.relative_path,
-                "local_serial": serial,
-                "internal_disc_serial": internal_serial,
-                "disc_id_source": identity_source,
-                "disc_id_conflict": "YES" if serial_conflict else "NO",
-                "local_friendly_title": friendly_local_title(item.relative_path),
-                "gamedb_title": gamedb_title,
-                "identity_review_reason": review_reason(
-                    gamedb_title or friendly_local_title(item.relative_path),
-                    alternatives, special_disc
-                ) if not recommendation and not no_set_game and not match else "",
-                "identity_resolution": (
-                    "manual-no-ra-listing" if manually_unlisted else
-                    "verified-ra-hash" if match else
-                    confidence if recommendation or no_set_game else
-                    "special-disc" if special_disc else
-                    "review-candidates" if alternatives else
-                    "no-catalogue-crosswalk"
-                ),
-                "ra_set_status": ("NOT_LISTED" if manually_unlisted else "HAS_SET" if (recommendation or match) and
-                    counts_by_id.get(recommendation.game_id if recommendation else match[0], 0) > 0
-                    else "NO_SET" if (no_set_game or match) else "UNRESOLVED"),
-                "no_set_ra_game_id": (
-                    no_set_game.game_id if no_set_game else
-                    match[0] if match and counts_by_id.get(match[0], 0) == 0 else ""
-                ),
-                "no_set_ra_title": (
-                    no_set_game.title if no_set_game else
-                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else ""
-                ),
-                "gamedb_identified": "YES" if gamedb_title else "NO",
-                "disc_classification": ("special-disc-review" if special_disc else "standard"),
-                "local_region": local_region,
-                "local_ra_hash": item.ra_hash or "",
-                "ra_game_id": item.ra_game_id or "",
-                "ra_game_title": item.ra_game_title or "",
-                "recommendation_confidence": confidence,
-                "recommendation_score": f"{score:.3f}" if recommendation else "",
-                "recommended_ra_game_id": recommendation.game_id if recommendation else "",
-                "recommended_ra_title": recommendation.title if recommendation else "",
-                "alternative_candidates": alternatives,
-                "preferred_release_name": preferred_name,
-                "preferred_region": preferred_region,
-                "preferred_ra_hash": preferred_hash,
-                "preferred_ra_labels": preferred_labels,
-                "preferred_patch_url": preferred_patch_url,
-                "release_guidance": release_guidance(
-                    local_region, preferred_region, preferred_name, preferred_labels
-                ),
-                "accepted_regions": regions_from_names(accepted_names),
-                "accepted_file_names": " | ".join(accepted_names),
-                "accepted_ra_hashes": " | ".join(accepted_hashes),
-                "ra_labels": " | ".join(labels),
-                "error": item.ra_hash_error or "",
-            })
-            if number % 25 == 0 or number == total:
-                print(f"[RUN] {platform.name}: {number}/{total} checked.")
-
-        if no_set_evidence:
-            print(f"[INFO] {platform.name}: NO_SET identity evidence: " + ", ".join(f"{method}={count}" for method, count in sorted(no_set_evidence.items())))
-        summaries.append(MatchSummary(
-            platform.name, total, counts["matched"], counts["unmatched"],
-            counts["failed"], counts["cached"], counts["recommended"],
-        ))
-
-    report_path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = report_path.with_suffix(".tmp")
-    fields = [
-        "platform", "status", "path", "local_serial", "internal_disc_serial", "disc_id_source", "disc_id_conflict", "local_region",
-        "local_friendly_title", "gamedb_title", "gamedb_identified",
-        "identity_resolution", "identity_review_reason",
-        "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
-        "disc_classification",
-        "local_ra_hash", "ra_game_id", "ra_game_title",
-        "recommendation_confidence", "recommendation_score",
-        "recommended_ra_game_id", "recommended_ra_title",
-        "alternative_candidates", "preferred_release_name", "preferred_region",
-        "preferred_ra_hash", "preferred_ra_labels", "release_guidance",
-        "preferred_patch_url",
-        "accepted_regions", "accepted_file_names", "accepted_ra_hashes",
-        "ra_labels", "error",
-    ]
-    with temporary.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
-        writer.writeheader()
-        writer.writerows(report_rows)
-    temporary.replace(report_path)
-    return tuple(summaries)
-, line, re.I)
-        if not match:
-            raise MatchError("Unsupported PS1 CUE FILE directive")
-        refs.append(match.group(1) or match.group(2))
+            tokens = shlex.split(line)
+        except ValueError:
+            raise MatchError("Invalid PS1 CUE FILE declaration") from None
+        if len(tokens) != 3 or tokens[0].upper() != "FILE" or tokens[2].upper() != "BINARY":
+            raise MatchError("Unsupported PS1 CUE FILE declaration")
+        refs.append(tokens[1])
     if len(refs) != 1:
-        raise MatchError("PS1 CUE does not reference exactly one BIN track")
-    ref = refs[0]
-    if ref != Path(ref).name or not ref.lower().endswith(".bin") or "\\\\" in ref:
-        raise MatchError("Unsafe or non-BIN PS1 CUE reference")
-    bin_path = cue.parent / ref
-    if bin_path.is_symlink() or not bin_path.is_file():
-        raise MatchError(f"Referenced PS1 BIN missing: {ref}")
-    return bin_path
+        raise MatchError("PS1 CUE requires exactly one referenced BIN")
+    name = refs[0]
+    if name in (".", "..") or "/" in name or "\\" in name or not name.lower().endswith(".bin"):
+        raise MatchError("Unsafe PS1 BIN reference")
+    target = cue.parent / name
+    if target.is_symlink() or not target.is_file():
+        raise MatchError(f"Referenced PS1 BIN missing: {name}")
+    return target
 
 
 def hash_file(hasher: Path, console_id: int, path: Path) -> str:
@@ -1005,7 +601,7 @@ def match_collection(
                 counts["cached"] += 1
             else:
                 try:
-                    item.ra_hash = hash_file(hasher, console_id, path)
+                    item.ra_hash = hash_file(hasher, console_id, ps1_hash_target(path) if slug == "playstation" else path)
                     item.ra_hash_error = None
                 except MatchError as exc:
                     item.ra_hash = None
