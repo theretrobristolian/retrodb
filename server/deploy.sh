@@ -43,6 +43,24 @@ command -v rsync >/dev/null || die 'rsync is missing; run sudo bash server/build
 command -v psql >/dev/null || die 'PostgreSQL is missing; run sudo bash server/build.sh first.'
 getent passwd "$APP_USER" >/dev/null || die 'RetroDB service account is missing.'
 
+# Refuse to change installed files or restart services if checked-out Python is invalid.
+validate_python_syntax() {
+    python3 - "$SOURCE_ROOT" <<'PYCHECK'
+import pathlib
+import sys
+root = pathlib.Path(sys.argv[1])
+for dirname in ("backend", "server"):
+    for path in (root / dirname).rglob("*.py"):
+        try:
+            compile(path.read_bytes(), str(path), "exec")
+        except (SyntaxError, ValueError) as exc:
+            print(f"[ERROR] Invalid Python: {path}: {exc}", file=sys.stderr)
+            sys.exit(1)
+print("[OK] Python source syntax validated before deployment")
+PYCHECK
+}
+run_step 'Validating Python syntax before deployment' validate_python_syntax
+
 if ! grep -q '^RETRODB_DATABASE_URL=' "$CONFIG_FILE" 2>/dev/null; then
     DB_PASSWORD=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
     DATABASE_URL="postgresql+psycopg://retrodb:$DB_PASSWORD@/retrodb?host=/var/run/postgresql"
