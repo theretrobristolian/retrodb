@@ -225,6 +225,8 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     title = ((item.ra_game_title or "").strip()
              or gamedb_title(item, slug)
              or filename)
+    if slug == "playstation" and disc_id(item) == "SLES-03120":
+        title = "3, 2, 1, Smurf! My First Racing Game"
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
     title = re.sub(r"\\[\\s*\\]|\\{\\s*\\}|\\(\\s*\\)", " ", title)
