@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Conservative PS1 RA conflict resolver. One verified Alundra collision pilot.
+
+Never deletes a BIN, overwrites existing files or trusts filenames as RA proof.
+A journal is written BEFORE any rename; interrupted work requires manual review.
+"""
+import argparse
+import hashlib
+import json
+import os
+import re
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+RA_HASH = "940e0711309dd542a8a487edf2aebeb9"
+UNMATCHED_HASH = "3841328147ba8a9bbdd152d9a599b296"
+SOURCE_NAME = "Alundra (USA) (Rev 1)"
+TARGET_NAME = "Alundra [SLUS-00553]"
+ROOT_REL = Path("iso")
+FILE_RE = re.compile(r'^(\\s*FILE\\s+)(?:"([^"]+)"|(\\S+))(\\s+[^\\r\\n]+)$', re.I)
+
+
+def ra_hash(hasher, cue):
+    result = subprocess.run([str(hasher), "12", str(cue)], capture_output=True,
+                            text=True, timeout=180, check=False)
+    if result.returncode:
+        raise RuntimeError("RAHasher failed: " + (result.stderr or result.stdout)[-220:])
+    hashes = re.findall(r"(?i)\\b[a-f0-9]{32}\\b", result.stdout + "\\n" + result.stderr)
+    if len(hashes) != 1:
+        raise RuntimeError("RAHasher did not return exactly one unambiguous hash")
+    return hashes[0].lower()
+
+
+def verify_pair(cue, binary):
+    if any(p.is_symlink() or not p.is_file() for p in (cue, binary)):
+        raise RuntimeError("Missing or symlinked CUE/BIN")
+    raw = cue.read_bytes()
+    try:
+        txt = raw.decode("utf-8-sig")
+        enc = "utf-8-sig"
+    except UnicodeDecodeError:
+        txt = raw.decode("cp1252")
+        enc = "cp1252"
+    lines = txt.splitlines(keepends=True)
+    matches = [(i, FILE_RE.match(line.rstrip("\\r\\n"))) for i, line in enumerate(lines)
+               if line.lstrip().upper().startswith("FILE ")]
+    if len(matches) != 1 or not matches[0][1]:
+        raise RuntimeError("CUE must contain exactly one parseable FILE reference")
+    match = matches[0][1]
+    if (match.group(2) or match.group(3)) != binary.name:
+        raise RuntimeError("CUE does not reference expected BIN")
+    return raw, enc, lines, matches[0]
+
+
+def rewritten(lines, line_match, binary, enc):
+    i, match = line_match
+    out = list(lines)
+    ending = "\\r\\n" if out[i].endswith("\\r\\n") else ("\\n" if out[i].endswith("\\n") else "")
+    out[i] = match.group(1) + '"' + binary.name + '"' + match.group(4) + ending
+    return "".join(out).encode(enc)
+
+
+def inspect(root, hasher):
+    folder = root / ROOT_REL
+    a_cue, a_bin = (folder / (SOURCE_NAME + suffix) for suffix in (".cue", ".bin"))
+    b_cue, b_bin = (folder / (TARGET_NAME + suffix) for suffix in (".cue", ".bin"))
+    backup_cue = folder / ("OLD_" + TARGET_NAME + ".cue")
+    backup_bin = folder / ("OLD_" + TARGET_NAME + ".bin")
+    paths = [a_cue, a_bin, b_cue, b_bin]
+    if any(not x.is_file() or x.is_symlink() for x in paths):
+        return None
+    if backup_cue.exists() or backup_bin.exists():
+        raise RuntimeError("OLD_ backup already exists; refusing collision resolution")
+    if len({str(p).casefold() for p in paths + [backup_cue, backup_bin]}) != 6:
+        raise RuntimeError("Case-folded name collision")
+    for cue, binary in ((a_cue, a_bin), (b_cue, b_bin)):
+        verify_pair(cue, binary)
+    source_hash = ra_hash(hasher, a_cue)
+    target_hash = ra_hash(hasher, b_cue)
+    if (source_hash, target_hash) != (RA_HASH, UNMATCHED_HASH):
+        raise RuntimeError("RA hash evidence changed: source=" + source_hash + " target=" + target_hash)
+    return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
+                backup_cue=backup_cue, backup_bin=backup_bin,
+                verified_hash=source_hash, unmatched_hash=target_hash)
+
+
+def apply(root, hasher, journal, expected):
+    if journal.exists():
+        raise RuntimeError("Journal exists; refusing overwrite")
+    operation = inspect(root, hasher)
+    if operation is None:
+        raise RuntimeError("Alundra pairs changed since preview")
+    if (operation["verified_hash"], operation["unmatched_hash"]) != expected:
+        raise RuntimeError("RA hashes changed since confirmed preview")
+    src_raw, src_enc, src_lines, src_match = verify_pair(operation["source_cue"], operation["source_bin"])
+    dst_raw, dst_enc, dst_lines, dst_match = verify_pair(operation["dest_cue"], operation["dest_bin"])
+    def write(state):
+        record = {"operation": "alundra-ra-collision", "state": state,
+                  "created_utc": datetime.now(timezone.utc).isoformat(),
+                  "paths": {k: str(v) for k, v in operation.items() if isinstance(v, Path)},
+                  "verified_hash": operation["verified_hash"],
+                  "unmatched_hash": operation["unmatched_hash"],
+                  "original_cues_hex": {"source": src_raw.hex(), "destination": dst_raw.hex()}}
+        journal.parent.mkdir(parents=True, exist_ok=True)
+        temp = journal.with_suffix(".json.tmp")
+        temp.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        os.replace(temp, journal)
+    # Journal each irreversible step. Leave files as-is on error for recovery.
+    write("pending")
+    operation["dest_bin"].rename(operation["backup_bin"])
+    write("unmatched-bin-backed-up")
+    operation["dest_cue"].rename(operation["backup_cue"])
+    write("unmatched-cue-backed-up")
+    operation["backup_cue"].write_bytes(rewritten(dst_lines, dst_match, operation["backup_bin"], dst_enc))
+    write("backup-cue-relinked")
+    operation["source_bin"].rename(operation["dest_bin"])
+    write("verified-bin-promoted")
+    operation["source_cue"].rename(operation["dest_cue"])
+    write("verified-cue-promoted")
+    operation["dest_cue"].write_bytes(rewritten(src_lines, src_match, operation["dest_bin"], src_enc))
+    write("verified-cue-relinked")
+    if ra_hash(hasher, operation["dest_cue"]) != RA_HASH or ra_hash(hasher, operation["backup_cue"]) != UNMATCHED_HASH:
+        raise RuntimeError("Post-rename RA verification failed; inspect journal immediately")
+    write("applied")
+    print("[OK] Alundra: RA-compatible pair promoted; unmatched pair preserved as OLD_.")
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("mode", choices=("preview", "apply"))
+    p.add_argument("--root", type=Path, required=True)
+    p.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
+    p.add_argument("--journal", type=Path)
+    args = p.parse_args()
+    operation = inspect(args.root, args.hasher)
+    if operation is None:
+        print("[INFO] No Alundra RA conflict requiring resolution")
+        return
+    print("[RA CONFLICT] Verified:", operation["source_cue"].name, "=>", operation["dest_cue"].name)
+    print("[PRESERVE] Unmatched:", operation["dest_cue"].name, "=>", operation["backup_cue"].name)
+    print("[INFO] Matching both disc hashes was mandatory; no files deleted.")
+    if args.mode == "apply":
+        if not args.journal:
+            p.error("--journal required for apply")
+        apply(args.root, args.hasher, args.journal, (operation["verified_hash"], operation["unmatched_hash"]))
+    else:
+        print("PREVIEW ONLY: no files changed.")
+
+
+if __name__ == "__main__":
+    main()
