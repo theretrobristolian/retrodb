@@ -479,7 +479,7 @@ PYCONF
   if [[ "$result" -eq 0 ]]; then
     # A resolved collision changes file names, so regenerate proposals using
     # the writable view before applying the ordinary non-collision renames.
-    ( umask 077; python3 "$HERE/report_ps1_audit.py" --root "$PILOT_ROOT/roms/sony/playstation1" --output "$csv" ) || result=$?
+    ( umask 077; sudo python3 "$HERE/report_ps1_audit.py" --root "$PILOT_ROOT/roms/sony/playstation1" --output "$csv" && sudo chown "$(id -un):$(id -gn)" "$csv" ) || result=$?
   fi
   if [[ "$result" -eq 0 ]]; then
     journal="$journal_dir/ps1-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
