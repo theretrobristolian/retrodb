@@ -18,7 +18,7 @@ UNMATCHED_HASH = "3841328147ba8a9bbdd152d9a599b296"
 SOURCE_NAME = "Alundra (USA) (Rev 1)"
 TARGET_NAME = "Alundra [SLUS-00553]"
 ROOT_REL = Path("iso")
-FILE_RE = re.compile(r'^(\\s*FILE\\s+)(?:"([^"]+)"|(\\S+))(\\s+[^\\r\\n]+)$', re.I)
+FILE_RE = re.compile(r'^(\s*FILE\s+)(?:"([^"]+)"|(\S+))(\s+[^\r\n]+)$', re.I)
 
 
 def ra_hash(hasher, cue):
@@ -26,7 +26,7 @@ def ra_hash(hasher, cue):
                             text=True, timeout=180, check=False)
     if result.returncode:
         raise RuntimeError("RAHasher failed: " + (result.stderr or result.stdout)[-220:])
-    hashes = re.findall(r"(?i)\\b[a-f0-9]{32}\\b", result.stdout + "\\n" + result.stderr)
+    hashes = re.findall(r"(?i)\b[a-f0-9]{32}\b", result.stdout + "\n" + result.stderr)
     if len(hashes) != 1:
         raise RuntimeError("RAHasher did not return exactly one unambiguous hash")
     return hashes[0].lower()
@@ -43,7 +43,7 @@ def verify_pair(cue, binary):
         txt = raw.decode("cp1252")
         enc = "cp1252"
     lines = txt.splitlines(keepends=True)
-    matches = [(i, FILE_RE.match(line.rstrip("\\r\\n"))) for i, line in enumerate(lines)
+    matches = [(i, FILE_RE.match(line.rstrip("\r\n"))) for i, line in enumerate(lines)
                if line.lstrip().upper().startswith("FILE ")]
     if len(matches) != 1 or not matches[0][1]:
         raise RuntimeError("CUE must contain exactly one parseable FILE reference")
@@ -56,7 +56,7 @@ def verify_pair(cue, binary):
 def rewritten(lines, line_match, binary, enc):
     i, match = line_match
     out = list(lines)
-    ending = "\\r\\n" if out[i].endswith("\\r\\n") else ("\\n" if out[i].endswith("\\n") else "")
+    ending = "\r\n" if out[i].endswith("\r\n") else ("\n" if out[i].endswith("\n") else "")
     out[i] = match.group(1) + '"' + binary.name + '"' + match.group(4) + ending
     return "".join(out).encode(enc)
 
