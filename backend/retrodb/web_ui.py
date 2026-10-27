@@ -245,8 +245,32 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
             title += f" (Disc {disc})"
     return title or filename
 
+RA_CACHE = Path("/var/cache/retrodb/providers/retroachievements")
+
+
+@lru_cache(maxsize=8)
+def _ra_achievement_counts(slug: str, mtime_ns: int) -> dict[int, int]:
+    try:
+        rows = json.loads((RA_CACHE / f"{slug}.json").read_text(encoding="utf-8"))
+        return {int(row["ID"]): int(row.get("NumAchievements", 0))
+                for row in rows if isinstance(row, dict) and "ID" in row}
+    except (OSError, ValueError, TypeError, KeyError):
+        return {}
+
+
 def ra_supported(item: LibraryItem) -> bool:
-    return bool(item.ra_game_id and (item.ra_match_status or "").lower() == "matched")
+    """Gold means a matched disc AND a confirmed nonempty achievement set."""
+    if not item.ra_game_id or (item.ra_match_status or "").lower() != "matched":
+        return False
+    slug = item_slug(item)
+    if slug not in ("playstation", "playstation-2"):
+        return False
+    path = RA_CACHE / f"{slug}.json"
+    try:
+        counts = _ra_achievement_counts(slug, path.stat().st_mtime_ns)
+    except OSError:
+        return False  # Missing catalogue is not proof of achievements.
+    return counts.get(int(item.ra_game_id), 0) > 0
 
 def platform_counts(db: Session):
     stmt = (select(Platform, func.count(LibraryItem.id))
