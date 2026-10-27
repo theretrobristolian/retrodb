@@ -134,7 +134,7 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
     heading = escape(title)
     mobile_links = [
         ("/", "⌂", "Consoles"),
-        ("/library", "▤", "Games"),
+        ("/consoles", "▤", "Consoles"),
         ("/profile", "♙", "Profile"),
         ("/online-services", "◉", "Online"),
         ("/management", "⚙", "Manage"),
@@ -156,9 +156,9 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a><div class="mobile-actions"><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit">{logout_label}</button></form></div>
-<nav><a href="/">Consoles</a><a href="/library">All games</a>{private_nav}
+<nav><a href="/">Home</a><a href="/consoles">Consoles</a><a href="/library">All games</a>{private_nav}
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
-<main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/library"&&(p.startsWith("/library")||p.startsWith("/game/")))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
+<main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/consoles"&&p.startsWith("/consoles"))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
 
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
@@ -279,19 +279,100 @@ def platform_counts(db: Session):
 
 @router.get("/", response_class=HTMLResponse)
 def homepage(request: Request, db: Session = Depends(get_session)):
+    """Read-only landing dashboard; never execute privileged host commands."""
+    platforms = platform_counts(db)
+    total = sum(count for _, count in platforms)
+    available = len([1 for _, count in platforms if count])
+    nas_path = Path("/mnt/retrodb-retronas")
+    # Existence does not prove a share is mounted. Avoid claiming live health
+    # or free capacity from a path that could be an unmounted local directory.
+    try:
+        mounts = Path("/proc/mounts").read_text(encoding="utf-8")
+        nas_mounted = any(line.split()[1] == str(nas_path) and line.split()[2] == "cifs"
+                          for line in mounts.splitlines() if len(line.split()) >= 3)
+    except OSError:
+        nas_mounted = False
+    nas_status = "CIFS mounted" if nas_mounted else "Mount not confirmed"
+    nas_details = "Collection availability detected" if nas_mounted else "Check RetroNAS mount status"
+    private = "" if is_guest(request) else (
+        '<a class="card" href="/management"><div class="eyebrow">Administration</div>'
+        '<h2>Management →</h2><p class="muted">Inventory, audit information and maintenance</p></a>')
+    return page("Home", f"""<div class="eyebrow">The Retro Bristolian · Collection & services</div>
+<h1>Welcome to RetroDB</h1>
+<p class="muted">A home for your retro gaming collection: explore classic systems,
+review RetroAchievements compatibility and keep your gaming services in sight.</p>
+<div class="grid">
+<div class="card"><div class="label">Indexed files</div><div class="metric">{total:,}</div>
+<p class="muted">Library inventory records, including PS1 BIN/CUE pairs</p></div>
+<div class="card"><div class="label">Systems in collection</div><div class="metric">{available}</div>
+<p class="muted">Of {len(platforms)} catalogued platforms</p></div>
+<a class="card" href="/consoles"><div class="eyebrow">Browse</div><h2>Consoles →</h2>
+<p class="muted">Browse by manufacturer, generation or release year</p></a></div>
+<h2>Collection & services</h2><div class="grid">
+<div class="card"><div class="eyebrow">RetroNAS · Read-only check</div><h2>{escape(nas_status)}</h2>
+<p class="muted">{escape(nas_details)}. Detailed NAS capacity and free space monitoring are planned.</p></div>
+<div class="card"><div class="eyebrow">xeRAbora</div><h2>Achievement relay</h2>
+<p class="muted">Live player, current game and service status integration is planned.</p>
+<a href="/online-services">Open services →</a></div>
+<div class="card"><div class="eyebrow">RetroAchievements</div><h2>Track your progress</h2>
+<p class="muted">Latest achievement unlocks and player activity are coming next.</p>
+<a href="https://retroachievements.org/" target="_blank" rel="noopener">RetroAchievements website ↗</a></div>
+<div class="card"><div class="eyebrow">RetroDB</div><h2>Library dashboard</h2>
+<p class="muted">Browse indexed releases and review the collection. Live audit summaries are planned.</p>
+<a href="/library">Explore games →</a></div>
+{private}</div>""", guest=is_guest(request))
+
+
+@router.get("/consoles", response_class=HTMLResponse)
+def consoles(request: Request, db: Session = Depends(get_session),
+             manufacturer: str = "", generation: str = "", sort: str = "release"):
+    """Platform catalogue, separate from the dashboard."""
+    platforms = platform_counts(db)
+    makers = sorted({p.manufacturer for p, _ in platforms if p.manufacturer})
+    generations = sorted({p.generation for p, _ in platforms if p.generation is not None})
+    def option(value, label, current):
+        selected = ' selected' if str(value) == str(current) else ''
+        return f'<option value="{escape(str(value), quote=True)}"{selected}>{escape(str(label))}</option>'
+    maker_options = option("", "All manufacturers", manufacturer) + "".join(
+        option(m, m, manufacturer) for m in makers)
+    gen_options = option("", "All generations", generation) + "".join(
+        option(g, f"Generation {g}", generation) for g in generations)
+    sort_options = "".join(option(v, lbl, sort) for v, lbl in (
+        ("release", "Release year"), ("name", "Name"), ("manufacturer", "Manufacturer"),
+        ("generation", "Generation"), ("collection", "Collection size")))
+    filtered = [(p, count) for p, count in platforms
+                if (not manufacturer or p.manufacturer == manufacturer)
+                and (not generation or str(p.generation) == generation)]
+    if sort == "name":
+        filtered.sort(key=lambda x: x[0].name.casefold())
+    elif sort == "manufacturer":
+        filtered.sort(key=lambda x: ((x[0].manufacturer or "").casefold(), x[0].name.casefold()))
+    elif sort == "generation":
+        filtered.sort(key=lambda x: (x[0].generation is None, x[0].generation or 0, x[0].name))
+    elif sort == "collection":
+        filtered.sort(key=lambda x: (-x[1], x[0].name))
+    else:
+        filtered.sort(key=lambda x: (x[0].release_date is None, str(x[0].release_date or ""), x[0].name))
     cards = []
-    total = 0
-    for platform, count in platform_counts(db):
-        total += count
-        cards.append(f"""<a class="card" href="/library/{quote(platform.slug)}"><div class="eyebrow">{escape(platform.manufacturer or 'Console')}</div>
-<h2>{escape(platform.name)}</h2><div class="metric">{count:,}</div><span class="muted">indexed files · Explore →</span></a>""")
-    empty = '<p class="muted">No consoles are configured in PostgreSQL yet. Run RetroDB deployment and library inventory scan first.</p>' if not cards else ""
-    management_card = "" if is_guest(request) else '<a class="card" href="/management"><h2>Library management →</h2><p class="muted">Status, inventory and safe maintenance guidance</p></a>'
-    return page("Consoles", f"""<div class="eyebrow">Your personal game collection</div><h1>Choose a console</h1>
-<p class="muted">Browse your own indexed collection, explore releases, and check collection health.</p>
-<div class="grid">{''.join(cards)}</div>{empty}
-<h2>Library overview</h2><div class="grid"><div class="card"><div class="label">Indexed game files</div>
-<div class="metric">{total:,}</div></div>{management_card}</div>""", guest=is_guest(request))
+    for p, count in filtered:
+        subtitle = " · ".join(v for v in (
+            p.manufacturer or "", f"Generation {p.generation}" if p.generation else "",
+            str(p.release_date.year) if p.release_date else "") if v)
+        cards.append(f'<a class="card" href="/library/{quote(p.slug)}">'
+                     f'<div class="eyebrow">{escape(subtitle or "Console")}</div>'
+                     f'<h2>{escape(p.name)}</h2><div class="metric">{count:,}</div>'
+                     '<span class="muted">indexed files · Explore →</span></a>')
+    return page("Consoles", f"""<div class="eyebrow">Systems catalogue</div>
+<h1>Consoles</h1><p class="muted">Discover platforms by manufacturer, generation or release year.</p>
+<form action="/consoles" method="get" class="panel" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+<label>Manufacturer <select name="manufacturer">{maker_options}</select></label>
+<label>Generation <select name="generation">{gen_options}</select></label>
+<label>Sort <select name="sort">{sort_options}</select></label>
+<button type="submit">Apply filters</button></form>
+<p class="muted">{len(filtered)} of {len(platforms)} platforms</p>
+<div class="grid">{''.join(cards) or '<p class="muted">No consoles match these filters.</p>'}</div>""",
+                guest=is_guest(request))
+
 
 def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
            page_number: int, ra_filter: str = "all", sort_by: str = "title", order: str = "asc"):
