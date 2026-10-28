@@ -133,8 +133,8 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
     logout_label = "Leave guest view" if guest else "Sign out"
     heading = escape(title)
     mobile_links = [
-        ("/", "⌂", "Consoles"),
-        ("/consoles", "▤", "Consoles"),
+        ("/", "⌂", "Dashboard"),
+        ("/library", "▤", "Library"),
         ("/profile", "♙", "Profile"),
         ("/online-services", "◉", "Online"),
         ("/management", "⚙", "Manage"),
@@ -156,9 +156,9 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.webmanifest">
 <style>{CSS}</style></head><body><header><div class="bar"><a class="brand" href="/">◈ RetroDB</a><div class="mobile-actions"><a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit">{logout_label}</button></form></div>
-<nav><a href="/">Home</a><a href="/consoles">Consoles</a><a href="/library">All games</a>{private_nav}
+<nav><a href="/">Dashboard</a><a href="/library">Library</a><a href="/consoles">Consoles</a>{private_nav}
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
-<main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/consoles"&&p.startsWith("/consoles"))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
+<main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/library"&&(p.startsWith("/library")||p.startsWith("/game/")))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
 
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
@@ -459,7 +459,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
     heading = escape(platform.name if platform else "All games")
-    return page(heading, f"""<div class="crumb"><a href="/">Consoles</a> / {heading}</div>
+    return page(heading, f"""<div class="crumb"><a href="/">Dashboard</a> / {heading}</div>
 <h1>{heading}</h1><p class="muted">{count:,} indexed game entries · Up to 100 per page</p>
 <form class="toolbar" action="{base}">
 <input name="q" value="{escape(q,quote=True)}" placeholder="Search games or serials">
