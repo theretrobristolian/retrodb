@@ -686,7 +686,10 @@ def match_collection(
                 # Manually cross-referenced retail PS1 releases. Identity only;
                 # hash matching remains the sole RA-compatible criterion.
                 reviewed_ps1 = {"SCES-01706": 11305, "SCES-00242": 5332, "SLUS-00893": 11357,
-                                "SLES-01761": 823}  # Action Man: Mission Xtreme = Operation Extreme (regional title)
+                                "SLES-01761": 823,  # Action Man: Mission Xtreme = Operation Extreme
+                                 "SCUS-94455": 11278, "SCUS-94488": 11278,  # Gran Turismo 2: Arcade / Simulation
+                                 "SLUS-01161": 11588, "SLUS-01318": 11588,  # Driver 2: Disc 1 / Disc 2
+                                 "SLES-00097": 15920}  # Exhumed = Powerslave (European release)
                 reviewed_id = reviewed_ps1.get(serial)
                 if reviewed_id is not None:
                     reviewed_game = next((g for g in with_sets if g.game_id == reviewed_id), None)
