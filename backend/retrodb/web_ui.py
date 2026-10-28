@@ -375,7 +375,8 @@ def consoles(request: Request, db: Session = Depends(get_session),
 
 
 def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
-           page_number: int, ra_filter: str = "all", sort_by: str = "title", order: str = "asc"):
+           page_number: int, ra_filter: str = "all", sort_by: str = "title", order: str = "asc",
+           console_filter: str = "", generation: str = "", region: str = ""):
     platform = None
     if slug:
         platform = db.scalar(select(Platform).where(Platform.slug == slug))
@@ -390,6 +391,18 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
                               func.lower(LibraryItem.extension) != "bin"))
     if platform:
         stmt = stmt.where(LibraryItem.platform_id == platform.id)
+    elif console_filter:
+        stmt = stmt.where(LibraryItem.platform_id.in_(
+            select(Platform.id).where(Platform.slug == console_filter)))
+    if generation:
+        stmt = stmt.where(LibraryItem.platform_id.in_(
+            select(Platform.id).where(Platform.generation == int(generation))))
+    if region:
+        prefixes = {"usa": ("SLUS", "SCUS"), "europe": ("SLES", "SCES"),
+                    "japan": ("SLPS", "SLPM", "SCPS")}.get(region, ())
+        if prefixes:
+            stmt = stmt.where(or_(*(LibraryItem.filename.ilike(f"%{prefix}%")
+                                    for prefix in prefixes)))
     # Sort on the same basic cleanup used to display filename fallbacks.
     # This avoids sorting missing-RA titles under their disc serial rather than title.
     filename_stem = func.regexp_replace(LibraryItem.filename, r"\.[^.]+$", "", "g")
@@ -441,7 +454,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     base = "/library" + ("/" + quote(slug) if slug else "")
     from urllib.parse import urlencode
     def link(**changes):
-        args = dict(q=q,letter=letter,ra=ra_filter,sort=sort_by,order=order,page=page_number)
+        args = dict(q=q,letter=letter,ra=ra_filter,sort=sort_by,order=order,page=page_number,console=console_filter,generation=generation,region=region)
         args.update(changes)
         return base + "?" + urlencode(args)
     alphabet = ' '.join(f'<a class="pill" href="{escape(link(letter=c,page=1), quote=True)}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
@@ -458,12 +471,25 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 </tr>""")
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
-    heading = escape(platform.name if platform else "All games")
+    heading = escape(platform.name if platform else "Library")
+    available_platforms = db.scalars(select(Platform).order_by(Platform.name)).all()
+    console_options = '<option value="">All consoles</option>' + "".join(
+        f'<option value="{escape(p.slug, quote=True)}"{" selected" if console_filter == p.slug else ""}>{escape(p.name)}</option>'
+        for p in available_platforms)
+    generation_options = '<option value="">All generations</option>' + "".join(
+        f'<option value="{g}"{" selected" if generation == str(g) else ""}>Generation {g}</option>'
+        for g in sorted({p.generation for p in available_platforms if p.generation is not None}))
+    region_options = '<option value="">All regions</option>' + "".join(
+        f'<option value="{code}"{" selected" if region == code else ""}>{label}</option>'
+        for code, label in (("usa", "USA"), ("europe", "Europe / PAL"), ("japan", "Japan")))
     return page(heading, f"""<div class="crumb"><a href="/">Dashboard</a> / {heading}</div>
 <h1>{heading}</h1><p class="muted">{count:,} indexed game entries · Up to 100 per page</p>
 <form class="toolbar" action="{base}">
 <input name="q" value="{escape(q,quote=True)}" placeholder="Search games or serials">
 <input type="hidden" name="letter" value="{escape(letter,quote=True)}">
+{f'<label class="label">Console <select name="console">{console_options}</select></label>' if not slug else ''}
+<label class="label">Generation <select name="generation">{generation_options}</select></label>
+<label class="label">Region <select name="region">{region_options}</select></label>
 <label class="label">RA <select name="ra"><option value="all">All</option>
 <option value="yes" {'selected' if ra_filter=='yes' else ''}>Verified</option>
 <option value="other" {'selected' if ra_filter=='other' else ''}>Other / unknown</option></select></label>
@@ -506,8 +532,12 @@ def all_games(request: Request, db: Session = Depends(get_session), q: str = Que
               page_number: int = Query(1, alias="page", ge=1, le=10000),
               ra: str = Query("all", pattern="^(all|yes|other)$"),
               sort: str = Query("title", pattern="^(title|disc|id|ra)$"),
-              order: str = Query("asc", pattern="^(asc|desc)$")):
-    return browse(request, db, None, q, letter.upper(), page_number, ra, sort, order)
+              order: str = Query("asc", pattern="^(asc|desc)$"),
+              console: str = Query("", max_length=80),
+              generation: str = Query("", pattern=r"^([0-9]{1,2})?$"),
+              region: str = Query("", pattern="^(|usa|europe|japan)$")):
+    return browse(request, db, None, q, letter.upper(), page_number, ra, sort, order,
+                  console, generation, region)
 
 @router.get("/library/{slug}", response_class=HTMLResponse)
 def console_games(slug: str, request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
@@ -515,8 +545,11 @@ def console_games(slug: str, request: Request, db: Session = Depends(get_session
                   page_number: int = Query(1, alias="page", ge=1, le=10000),
                   ra: str = Query("all", pattern="^(all|yes|other)$"),
                   sort: str = Query("title", pattern="^(title|disc|id|ra)$"),
-                  order: str = Query("asc", pattern="^(asc|desc)$")):
-    return browse(request, db, slug, q, letter.upper(), page_number, ra, sort, order)
+                  order: str = Query("asc", pattern="^(asc|desc)$"),
+                  generation: str = Query("", pattern=r"^([0-9]{1,2})?$"),
+                  region: str = Query("", pattern="^(|usa|europe|japan)$")):
+    return browse(request, db, slug, q, letter.upper(), page_number, ra, sort, order,
+                  "", generation, region)
 
 PS2_SERIAL = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 DATA_DIR = Path("/var/cache/retrodb/web")
