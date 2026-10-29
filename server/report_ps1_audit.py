@@ -163,15 +163,15 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
         if not selected_serial and not is_homebrew:
             issues.append("ID_MISSING")
         catalogue_title = gamedb.get(selected_serial, "")
-        if selected_serial == "SCES-01000" and re.search(r"\\bkula\\s+world\\b", cue.stem, re.I):
+        if selected_serial == "SCES-01000" and "kula world" in cue.stem.casefold():
             catalogue_title = "Kula World"
         if selected_serial == "SLES-03120":
             catalogue_title = "3, 2, 1, Smurf! My First Racing Game"
         # A catalogue serial match does not prove the image is that retail title.
         # Kula World has been observed proposing a PS One Kids demo title;
         # preserve the source and require manual disc identity review.
-        if (re.search(r"\\bkula\\s+world\\b", cue.stem, re.I)
-                and re.search(r"\\bps\\s*one\\s+kids\\b", catalogue_title, re.I)):
+        if (re.search(r"\bkula\s+world\b", cue.stem, re.I)
+                and re.search(r"\bps\s*one\s+kids\b", catalogue_title, re.I)):
             issues.append("TITLE_IDENTITY_CONFLICT")
         title = cleaned_ps1_title(catalogue_title) if catalogue_title else cleaned_ps1_title(cue.stem)
         title = re.sub(r"\s*\((?:Rev(?:ision)?\s*\d+(?:\.\d+)?|v\d+(?:\.\d+)?)\)", "", title, flags=re.I).strip()
