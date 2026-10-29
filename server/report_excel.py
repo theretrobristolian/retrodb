@@ -120,7 +120,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
             and r.get('ra_set_status') == 'NO_SET'):
         title = 'Exhumed / PowerSlave'
         release = 'PowerSlave (USA) — optional; no PS1 achievement set'
-        return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
+    return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             (14865 if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SCES-01000' and 'kula world' in Path(r['path']).stem.casefold() else (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', ''))), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
 def _disc_variant(row):
