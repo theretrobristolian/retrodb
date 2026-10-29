@@ -180,6 +180,10 @@ def discover(audit, ps1_audit):
             if len(candidates[key]) == 1}
 
 
+class NotIdenticalDuplicate(RuntimeError):
+    """RA-equivalent images with different complete BIN contents; preserve both."""
+
+
 def inspect(root, hasher, profile="alundra", audit=None):
     from report_ps1_audit import disc_serial
     cfg = PROFILES[profile]
@@ -218,7 +222,7 @@ def inspect(root, hasher, profile="alundra", audit=None):
             return digest.digest()
         if (a_bin.stat().st_size != b_bin.stat().st_size
                 or full_sha256(a_bin) != full_sha256(b_bin)):
-            raise RuntimeError("RA hash matches but BIN contents differ; refusing OLD_")
+            raise NotIdenticalDuplicate("Same RA hash, different full BIN contents; both retained")
     if profile != "alundra":
         audit_pair(audit, cfg, source_hash, target_hash)
     return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
@@ -321,8 +325,22 @@ def main():
         return
     PROFILES.clear()
     PROFILES.update(discover(args.audit, args.ps1_audit))
-    available = [(key, op) for key in PROFILES
-                 if (op := inspect(args.root, args.hasher, key, args.audit)) is not None]
+    available = []
+    skipped = []
+    for key in PROFILES:
+        try:
+            operation = inspect(args.root, args.hasher, key, args.audit)
+        except NotIdenticalDuplicate as exc:
+            skipped.append((key, str(exc)))
+            continue
+        if operation is not None:
+            available.append((key, operation))
+    if args.mode != "count":
+        for key, reason in skipped:
+            print("[SKIP - REVIEW]", PROFILES[key]["source"], "=>",
+                  PROFILES[key]["target"], "-", reason)
+        if skipped:
+            print(f"[INFO] {len(skipped)} collision candidate(s) retained unchanged.")
     if args.mode == "count":
         print(len(available))
         return
