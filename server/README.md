@@ -24,7 +24,7 @@ bash -n server/manager.sh
 python3 -m pytest tests/test_ps1_verified_conflicts.py -q
 ```
 
-For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENAMEPS1` confirmation. Verified RA alternatives take priority. True duplicates require **byte-identical BIN files** (full SHA-256), not merely the same RetroAchievements hash. Pairs with different full BIN content are shown as `SKIP - REVIEW` and neither is modified. Collisions may be applied individually with journals; `OLD_` pairs must be reviewed before manual deletion. Never delete or rename a `SKIP - REVIEW` pair based only on RA hashes.
+For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENAMEPS1` confirmation. Verified RA alternatives take priority. When an existing canonical pair and another image share a verified game identity and the same internal disc serial, the canonical pair remains active and the extra pair is preserved as `OLD_`, even if their BIN files differ. The resolver compares live RA hashes against the audit before writing, retains a recovery journal, and refuses ambiguous disc, mode, or special-edition pairs. Without a reviewed RA identity, differing hashes still require manual review. An unmatched source is never preferred over an RA-matched canonical image. Collisions may be applied individually with journals; `OLD_` pairs must be reviewed before manual deletion. Never delete or rename a `SKIP - REVIEW` pair based only on RA hashes.
 
 ## Main tools
 
