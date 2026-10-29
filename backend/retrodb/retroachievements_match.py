@@ -653,6 +653,9 @@ def match_collection(
                 observed_title = (gamedb_title or friendly_local_title(item.relative_path)).casefold()
                 if "supersonic racers" in observed_title or "dare devil derby 3d" in observed_title:
                     curated_id = 16649
+                elif serial == "SLES-00097":
+                    # Exhumed is the European release of PS1 PowerSlave.
+                    curated_id = 15920
                 elif serial == "SLES-01244":
                     # European Assault: verified catalogue identity from manual review.
                     curated_id = 26626
