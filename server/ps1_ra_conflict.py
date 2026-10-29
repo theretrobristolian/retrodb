@@ -143,9 +143,9 @@ def discover(audit, ps1_audit):
         # or disc serial; never auto-archive one as another.
         def variant(stem):
             words = stem.casefold()
-            mode = re.search(r"\\b(arcade|simulation)(?:\\s+mode)?\\b", words)
-            disc = re.search(r"\\b(?:disc|disk|cd)\\s*[-_ ]*(\\d+)\\b", words)
-            edition = re.search(r"\\b(special edition|collector(?:'s|s)? edition)\\b", words)
+            mode = re.search(r"\b(arcade|simulation)(?:\s+mode)?\b", words)
+            disc = re.search(r"\b(?:disc|disk|cd)\s*[-_ ]*(\d+)\b", words)
+            edition = re.search(r"\b(special edition|collector(?:'s|s)? edition)\b", words)
             return (mode.group(1) if mode else "",
                     disc.group(1) if disc else "",
                     edition.group(1) if edition else "")
