@@ -98,27 +98,34 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
             (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', '')), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
 def apply_collection_dedup(entries):
-    """Discount only demonstrably redundant noncompatible copies.
+    """Exclude only an unmatched duplicate of the *same disc*.
 
-    The raw CSV and all ISO files are untouched. Do not hide multi-disc games:
-    two verified hashes for the same RA ID remain counted. Also preserve
-    unresolved duplicates when there is no compatible copy.
+    RA game IDs are shared across some multi-disc games (for example GT2
+    Arcade/Simulation). They are insufficient proof of a redundant disc.
+    Missing or conflicting disc serials are deliberately kept for review.
+    Only reporting is affected; no NAS files are modified.
     """
     groups = {}
     for row in entries:
-        game_id = str(row[6] or '').strip()
-        if game_id:
-            groups.setdefault(game_id, []).append(row)
+        game_id = str(row[6] or "").strip()
+        serial = str(row[2] or "").strip().upper()
+        internal = str(row[21] or "").strip().upper() if len(row) > 21 else ""
+        conflict = str(row[23] or "").strip().upper() if len(row) > 23 else ""
+        if not game_id or not serial or conflict == "YES":
+            continue
+        if internal and internal != serial:
+            continue
+        groups.setdefault((game_id, serial), []).append(row)
     for group in groups.values():
-        verified = [row for row in group if row[3] == 'YES']
-        if not verified:
+        if not any(row[3] == "YES" for row in group):
             continue
         for row in group:
-            if row[3] != 'YES':
-                row[13] = 'EXCLUDE — compatible copy present'
-                row[5] = 'Already covered by verified RA-compatible ISO for this RA game ID; retained on RetroNAS'
+            if row[3] == "YES":
+                row[13] = "COUNT — verified"
             else:
-                row[13] = 'COUNT — verified'
+                row[13] = "EXCLUDE — compatible same-disc copy present"
+                row[5] = ("Verified RA-compatible image exists for this exact game "
+                          "and disc serial; retain until manually reviewed")
     return entries
 
 
