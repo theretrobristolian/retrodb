@@ -212,3 +212,30 @@ def test_identical_ra_hash_but_different_bin_is_rejected(tmp_path):
          patch.object(resolver, "audit_pair"):
         with pytest.raises(RuntimeError, match="BIN contents differ"):
             resolver.inspect(tmp_path, Path("/unused/RAHasher"), "duplicate-test")
+
+
+def test_generic_discovery_no_set_identical_copies(tmp_path):
+    import csv
+    raw = tmp_path / "ra.csv"
+    audit = tmp_path / "ps1.csv"
+    with raw.open("w", newline="") as out:
+        fields = ["platform", "path", "status", "local_serial",
+                  "no_set_ra_game_id", "local_ra_hash"]
+        w = csv.DictWriter(out, fieldnames=fields)
+        w.writeheader()
+        for name in ("LEGO Island 2 (USA)", "LEGO Island 2 [SLUS-01246]"):
+            w.writerow(dict(platform="Sony PlayStation", path="iso/" + name + ".cue",
+                            status="unmatched", local_serial="SLUS-01246",
+                            no_set_ra_game_id="13898", local_ra_hash="b" * 32))
+    with audit.open("w", newline="") as out:
+        fields = ["relative_cue", "proposed_cue", "issues",
+                  "internal_serial", "selected_serial"]
+        w = csv.DictWriter(out, fieldnames=fields)
+        w.writeheader()
+        w.writerow(dict(relative_cue="iso/LEGO Island 2 (USA).cue",
+                        proposed_cue="iso/LEGO Island 2 [SLUS-01246].cue",
+                        issues="CUE_DESTINATION_EXISTS | BIN_DESTINATION_EXISTS",
+                        internal_serial="SLUS-01246", selected_serial="SLUS-01246"))
+    plans = resolver.discover(raw, audit)
+    assert len(plans) == 1
+    assert next(iter(plans.values()))["identical"] is True
