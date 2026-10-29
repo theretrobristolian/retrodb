@@ -22,6 +22,10 @@ def parse(args):
         if row["status"] not in ("RENAME_CANDIDATE", "VALID"):
             continue
         issue_set = {x.strip() for x in row.get("issues", "").split("|") if x.strip()}
+        # Defence in depth for older/stale CSVs generated before the audit fix.
+        if ("kula world" in Path(row.get("relative_cue", "")).stem.casefold()
+                and "ps one kids" in Path(row.get("proposed_cue", "")).stem.casefold()):
+            continue
         mgs_disc1 = (
             row.get("relative_cue", "").endswith("Metal Gear Solid [SLUS_006.94].cue")
             and row.get("filename_serial") == "SLUS-00694"
