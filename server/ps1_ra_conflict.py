@@ -93,10 +93,11 @@ def audit_pair(audit_path, cfg, source_hash, target_hash):
     target = unique(cfg["target"])
     game_id = cfg["ra_game_id"]
     if (not cfg.get("identical") and source.get("status") != "matched"
-            or str(source.get("ra_game_id")) != game_id
+            or (not cfg.get("identical") and str(source.get("ra_game_id")) != game_id)
+            or (cfg.get("identical") and str(source.get("ra_game_id") or source.get("no_set_ra_game_id") or ("serial:" + cfg["serial"])) != game_id)
             or source.get("local_ra_hash", "").lower() != source_hash
             or (not cfg.get("identical") and target.get("status") != "unmatched")
-            or str(target.get("ra_game_id") if cfg.get("identical") else target.get("recommended_ra_game_id")) != game_id
+            or str((target.get("ra_game_id") or target.get("no_set_ra_game_id") or ("serial:" + cfg["serial"])) if cfg.get("identical") else target.get("recommended_ra_game_id")) != game_id
             or target.get("local_ra_hash", "").lower() != target_hash):
         raise RuntimeError("RA audit does not prove a verified source and unmatched destination")
     if (source.get("local_serial") != cfg["serial"]
@@ -154,8 +155,12 @@ def discover(audit, ps1_audit):
             continue
         if src.get("disc_id_conflict") == "YES" or dst.get("disc_id_conflict") == "YES":
             continue
-        game_id = str(src.get("ra_game_id", ""))
-        if not game_id or (not identical and str(dst.get("recommended_ra_game_id", "")) != game_id) or (identical and str(dst.get("ra_game_id", "")) != game_id):
+        game_id = str(src.get("ra_game_id") or src.get("no_set_ra_game_id") or "")
+        target_id = str(dst.get("ra_game_id") or dst.get("no_set_ra_game_id") or "")
+        if not game_id and identical:
+            game_id = "serial:" + serial
+            target_id = game_id
+        if not game_id or (not identical and str(dst.get("recommended_ra_game_id", "")) != game_id) or (identical and target_id != game_id):
             continue
         src_hash = src.get("local_ra_hash", "").lower()
         dst_hash = dst.get("local_ra_hash", "").lower()
