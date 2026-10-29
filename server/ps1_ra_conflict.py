@@ -285,25 +285,25 @@ def verify_completed(journal, ro_root, hasher):
     if record.get("operation") not in ("alundra-ra-collision", "verified-ps1-collision"):
         raise RuntimeError("Not a PS1 collision journal")
     cfg = record.get("config") or PROFILES[record.get("profile", "alundra")]
-    if record.get("state") not in ("verified-cue-relinked", "applied"):
+    if record.get("state") not in ("verified-cue-relinked", "source-cue-relinked", "applied"):
         raise RuntimeError("Journal is not ready for final verification: " + str(record.get("state")))
     paths = record["paths"]
     expected_dir = (ro_root / Path(cfg.get("folder", "iso"))).resolve()
     for name in ("dest_cue", "dest_bin", "backup_cue", "backup_bin"):
         candidate = Path(paths[name])
-        if candidate.name != (("OLD_" if name.startswith("backup_") else "") + cfg["target"] + (".cue" if name.endswith("cue") else ".bin")):
+        if candidate.name != (("OLD_" if name.startswith("backup_") else "") + (cfg["source"] if name.startswith("backup_") and cfg.get("archive_source") else cfg["target"]) + (".cue" if name.endswith("cue") else ".bin")):
             raise RuntimeError("Journal contains unexpected filename for " + name)
     active_cue = expected_dir / (cfg["target"] + ".cue")
     active_bin = expected_dir / (cfg["target"] + ".bin")
-    backup_cue = expected_dir / ("OLD_" + cfg["target"] + ".cue")
-    backup_bin = expected_dir / ("OLD_" + cfg["target"] + ".bin")
+    backup_cue = expected_dir / ("OLD_" + (cfg["source"] if cfg.get("archive_source") else cfg["target"]) + ".cue")
+    backup_bin = expected_dir / ("OLD_" + (cfg["source"] if cfg.get("archive_source") else cfg["target"]) + ".bin")
     verify_pair(active_cue, active_bin)
     verify_pair(backup_cue, backup_bin)
     active_hash = ra_hash(hasher, active_bin)
     old_hash = ra_hash(hasher, backup_bin)
     print("[VERIFY] Active:", active_hash, "expected:", record["verified_hash"])
     print("[VERIFY] OLD_  :", old_hash, "expected:", record["unmatched_hash"])
-    if (active_hash, old_hash) != (record["verified_hash"], record["unmatched_hash"]):
+    if (active_hash, old_hash) != ((record["unmatched_hash"], record["verified_hash"]) if cfg.get("archive_source") else (record["verified_hash"], record["unmatched_hash"])):
         raise RuntimeError("Final RA hash mismatch; journal unchanged")
     if record["state"] == "applied":
         print("[OK] Already verified and completed")
@@ -355,9 +355,9 @@ def main():
         print("[INFO] No reviewed PS1 RA collision requiring resolution")
         return
     for profile, operation in available:
-        print("[RA CONFLICT]", profile, "verified:", operation["source_cue"].name,
+        print("[RA CONFLICT]", profile, "extra:" if PROFILES[profile].get("archive_source") else "verified:", operation["source_cue"].name,
               "=>", operation["dest_cue"].name)
-        print("[PRESERVE]", operation["dest_cue"].name, "=>", operation["backup_cue"].name)
+        print("[PRESERVE]", (operation["source_cue"] if PROFILES[profile].get("archive_source") else operation["dest_cue"]).name, "=>", operation["backup_cue"].name)
     if args.mode == "apply":
         if not args.journal:
             p.error("--journal required for apply")
