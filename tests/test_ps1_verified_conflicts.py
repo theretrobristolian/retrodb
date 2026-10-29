@@ -175,3 +175,40 @@ def test_generic_discovery_rejects_different_disc_serial(tmp_path):
                              issues="CUE_DESTINATION_EXISTS | BIN_DESTINATION_EXISTS",
                              internal_serial="SCUS-94488", selected_serial="SCUS-94488"))
     assert resolver.discover(ra_path, audit_path) == {}
+
+
+def test_generic_discovery_finds_identical_verified_collision(tmp_path):
+    import csv
+    ra = tmp_path / "ra.csv"
+    files = tmp_path / "ps1.csv"
+    cols = ["platform", "path", "status", "local_serial",
+            "ra_game_id", "recommended_ra_game_id", "local_ra_hash"]
+    with ra.open("w", newline="") as out:
+        w = csv.DictWriter(out, fieldnames=cols)
+        w.writeheader()
+        for stem in ("LEGO Rock Raiders (USA)", "LEGO Rock Raiders [SLUS-00937]"):
+            w.writerow(dict(platform="Sony PlayStation", path="iso/" + stem + ".cue",
+                            status="matched", local_serial="SLUS-00937",
+                            ra_game_id="17043", local_ra_hash="a" * 32))
+    with files.open("w", newline="") as out:
+        w = csv.DictWriter(out, fieldnames=["relative_cue", "proposed_cue",
+                           "issues", "internal_serial", "selected_serial"])
+        w.writeheader()
+        w.writerow(dict(relative_cue="iso/LEGO Rock Raiders (USA).cue",
+                        proposed_cue="iso/LEGO Rock Raiders [SLUS-00937].cue",
+                        issues="CUE_DESTINATION_EXISTS | BIN_DESTINATION_EXISTS",
+                        internal_serial="SLUS-00937", selected_serial="SLUS-00937"))
+    plans = resolver.discover(ra, files)
+    assert len(plans) == 1
+    assert next(iter(plans.values()))["identical"] is True
+
+
+def test_identical_ra_hash_but_different_bin_is_rejected(tmp_path):
+    cfg, hash_impl = fixture_pairs(tmp_path, "driver")
+    cfg = dict(cfg, identical=True, unmatched=cfg["verified"])
+    with patch.dict(resolver.PROFILES, {"duplicate-test": cfg}), \
+         patch("report_ps1_audit.disc_serial", return_value=cfg["serial"]), \
+         patch.object(resolver, "ra_hash", return_value=cfg["verified"]), \
+         patch.object(resolver, "audit_pair"):
+        with pytest.raises(RuntimeError, match="BIN contents differ"):
+            resolver.inspect(tmp_path, Path("/unused/RAHasher"), "duplicate-test")
