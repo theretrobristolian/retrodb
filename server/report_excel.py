@@ -79,7 +79,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                   'use Roll Away (USA), SLUS-00724, supported hash '
                   'ec12ea42d913aa5a9d4f2b42ad5d28ec. '
                   'RA: https://retroachievements.org/game/14865')
-        elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
+    elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
     elif suggested:
         status = 'NO'
         if r.get('recommendation_confidence') == 'supported-alternative-edition':
