@@ -198,3 +198,24 @@ def test_kula_world_europe_identity_and_us_release_guidance():
     assert result[7] == "Roll Away (USA) [SLUS-00724]"
     assert result[3] == "NO"
     assert "retroachievements.org/game/14865" in result[5]
+
+
+def test_exhumed_europe_is_powerslave_no_set_with_optional_us_guidance():
+    row = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Exhumed [SLES-00097].cue",
+        "local_serial": "SLES-00097", "local_region": "Europe",
+        "gamedb_title": "Exhumed", "local_friendly_title": "Exhumed",
+        "ra_set_status": "NO_SET", "no_set_ra_game_id": 15920,
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    result = report.row_for(row)
+    assert result[0] == "Exhumed / PowerSlave"
+    assert result[3] == "NO SET"
+    assert str(result[6]) == "15920"
+    assert "PowerSlave (USA)" in result[7]
+    assert "NOT an RA-compatible upgrade" in result[5]
+    assert "retroachievements.org/game/15920" in result[5]
