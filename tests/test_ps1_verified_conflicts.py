@@ -25,17 +25,40 @@ def fixture_pairs(tmp_path, profile):
     return cfg, pretend_hash
 
 
+def make_audit(tmp_path, cfg):
+    import csv
+    path = tmp_path / "ra-audit.csv"
+    fields = ["platform", "path", "status", "local_serial", "ra_game_id",
+              "recommended_ra_game_id", "local_ra_hash", "disc_id_conflict"]
+    with path.open("w", newline="", encoding="utf-8") as out:
+        writer = csv.DictWriter(out, fieldnames=fields)
+        writer.writeheader()
+        for stem, status, content_hash in (
+            (cfg["source"], "matched", cfg["verified"]),
+            (cfg["target"], "unmatched", "f" * 32),
+        ):
+            writer.writerow({
+                "platform": "Sony PlayStation", "path": "iso/" + stem + ".cue",
+                "status": status, "local_serial": cfg["serial"],
+                "ra_game_id": cfg["ra_game_id"] if status == "matched" else "",
+                "recommended_ra_game_id": cfg["ra_game_id"] if status == "unmatched" else "",
+                "local_ra_hash": content_hash, "disc_id_conflict": "NO",
+            })
+    return path
+
+
 @pytest.mark.parametrize("profile", ["driver", "gt2-simulation"])
 def test_promote_verified_pair_retains_unmatched_old_pair(tmp_path, profile):
     cfg, hash_impl = fixture_pairs(tmp_path, profile)
     journal = tmp_path / (profile + ".json")
+    audit = make_audit(tmp_path, cfg)
     with patch("report_ps1_audit.disc_serial", return_value=cfg["serial"]), \
          patch.object(resolver, "ra_hash", side_effect=hash_impl):
-        op = resolver.inspect(tmp_path, Path("/unused/RAHasher"), profile)
+        op = resolver.inspect(tmp_path, Path("/unused/RAHasher"), profile, audit)
         assert op is not None
         assert op["verified_hash"] == cfg["verified"]
         resolver.apply(tmp_path, Path("/unused/RAHasher"), journal,
-                       (op["verified_hash"], op["unmatched_hash"]), profile)
+                       (op["verified_hash"], op["unmatched_hash"]), profile, audit)
         assert (tmp_path / "iso" / (cfg["target"] + ".bin")).read_bytes() == b"verified"
         assert (tmp_path / "iso" / ("OLD_" + cfg["target"] + ".bin")).read_bytes() == b"unmatched"
         for basename in (cfg["target"], "OLD_" + cfg["target"]):
