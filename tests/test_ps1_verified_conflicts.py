@@ -114,3 +114,64 @@ def test_refuses_unverified_source_hash(tmp_path):
          patch.object(resolver, "ra_hash", side_effect=hash_impl):
         with pytest.raises(RuntimeError, match="Verified hash"):
             resolver.inspect(tmp_path, Path("/unused/RAHasher"), "gt2-simulation", audit)
+
+
+def test_generic_discovery_finds_verified_same_disc_collision(tmp_path):
+    import csv
+    folder = tmp_path / "iso"
+    folder.mkdir()
+    source = "Doom (USA) (Rev 1)"
+    target = "Doom [SLUS-00077]"
+    ra_path = tmp_path / "ra.csv"
+    audit_path = tmp_path / "ps1.csv"
+    ra_fields = ["platform", "path", "status", "local_serial",
+                 "ra_game_id", "recommended_ra_game_id",
+                 "local_ra_hash", "disc_id_conflict"]
+    with ra_path.open("w", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=ra_fields)
+        writer.writeheader()
+        writer.writerow(dict(platform="Sony PlayStation", path="iso/" + source + ".cue",
+                             status="matched", local_serial="SLUS-00077",
+                             ra_game_id="11256", local_ra_hash="a" * 32))
+        writer.writerow(dict(platform="Sony PlayStation", path="iso/" + target + ".cue",
+                             status="unmatched", local_serial="SLUS-00077",
+                             recommended_ra_game_id="11256", local_ra_hash="b" * 32))
+    fields = ["relative_cue", "proposed_cue", "issues",
+              "internal_serial", "selected_serial"]
+    with audit_path.open("w", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=fields)
+        writer.writeheader()
+        writer.writerow(dict(relative_cue="iso/" + source + ".cue",
+                             proposed_cue="iso/" + target + ".cue",
+                             issues="CUE_DESTINATION_EXISTS | BIN_DESTINATION_EXISTS",
+                             internal_serial="SLUS-00077", selected_serial="SLUS-00077"))
+    profiles = resolver.discover(ra_path, audit_path)
+    assert len(profiles) == 1
+    assert next(iter(profiles.values()))["target"] == target
+
+
+def test_generic_discovery_rejects_different_disc_serial(tmp_path):
+    import csv
+    ra_path = tmp_path / "ra.csv"
+    audit_path = tmp_path / "ps1.csv"
+    with ra_path.open("w", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=["platform", "path", "status",
+                                "local_serial", "ra_game_id",
+                                "recommended_ra_game_id", "local_ra_hash"])
+        writer.writeheader()
+        writer.writerow(dict(platform="Sony PlayStation", path="iso/Simulation.cue",
+                             status="matched", local_serial="SCUS-94488",
+                             ra_game_id="11278", local_ra_hash="a" * 32))
+        writer.writerow(dict(platform="Sony PlayStation", path="iso/Arcade.cue",
+                             status="unmatched", local_serial="SCUS-94455",
+                             recommended_ra_game_id="11278", local_ra_hash="b" * 32))
+    with audit_path.open("w", newline="") as out:
+        writer = csv.DictWriter(out, fieldnames=["relative_cue", "proposed_cue",
+                                                 "issues", "internal_serial",
+                                                 "selected_serial"])
+        writer.writeheader()
+        writer.writerow(dict(relative_cue="iso/Simulation.cue",
+                             proposed_cue="iso/Arcade.cue",
+                             issues="CUE_DESTINATION_EXISTS | BIN_DESTINATION_EXISTS",
+                             internal_serial="SCUS-94488", selected_serial="SCUS-94488"))
+    assert resolver.discover(ra_path, audit_path) == {}
