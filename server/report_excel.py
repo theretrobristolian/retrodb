@@ -151,10 +151,13 @@ def action_rows(entries, platform):
             action = 'Fix disc hash error'
         elif r[4] == 'YES':
             action = 'Apply verified patch; check new RA hash'
-        elif r[3] == 'UNKNOWN':
+        elif r[3] == 'UNKNOWN' and str(r[6]).strip() not in verified_by_id:
             action = 'Investigate RA identity or listing'
         else:
-            action = 'Obtain supported region / edition / revision'
+            # A mismatched region/revision is compatibility information, not
+            # an action to obtain or delete an image. Keep it on the platform
+            # sheet, even where a verified copy of the game also exists.
+            continue
         matched_copy = ' | '.join(verified_by_id.get(str(r[6]).strip(), []))
         rows.append([
             platform, r[0], r[1], r[2], r[3], action,
