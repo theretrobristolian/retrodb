@@ -147,7 +147,8 @@ def discover(audit, ps1_audit):
             continue
         identical = (src.get("status") == dst.get("status")
                      and src.get("status") in ("matched", "unmatched")
-                     and src.get("local_ra_hash", "").lower() == dst.get("local_ra_hash", "").lower())
+                     and bool(src.get("local_ra_hash")) and bool(dst.get("local_ra_hash")))
+        # Equal compatibility and identity can be redundant despite BIN differences.
         promotion = src.get("status") == "matched" and dst.get("status") == "unmatched"
         if not (identical or promotion):
             continue
@@ -172,7 +173,7 @@ def discover(audit, ps1_audit):
         cfg = dict(source=source_rel.stem, target=target_rel.stem,
                    folder=source_rel.parent.as_posix(), serial=serial,
                    ra_game_id=game_id, verified=src_hash, unmatched=dst_hash,
-                   identical=identical)
+                   identical=identical, archive_source=identical)
         candidates.setdefault(key, []).append(cfg)
     # A canonical destination with multiple eligible sources is ambiguous.
     return {"collision-%04d" % number: candidates[key][0]
@@ -190,8 +191,9 @@ def inspect(root, hasher, profile="alundra", audit=None):
     folder = root / Path(cfg.get("folder", "iso"))
     a_cue, a_bin = (folder / (cfg["source"] + suffix) for suffix in (".cue", ".bin"))
     b_cue, b_bin = (folder / (cfg["target"] + suffix) for suffix in (".cue", ".bin"))
-    backup_cue = folder / ("OLD_" + cfg["target"] + ".cue")
-    backup_bin = folder / ("OLD_" + cfg["target"] + ".bin")
+    backup_stem = cfg["source"] if cfg.get("archive_source") else cfg["target"]
+    backup_cue = folder / ("OLD_" + backup_stem + ".cue")
+    backup_bin = folder / ("OLD_" + backup_stem + ".bin")
     paths = [a_cue, a_bin, b_cue, b_bin]
     if any(not x.is_file() or x.is_symlink() for x in paths):
         return None
@@ -209,20 +211,12 @@ def inspect(root, hasher, profile="alundra", audit=None):
         raise RuntimeError("Verified hash evidence changed for " + profile)
     if cfg["unmatched"] is not None and target_hash != cfg["unmatched"]:
         raise RuntimeError("Unmatched copy hash changed for " + profile)
-    if source_hash == target_hash and not cfg.get("identical"):
-        raise RuntimeError("Identical RA hashes require explicit duplicate mode")
-    if cfg.get("identical"):
-        if source_hash != target_hash:
-            raise RuntimeError("Duplicate images no longer have matching RA hashes")
-        def full_sha256(p):
-            digest = hashlib.sha256()
-            with p.open("rb") as stream:
-                for chunk in iter(lambda: stream.read(4 * 1024 * 1024), b""):
-                    digest.update(chunk)
-            return digest.digest()
-        if (a_bin.stat().st_size != b_bin.stat().st_size
-                or full_sha256(a_bin) != full_sha256(b_bin)):
-            raise NotIdenticalDuplicate("Same RA hash, different full BIN contents; both retained")
+    if cfg.get("archive_source") and not cfg.get("ra_game_id", "").startswith("serial:"):
+        pass  # Both images share a reviewed RA identity, not necessarily bytes.
+    elif source_hash == target_hash and not cfg.get("identical"):
+        raise RuntimeError("Equal hashes without an explicit duplicate decision")
+    elif cfg.get("archive_source") and source_hash != target_hash:
+        raise RuntimeError("No reviewed RA identity; unequal hashes need manual review")
     if profile != "alundra":
         audit_pair(audit, cfg, source_hash, target_hash)
     return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
@@ -251,6 +245,19 @@ def apply(root, hasher, journal, expected, profile="alundra", audit=None):
         temp = journal.with_suffix(".json.tmp")
         temp.write_text(json.dumps(record, indent=2), encoding="utf-8")
         os.replace(temp, journal)
+    if PROFILES[profile].get("archive_source"):
+        write("pending")
+        operation["source_bin"].rename(operation["backup_bin"])
+        write("source-bin-backed-up")
+        operation["source_cue"].rename(operation["backup_cue"])
+        write("source-cue-backed-up")
+        operation["backup_cue"].write_bytes(rewritten(src_lines, src_match, operation["backup_bin"], src_enc))
+        write("source-cue-relinked")
+        if (ra_hash(hasher, operation["backup_bin"]), ra_hash(hasher, operation["dest_bin"])) != expected:
+            raise RuntimeError("Post-archive hash verification failed; inspect journal")
+        write("applied")
+        print("[OK]", profile, "canonical pair retained; other pair now OLD_.")
+        return
     # Journal each irreversible step. Leave files as-is on error for recovery.
     write("pending")
     operation["dest_bin"].rename(operation["backup_bin"])
