@@ -165,6 +165,12 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
         catalogue_title = gamedb.get(selected_serial, "")
         if selected_serial == "SLES-03120":
             catalogue_title = "3, 2, 1, Smurf! My First Racing Game"
+        # A catalogue serial match does not prove the image is that retail title.
+        # Kula World has been observed proposing a PS One Kids demo title;
+        # preserve the source and require manual disc identity review.
+        if (re.search(r"\\bkula\\s+world\\b", cue.stem, re.I)
+                and re.search(r"\\bps\\s*one\\s+kids\\b", catalogue_title, re.I)):
+            issues.append("TITLE_IDENTITY_CONFLICT")
         title = cleaned_ps1_title(catalogue_title) if catalogue_title else cleaned_ps1_title(cue.stem)
         title = re.sub(r"\s*\((?:Rev(?:ision)?\s*\d+(?:\.\d+)?|v\d+(?:\.\d+)?)\)", "", title, flags=re.I).strip()
         # Preserve disc numbering already evidenced by this individual file even
@@ -191,7 +197,7 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
             issues.append("INTERNAL_ID_UNVERIFIED")
         blockers = {"DISC_ID_MISMATCH", "MULTI_BIN_REVIEW", "NON_BIN_REFERENCE",
                     "ID_MISSING", "TITLE_MISSING", "CUE_DESTINATION_EXISTS",
-                    "BIN_DESTINATION_EXISTS", "INTERNAL_ID_UNVERIFIED"}
+                    "BIN_DESTINATION_EXISTS", "INTERNAL_ID_UNVERIFIED", "TITLE_IDENTITY_CONFLICT"}
         broken = any(x.startswith(("CUE_FILE_SYNTAX", "NO_FILE_REFERENCES", "MISSING_REFERENCE", "UNSAFE_REFERENCE", "CUE_UNREADABLE")) for x in issues)
         # This known RA-verified Metal Gear Solid Disc 1 release has a typo in
         # its filename (00694), while the on-disc boot ID is SLUS-00594.
