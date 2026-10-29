@@ -71,7 +71,15 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
         status, reason = 'OTHER SOFTWARE', 'Homebrew video calibration utility; achievements are not expected and no RA action is required'
     elif yes: status, reason = 'YES', 'Verified RA hash; ready to play'
     elif patchable: status, reason = 'NO', 'READY: exact local source checksum verified; apply patch to a separate copy, then verify output RA hash'
-    elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
+    elif (r.get('platform') == 'Sony PlayStation'
+          and r.get('local_serial') == 'SCES-01000'
+          and 'kula world' in Path(r['path']).stem.casefold()):
+        status = 'NO'
+        reason = ('Kula World (Europe) is not matched to the RA set; '
+                  'use Roll Away (USA), SLUS-00724, supported hash '
+                  'ec12ea42d913aa5a9d4f2b42ad5d28ec. '
+                  'RA: https://retroachievements.org/game/14865')
+        elif r['status'] == 'failed': status, reason = 'ERROR', r['error'] or 'Disc hashing failed'
     elif suggested:
         status = 'NO'
         if r.get('recommendation_confidence') == 'supported-alternative-edition':
@@ -94,8 +102,13 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     else: status, reason = 'UNKNOWN', 'No confident match; possibly unsupported'
     if warning and not yes:
         reason += ' — ' + warning
+    if (r.get('platform') == 'Sony PlayStation'
+            and r.get('local_serial') == 'SCES-01000'
+            and 'kula world' in Path(r['path']).stem.casefold()):
+        title = 'Kula World'
+        release = 'Roll Away (USA) [SLUS-00724]'
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
-            (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', '')), release,
+            (14865 if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SCES-01000' and 'kula world' in Path(r['path']).stem.casefold() else (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', ''))), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
 def _disc_variant(row):
     """Identify distinct content within an RA game without conflating regions.
