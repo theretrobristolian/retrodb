@@ -634,6 +634,9 @@ def match_collection(
                 local_region = REGION_BY_PREFIX.get(serial.split("-", 1)[0], "")
                 identity_source = "system-cnf"
             gamedb_title = gamedb_titles.get(serial, '')
+            if slug == "playstation" and serial == "SCES-01000":
+                gamedb_title = "Kula World"  # European title of Roll Away (USA)
+
             # Non-retail discs are identified but never promoted from a retail
             # title alone. Their hashes can still legitimately match RA.
             special_disc = serial.startswith("USGR-") or serial == "SCPM-85101"
@@ -685,7 +688,8 @@ def match_collection(
             if item.ra_match_status == "unmatched" and slug == "playstation" and not special_disc and not recommendation and not no_set_game:
                 # Manually cross-referenced retail PS1 releases. Identity only;
                 # hash matching remains the sole RA-compatible criterion.
-                reviewed_ps1 = {"SCES-01706": 11305, "SCES-00242": 5332, "SLUS-00893": 11357,
+                reviewed_ps1 = {"SCES-01000": 14865,  # Kula World (Europe) = Roll Away (USA)
+                                 "SCES-01706": 11305, "SCES-00242": 5332, "SLUS-00893": 11357,
                                 "SLES-01761": 823,  # Action Man: Mission Xtreme = Operation Extreme
                                  "SCUS-94455": 11278, "SCUS-94488": 11278,  # Gran Turismo 2: Arcade / Simulation
                                  "SLUS-01161": 11588, "SLUS-01318": 11588,  # Driver 2: Disc 1 / Disc 2
