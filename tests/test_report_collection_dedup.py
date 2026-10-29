@@ -120,7 +120,7 @@ def test_region_difference_with_verified_alternative_is_not_action_required():
     usa = entry("Verified USA copy", "823", "YES")
     usa[2] = "SLUS-00887"
     rows = report.apply_collection_dedup([pal, usa])
-    assert rows[0][13] == "COUNT"
+    assert rows[0][13] == "EXCLUDE — verified alternative on share"
     assert report.action_rows(rows, "Sony PlayStation") == []
 
 
