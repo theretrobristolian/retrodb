@@ -5,6 +5,7 @@ Never deletes a BIN, overwrites existing files or trusts filenames as RA proof.
 A journal is written BEFORE any rename; interrupted work requires manual review.
 """
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -24,11 +25,11 @@ PROFILES = {
                     verified=RA_HASH, unmatched=UNMATCHED_HASH),
     "driver": dict(source="Driver - You Are the Wheelman (USA) (Rev 1)",
                    target="Driver You Are the Wheelman [SLUS-00842]",
-                   serial="SLUS-00842", verified="96be802f3f536946b5906f06029766f1",
+                   serial="SLUS-00842", ra_game_id="11391", verified="96be802f3f536946b5906f06029766f1",
                    unmatched=None),
     "gt2-simulation": dict(source="Gran Turismo 2 (USA) (Simulation Mode) (Rev 2)",
                            target="Gran Turismo 2 (Simulation Mode) [SCUS-94488]",
-                           serial="SCUS-94488", verified="4ea57dce50b86a32f0d5034479c1bc48",
+                           serial="SCUS-94488", ra_game_id="11278", verified="4ea57dce50b86a32f0d5034479c1bc48",
                            unmatched=None),
 }
 
@@ -75,7 +76,36 @@ def rewritten(lines, line_match, binary, enc):
     return "".join(out).encode(enc)
 
 
-def inspect(root, hasher, profile="alundra"):
+def audit_pair(audit_path, cfg, source_hash, target_hash):
+    """Prove one verified and one unmatched same-disc image in the raw RA audit."""
+    if not audit_path or not Path(audit_path).is_file():
+        raise RuntimeError("Fresh raw RetroAchievements CSV required")
+    with open(audit_path, newline="", encoding="utf-8-sig") as handle:
+        rows = [r for r in csv.DictReader(handle)
+                if r.get("platform") == "Sony PlayStation"]
+    def unique(stem):
+        matches = [r for r in rows if Path(r.get("path", "")).stem == stem]
+        if len(matches) != 1:
+            raise RuntimeError("Missing or ambiguous RA audit for " + stem)
+        return matches[0]
+    source = unique(cfg["source"])
+    target = unique(cfg["target"])
+    game_id = cfg["ra_game_id"]
+    if (source.get("status") != "matched"
+            or str(source.get("ra_game_id")) != game_id
+            or source.get("local_ra_hash", "").lower() != source_hash
+            or target.get("status") != "unmatched"
+            or str(target.get("recommended_ra_game_id")) != game_id
+            or target.get("local_ra_hash", "").lower() != target_hash):
+        raise RuntimeError("RA audit does not prove a verified source and unmatched destination")
+    if (source.get("local_serial") != cfg["serial"]
+            or target.get("local_serial") != cfg["serial"]
+            or source.get("disc_id_conflict") == "YES"
+            or target.get("disc_id_conflict") == "YES"):
+        raise RuntimeError("RA audit disc serial conflict")
+
+
+def inspect(root, hasher, profile="alundra", audit=None):
     from report_ps1_audit import disc_serial
     cfg = PROFILES[profile]
     folder = root / ROOT_REL
@@ -102,15 +132,17 @@ def inspect(root, hasher, profile="alundra"):
         raise RuntimeError("Unmatched copy hash changed for " + profile)
     if source_hash == target_hash:
         raise RuntimeError("Identical disc hashes; not a collision to promote")
+    if profile != "alundra":
+        audit_pair(audit, cfg, source_hash, target_hash)
     return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
                 backup_cue=backup_cue, backup_bin=backup_bin,
                 verified_hash=source_hash, unmatched_hash=target_hash)
 
 
-def apply(root, hasher, journal, expected, profile="alundra"):
+def apply(root, hasher, journal, expected, profile="alundra", audit=None):
     if journal.exists():
         raise RuntimeError("Journal exists; refusing overwrite")
-    operation = inspect(root, hasher, profile)
+    operation = inspect(root, hasher, profile, audit)
     if operation is None:
         raise RuntimeError("Pairs changed since preview: " + profile)
     if (operation["verified_hash"], operation["unmatched_hash"]) != expected:
@@ -192,6 +224,7 @@ def main():
     p.add_argument("--root", type=Path, required=True)
     p.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
     p.add_argument("--journal", type=Path)
+    p.add_argument("--audit", type=Path)
     args = p.parse_args()
     if args.mode == "verify-journal":
         if not args.journal:
@@ -199,7 +232,7 @@ def main():
         verify_completed(args.journal, args.root, args.hasher)
         return
     available = [(key, op) for key in PROFILES
-                 if (op := inspect(args.root, args.hasher, key)) is not None]
+                 if (op := inspect(args.root, args.hasher, key, args.audit)) is not None]
     if args.mode == "count":
         print(len(available))
         return
@@ -216,7 +249,7 @@ def main():
         for profile, operation in available:
             target_journal = args.journal.with_name(args.journal.stem + "-" + profile + ".json")
             apply(args.root, args.hasher, target_journal,
-                  (operation["verified_hash"], operation["unmatched_hash"]), profile)
+                  (operation["verified_hash"], operation["unmatched_hash"]), profile, args.audit)
             print("[JOURNAL]", target_journal)
     else:
         print("PREVIEW ONLY: no files changed.")
