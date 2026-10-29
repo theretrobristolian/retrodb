@@ -698,6 +698,14 @@ def match_collection(
                     no_set_game = None
                     confidence = "supported-alternative-edition"
                     score = 1.0
+            if item.ra_match_status == "unmatched" and slug == "playstation" and serial == "SLUS-00865":
+                # WipEout 3 USA is NOT the Special Edition. This is an
+                # alternative-edition recommendation, never a hash match.
+                special_edition = next((g for g in with_sets if g.game_id == 13912), None)
+                if special_edition is not None:
+                    recommendation = special_edition
+                    confidence = "supported-alternative-edition"
+                    score = 1.0
             if item.ra_match_status == "unmatched" and slug == "playstation" and not special_disc and not recommendation and not no_set_game:
                 # Manually cross-referenced retail PS1 releases. Identity only;
                 # hash matching remains the sole RA-compatible criterion.
