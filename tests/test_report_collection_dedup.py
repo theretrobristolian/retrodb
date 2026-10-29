@@ -112,3 +112,25 @@ def test_different_serials_under_same_ra_id_not_deduplicated():
     second = entry("Driver 2 Disc 2", "11588", "NO")
     second[2] = "SLUS-01318"
     assert report.apply_collection_dedup([first, second])[1][13] == "COUNT"
+
+
+def test_region_difference_with_verified_alternative_is_not_action_required():
+    pal = entry("European copy", "823", "NO")
+    pal[2] = "SLES-01761"
+    usa = entry("Verified USA copy", "823", "YES")
+    usa[2] = "SLUS-00887"
+    rows = report.apply_collection_dedup([pal, usa])
+    assert rows[0][13] == "COUNT"
+    assert report.action_rows(rows, "Sony PlayStation") == []
+
+
+def test_unverified_revision_without_a_replacement_is_not_urgent_action():
+    row = entry("Old revision", "11588", "NO")
+    assert report.action_rows([row], "Sony PlayStation") == []
+
+
+def test_hash_error_still_requires_action():
+    row = entry("Bad image", "11588", "ERROR")
+    actions = report.action_rows([row], "Sony PlayStation")
+    assert len(actions) == 1
+    assert actions[0][5] == "Fix disc hash error"
