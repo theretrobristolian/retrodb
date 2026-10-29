@@ -178,3 +178,23 @@ def test_unknown_identity_not_soft_hidden():
     unknown = entry("Unrecognised release", "9001", "UNKNOWN")
     compatible = entry("Recognised release", "9001", "YES")
     assert report.apply_collection_dedup([unknown, compatible])[0][13] == "COUNT"
+
+
+def test_kula_world_europe_identity_and_us_release_guidance():
+    row = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Kula World (Europe).cue",
+        "local_serial": "SCES-01000", "local_region": "Europe",
+        "gamedb_title": "PS One Kids Autumn 2000",
+        "local_friendly_title": "Kula World (Europe)",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    result = report.row_for(row)
+    assert result[0] == "Kula World"
+    assert str(result[6]) == "14865"
+    assert result[7] == "Roll Away (USA) [SLUS-00724]"
+    assert result[3] == "NO"
+    assert "retroachievements.org/game/14865" in result[5]
