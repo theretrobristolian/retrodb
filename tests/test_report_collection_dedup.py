@@ -280,3 +280,32 @@ def test_unlisted_aces_of_the_air_survives_stale_unknown_export():
     assert shown[14] == "NOT_LISTED"
     assert not shown[6]
     assert report.action_rows([shown], "Sony PlayStation") == []
+
+
+def test_multidisc_display_name_preserves_disc_number_from_filename():
+    base = {
+        "platform": "Sony PlayStation", "status": "matched",
+        "ra_game_title": "Fear Effect", "local_serial": "SLUS-00920",
+        "preferred_patch_url": "", "preferred_release_name": "",
+        "recommended_ra_title": "", "recommended_ra_game_id": "",
+        "local_region": "USA", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    first = report.row_for({**base, "path": "iso/Fear Effect (Disc 1) [SLUS-00920].cue"})
+    second = report.row_for({**base, "path": "iso/Fear Effect (Disc 2) [SLUS-01056].cue"})
+    assert first[0] == "Fear Effect (Disc 1)"
+    assert second[0] == "Fear Effect (Disc 2)"
+
+
+def test_disc_number_is_not_repeated_when_catalogue_title_has_it():
+    row = {
+        "platform": "Sony PlayStation", "status": "matched",
+        "ra_game_title": "Parasite Eve (Disc 1)",
+        "path": "iso/Parasite Eve (Disc 1) [SLUS-00662].cue",
+        "local_serial": "SLUS-00662", "preferred_patch_url": "",
+        "preferred_release_name": "", "recommended_ra_title": "",
+        "recommended_ra_game_id": "", "local_region": "USA",
+        "preferred_region": "", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    assert report.row_for(row)[0] == "Parasite Eve (Disc 1)"
