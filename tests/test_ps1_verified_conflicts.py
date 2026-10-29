@@ -251,3 +251,43 @@ def test_generic_discovery_no_set_identical_copies(tmp_path):
     plans = resolver.discover(raw, audit)
     assert len(plans) == 1
     assert next(iter(plans.values()))["identical"] is True
+
+
+def test_kula_world_planner_overrides_wrong_gamedb_title(tmp_path):
+    from report_ps1_audit import plan
+    cue = tmp_path / "Kula World (Europe).cue"
+    binary = tmp_path / "Kula World (Europe).bin"
+    binary.write_bytes(b"test")
+    cue.write_text('FILE "Kula World (Europe).bin" BINARY\n'
+                   '  TRACK 01 MODE2/2352\n'
+                   '    INDEX 01 00:00:00\n', encoding="utf-8")
+    with patch("report_ps1_audit.disc_serial", return_value="SCES-01000"):
+        rows = plan(tmp_path, {"SCES-01000": "PS One Kids Autumn 2000"})
+    record = next(r for r in rows if r.get("relative_cue") == cue.name)
+    assert record["proposed_cue"] == "Kula World [SCES-01000].cue"
+    assert "TITLE_IDENTITY_CONFLICT" not in record["issues"]
+
+
+def test_special_edition_collision_not_automatically_archived(tmp_path):
+    import csv
+    ra = tmp_path / "ra.csv"
+    files = tmp_path / "ps1.csv"
+    names = ("The Lost World Special Edition (USA)", "The Lost World [SLUS-00515]")
+    with ra.open("w", newline="") as out:
+        cols = ["platform", "path", "status", "local_serial", "ra_game_id", "local_ra_hash"]
+        writer = csv.DictWriter(out, fieldnames=cols)
+        writer.writeheader()
+        for name in names:
+            writer.writerow(dict(platform="Sony PlayStation", path="iso/" + name + ".cue",
+                                 status="matched", local_serial="SLUS-00515",
+                                 ra_game_id="14615", local_ra_hash="a" * 32))
+    with files.open("w", newline="") as out:
+        cols = ["relative_cue", "proposed_cue", "issues",
+                "internal_serial", "selected_serial"]
+        writer = csv.DictWriter(out, fieldnames=cols)
+        writer.writeheader()
+        writer.writerow(dict(relative_cue="iso/" + names[0] + ".cue",
+                             proposed_cue="iso/" + names[1] + ".cue",
+                             issues="CUE_DESTINATION_EXISTS | BIN_DESTINATION_EXISTS",
+                             internal_serial="SLUS-00515", selected_serial="SLUS-00515"))
+    assert resolver.discover(ra, files) == {}
