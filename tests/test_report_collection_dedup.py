@@ -238,3 +238,45 @@ def test_exhumed_stale_unknown_csv_not_action_required():
     assert shown[14] == "NO_SET"
     assert str(shown[6]) == "15920"
     assert report.action_rows([shown], "Sony PlayStation") == []
+
+
+def test_reviewed_ps1_crosswalks_survive_stale_unknown_export():
+    for serial, name, game_id in (
+        ("SLES-02017", "4x4 World Trophy", "18622"),
+        ("SLES-04129", "Dance Europe", "19456"),
+    ):
+        raw = {
+            "platform": "Sony PlayStation", "status": "unmatched",
+            "path": "roms/sony/playstation1/iso/" + name + " [" + serial + "].cue",
+            "local_serial": serial, "local_region": "Europe",
+            "gamedb_title": name, "local_friendly_title": name,
+            "ra_set_status": "UNRESOLVED", "no_set_ra_game_id": "",
+            "ra_game_id": "", "recommended_ra_game_id": "",
+            "recommended_ra_title": "", "preferred_patch_url": "",
+            "preferred_release_name": "", "preferred_region": "",
+            "release_guidance": "", "alternative_candidates": "",
+        }
+        shown = report.row_for(raw)
+        assert shown[3] == "NO SET"
+        assert shown[14] == "NO_SET"
+        assert str(shown[6]) == game_id
+        assert report.action_rows([shown], "Sony PlayStation") == []
+
+
+def test_unlisted_aces_of_the_air_survives_stale_unknown_export():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Aces of the Air [SLUS-01470].cue",
+        "local_serial": "SLUS-01470", "local_region": "USA",
+        "gamedb_title": "Aces of the Air", "local_friendly_title": "Aces of the Air",
+        "ra_set_status": "UNRESOLVED", "no_set_ra_game_id": "",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    shown = report.row_for(raw)
+    assert shown[3] == "NO SET"
+    assert shown[14] == "NOT_LISTED"
+    assert not shown[6]
+    assert report.action_rows([shown], "Sony PlayStation") == []
