@@ -162,7 +162,9 @@ def discover(audit, ps1_audit):
                    ra_game_id=game_id, verified=src_hash, unmatched=dst_hash)
         candidates.setdefault(key, []).append(cfg)
     # A canonical destination with multiple eligible sources is ambiguous.
-    return {key: options[0] for key, options in candidates.items() if len(options) == 1}
+    return {"collision-%04d" % number: candidates[key][0]
+            for number, key in enumerate(sorted(candidates), 1)
+            if len(candidates[key]) == 1}
 
 
 def inspect(root, hasher, profile="alundra", audit=None):
