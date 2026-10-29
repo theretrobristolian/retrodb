@@ -394,6 +394,7 @@ ps1_rename_all() {
   local journal_dir="$HOME/retrodb-exports/ps1-rename-journals"
   local journal="" source result=0 answer
   [[ -r "$csv" ]] || { echo 'Export reports first to generate a current PS1 audit.'; return 1; }
+  [[ -r "$EXPORT" ]] || { echo "Export reports first to generate the RA audit CSV."; return 1; }
   mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
   mkdir -p -m 0700 "$journal_dir" || return 1
   local prior
@@ -421,7 +422,7 @@ PYJ
   chmod 0600 "$csv" || return 1
   sudo python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
   echo "[CHECK] RA-verified name conflicts (preview only):"
-  sudo python3 "$HERE/ps1_ra_conflict.py" preview --root "$MOUNT/roms/sony/playstation1" || return 1
+  sudo python3 "$HERE/ps1_ra_conflict.py" preview --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT" || return 1
   local eligible conflict_count
   eligible="$(sudo python3 - "$HERE" "$csv" "$MOUNT/roms/sony/playstation1" <<'PYCOUNT'
 import sys
@@ -432,7 +433,7 @@ from ps1_rename import parse
 print(len(parse(SimpleNamespace(csv=Path(sys.argv[2]), root=Path(sys.argv[3]), limit=None))))
 PYCOUNT
 )" || return 1
-  conflict_count="$(sudo python3 "$HERE/ps1_ra_conflict.py" count --root "$MOUNT/roms/sony/playstation1")" || return 1
+  conflict_count="$(sudo python3 "$HERE/ps1_ra_conflict.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT")" || return 1
   if [[ "$eligible" == 0 && "$conflict_count" == 0 ]]; then
     echo '[OK] No eligible PS1 renames remain; nothing changed and no journal created.'
     return 0
@@ -473,7 +474,7 @@ PYCONF
   done
   if [[ "$result" -eq 0 && "$conflict_count" != 0 ]]; then
     cj="$conflict_dir/ps1-conflict-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-    sudo python3 "$HERE/ps1_ra_conflict.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$cj" || result=$?
+    sudo python3 "$HERE/ps1_ra_conflict.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$cj" --audit "$EXPORT" || result=$?
     local created=0 conflict_journal
     for conflict_journal in "${cj%.json}"-*.json; do
       [[ -f "$conflict_journal" ]] || continue
