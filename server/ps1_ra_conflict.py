@@ -105,10 +105,70 @@ def audit_pair(audit_path, cfg, source_hash, target_hash):
         raise RuntimeError("RA audit disc serial conflict")
 
 
+def discover(audit, ps1_audit):
+    """Discover same-serial canonical collisions from two independent audits.
+
+    No game/title allowlist. Fail closed on missing RA evidence or ambiguous
+    sources/targets. An RA game ID without equal disc serial is insufficient.
+    """
+    if not audit or not ps1_audit:
+        raise RuntimeError("Both RA and PS1 file audits are required")
+    with open(audit, newline="", encoding="utf-8-sig") as fh:
+        ra_rows = [r for r in csv.DictReader(fh) if r.get("platform") == "Sony PlayStation"]
+    with open(ps1_audit, newline="", encoding="utf-8-sig") as fh:
+        file_rows = list(csv.DictReader(fh))
+    by_stem = {}
+    for row in ra_rows:
+        by_stem.setdefault(Path(row.get("path", "")).stem, []).append(row)
+    def ra(stem):
+        records = by_stem.get(stem, [])
+        return records[0] if len(records) == 1 else None
+    candidates = {}
+    for row in file_rows:
+        issue = row.get("issues", "")
+        if "CUE_DESTINATION_EXISTS" not in issue or "BIN_DESTINATION_EXISTS" not in issue:
+            continue
+        if any(x in issue for x in ("DISC_ID_MISMATCH", "MULTI_BIN_REVIEW",
+                                     "MISSING_REFERENCE", "INTERNAL_ID_UNVERIFIED")):
+            continue
+        source_rel = Path(row.get("relative_cue", ""))
+        target_rel = Path(row.get("proposed_cue", ""))
+        if not source_rel.name or not target_rel.name or source_rel.parent != target_rel.parent:
+            continue
+        if source_rel.suffix.lower() != ".cue" or target_rel.suffix.lower() != ".cue":
+            continue
+        serial = row.get("internal_serial", "")
+        if not serial or row.get("selected_serial") != serial:
+            continue
+        src, dst = ra(source_rel.stem), ra(target_rel.stem)
+        if not src or not dst or src.get("status") != "matched" or dst.get("status") != "unmatched":
+            continue
+        if src.get("local_serial") != serial or dst.get("local_serial") != serial:
+            continue
+        if src.get("disc_id_conflict") == "YES" or dst.get("disc_id_conflict") == "YES":
+            continue
+        game_id = str(src.get("ra_game_id", ""))
+        if not game_id or str(dst.get("recommended_ra_game_id", "")) != game_id:
+            continue
+        src_hash = src.get("local_ra_hash", "").lower()
+        dst_hash = dst.get("local_ra_hash", "").lower()
+        if not (re.fullmatch(r"[a-f0-9]{32}", src_hash)
+                and re.fullmatch(r"[a-f0-9]{32}", dst_hash)
+                and src_hash != dst_hash):
+            continue
+        key = str(target_rel)
+        cfg = dict(source=source_rel.stem, target=target_rel.stem,
+                   folder=source_rel.parent.as_posix(), serial=serial,
+                   ra_game_id=game_id, verified=src_hash, unmatched=dst_hash)
+        candidates.setdefault(key, []).append(cfg)
+    # A canonical destination with multiple eligible sources is ambiguous.
+    return {key: options[0] for key, options in candidates.items() if len(options) == 1}
+
+
 def inspect(root, hasher, profile="alundra", audit=None):
     from report_ps1_audit import disc_serial
     cfg = PROFILES[profile]
-    folder = root / ROOT_REL
+    folder = root / Path(cfg.get("folder", "iso"))
     a_cue, a_bin = (folder / (cfg["source"] + suffix) for suffix in (".cue", ".bin"))
     b_cue, b_bin = (folder / (cfg["target"] + suffix) for suffix in (".cue", ".bin"))
     backup_cue = folder / ("OLD_" + cfg["target"] + ".cue")
@@ -150,7 +210,7 @@ def apply(root, hasher, journal, expected, profile="alundra", audit=None):
     src_raw, src_enc, src_lines, src_match = verify_pair(operation["source_cue"], operation["source_bin"])
     dst_raw, dst_enc, dst_lines, dst_match = verify_pair(operation["dest_cue"], operation["dest_bin"])
     def write(state):
-        record = {"operation": "verified-ps1-collision", "profile": profile, "state": state,
+        record = {"operation": "verified-ps1-collision", "profile": profile, "config": PROFILES[profile], "state": state,
                   "created_utc": datetime.now(timezone.utc).isoformat(),
                   "paths": {k: str(v) for k, v in operation.items() if isinstance(v, Path)},
                   "verified_hash": operation["verified_hash"],
@@ -186,11 +246,11 @@ def verify_completed(journal, ro_root, hasher):
     record = json.loads(journal.read_text(encoding="utf-8"))
     if record.get("operation") not in ("alundra-ra-collision", "verified-ps1-collision"):
         raise RuntimeError("Not a PS1 collision journal")
-    cfg = PROFILES[record.get("profile", "alundra")]
+    cfg = record.get("config") or PROFILES[record.get("profile", "alundra")]
     if record.get("state") not in ("verified-cue-relinked", "applied"):
         raise RuntimeError("Journal is not ready for final verification: " + str(record.get("state")))
     paths = record["paths"]
-    expected_dir = (ro_root / ROOT_REL).resolve()
+    expected_dir = (ro_root / Path(cfg.get("folder", "iso"))).resolve()
     for name in ("dest_cue", "dest_bin", "backup_cue", "backup_bin"):
         candidate = Path(paths[name])
         if candidate.name != (("OLD_" if name.startswith("backup_") else "") + cfg["target"] + (".cue" if name.endswith("cue") else ".bin")):
@@ -225,12 +285,15 @@ def main():
     p.add_argument("--hasher", type=Path, default=Path("/opt/retrodb-tools/RAHasher"))
     p.add_argument("--journal", type=Path)
     p.add_argument("--audit", type=Path)
+    p.add_argument("--ps1-audit", type=Path)
     args = p.parse_args()
     if args.mode == "verify-journal":
         if not args.journal:
             p.error("--journal required for verify-journal")
         verify_completed(args.journal, args.root, args.hasher)
         return
+    PROFILES.clear()
+    PROFILES.update(discover(args.audit, args.ps1_audit))
     available = [(key, op) for key in PROFILES
                  if (op := inspect(args.root, args.hasher, key, args.audit)) is not None]
     if args.mode == "count":
