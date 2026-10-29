@@ -93,3 +93,24 @@ def test_gt2_arcade_does_not_qualify_as_simulation(tmp_path):
          patch.object(resolver, "ra_hash", side_effect=hash_impl):
         with pytest.raises(RuntimeError, match="serial"):
             resolver.inspect(tmp_path, Path("/unused/RAHasher"), "gt2-simulation")
+
+
+def test_refuses_stale_ra_audit_hash(tmp_path):
+    cfg, hash_impl = fixture_pairs(tmp_path, "driver")
+    audit = make_audit(tmp_path, cfg)
+    raw = audit.read_text(encoding="utf-8").replace("f" * 32, "0" * 32)
+    audit.write_text(raw, encoding="utf-8")
+    with patch("report_ps1_audit.disc_serial", return_value=cfg["serial"]), \
+         patch.object(resolver, "ra_hash", side_effect=hash_impl):
+        with pytest.raises(RuntimeError, match="RA audit"):
+            resolver.inspect(tmp_path, Path("/unused/RAHasher"), "driver", audit)
+
+
+def test_refuses_unverified_source_hash(tmp_path):
+    cfg, hash_impl = fixture_pairs(tmp_path, "gt2-simulation")
+    audit = make_audit(tmp_path, cfg)
+    (tmp_path / "iso" / (cfg["source"] + ".bin")).write_bytes(b"unmatched")
+    with patch("report_ps1_audit.disc_serial", return_value=cfg["serial"]), \
+         patch.object(resolver, "ra_hash", side_effect=hash_impl):
+        with pytest.raises(RuntimeError, match="Verified hash"):
+            resolver.inspect(tmp_path, Path("/unused/RAHasher"), "gt2-simulation", audit)
