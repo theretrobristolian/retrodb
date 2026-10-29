@@ -91,7 +91,15 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
             reason = 'Different region recommended: ' + r['preferred_region']
         else: reason = 'Different ISO release or revision recommended'
         if r['release_guidance']: reason += ' — ' + r['release_guidance']
-    elif r.get('ra_set_status') == 'NOT_LISTED':
+    elif (r.get('platform') == 'Sony PlayStation'
+          and r.get('local_serial') == 'SLES-00097'
+          and r.get('ra_set_status') == 'NO_SET'):
+        status = 'NO SET'
+        reason = ('Exhumed (Europe) is PowerSlave on RetroAchievements (game 15920). '
+                  'No PS1 achievements exist yet; PowerSlave (USA) is an optional '
+                  'US-region replacement, NOT an RA-compatible upgrade. '
+                  'https://retroachievements.org/game/15920')
+        elif r.get('ra_set_status') == 'NOT_LISTED':
         status, reason = 'NO SET', 'User-reviewed: no RetroAchievements game listing found (recheck if catalogue changes)'
     elif r.get('ra_set_status') == 'NO_SET':
         status, reason = 'NO SET', 'RetroAchievements lists this game but has no achievement set'
@@ -107,7 +115,12 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
             and 'kula world' in Path(r['path']).stem.casefold()):
         title = 'Kula World'
         release = 'Roll Away (USA) [SLUS-00724]'
-    return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
+    if (r.get('platform') == 'Sony PlayStation'
+            and r.get('local_serial') == 'SLES-00097'
+            and r.get('ra_set_status') == 'NO_SET'):
+        title = 'Exhumed / PowerSlave'
+        release = 'PowerSlave (USA) — optional; no PS1 achievement set'
+        return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             (14865 if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SCES-01000' and 'kula world' in Path(r['path']).stem.casefold() else (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', ''))), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
 def _disc_variant(row):
