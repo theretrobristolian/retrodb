@@ -139,6 +139,18 @@ def discover(audit, ps1_audit):
             continue
         if source_rel.suffix.lower() != ".cue" or target_rel.suffix.lower() != ".cue":
             continue
+        # Different modes, disc numbers, and special editions may share RA ID
+        # or disc serial; never auto-archive one as another.
+        def variant(stem):
+            words = stem.casefold()
+            mode = re.search(r"\\b(arcade|simulation)(?:\\s+mode)?\\b", words)
+            disc = re.search(r"\\b(?:disc|disk|cd)\\s*[-_ ]*(\\d+)\\b", words)
+            edition = re.search(r"\\b(special edition|collector(?:'s|s)? edition)\\b", words)
+            return (mode.group(1) if mode else "",
+                    disc.group(1) if disc else "",
+                    edition.group(1) if edition else "")
+        if variant(source_rel.stem) != variant(target_rel.stem):
+            continue
         serial = row.get("internal_serial", "")
         if not serial or row.get("selected_serial") != serial:
             continue
