@@ -150,6 +150,29 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                       "recheck if catalogue changes")
             r = {**r, "ra_set_status": "NOT_LISTED",
                  "identity_resolution": "manual-no-ra-listing"}
+    # Reviewed crosswalk fallback also supports previously exported raw audits.
+    if r.get("platform") == "Sony PlayStation" and r.get("status") == "unmatched":
+        if r.get("local_serial") == "SLES-00054":
+            title = "X-Com: Enemy Unknown / X-COM: UFO Defense"
+            status = "NO"
+            release = "X-COM: UFO Defense — accepted RA hash required"
+            reason = ("Reviewed PAL identity for RA game 13493; current image is "
+                      "not hash verified. https://retroachievements.org/game/13493")
+            r = {**r, "recommended_ra_game_id": 13493,
+                 "recommended_ra_title": "X-COM: UFO Defense",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLUS-00865":
+            title = "WipEout 3"
+            status = "NO"
+            release = "WipEout 3: Special Edition (Europe) [SCES-02845]"
+            reason = ("Standard US WipEout 3 is a distinct edition; RA 13912 "
+                      "supports Special Edition, not this US disc. "
+                      "https://retroachievements.org/game/13912")
+            r = {**r, "recommended_ra_game_id": 13912,
+                 "recommended_ra_title": "WipEout 3: Special Edition",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "supported-alternative-edition"}
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             (14865 if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SCES-01000' and 'kula world' in Path(r['path']).stem.casefold() else (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', ''))), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
