@@ -105,8 +105,8 @@ def _disc_variant(row):
     """
     import re
     text = " ".join(str(row[i] or "") for i in (0, 1, 10))
-    mode = re.search(r"\\b(arcade|simulation)\\s+mode\\b", text, re.I)
-    disc = re.search(r"\\b(?:disc|disk|cd)\\s*[-_ ]*(\\d+)\\b", text, re.I)
+    mode = re.search(r"\b(arcade|simulation)\s+mode\b", text, re.I)
+    disc = re.search(r"\b(?:disc|disk|cd)\s*[-_ ]*(\d+)\b", text, re.I)
     if mode:
         return "mode:" + mode.group(1).lower()
     if disc:
