@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conservative PS1 RA conflict resolver. One verified Alundra collision pilot.
+"""Conservative PS1 RA conflict resolver. Reviewed Alundra, Driver and Gran Turismo 2 same-disc collisions.
 
 Never deletes a BIN, overwrites existing files or trusts filenames as RA proof.
 A journal is written BEFORE any rename; interrupted work requires manual review.
@@ -18,6 +18,20 @@ UNMATCHED_HASH = "3841328147ba8a9bbdd152d9a599b296"
 SOURCE_NAME = "Alundra (USA) (Rev 1)"
 TARGET_NAME = "Alundra [SLUS-00553]"
 ROOT_REL = Path("iso")
+# Exact reviewed identities; never group by RA game ID alone.
+PROFILES = {
+    "alundra": dict(source=SOURCE_NAME, target=TARGET_NAME, serial="SLUS-00553",
+                    verified=RA_HASH, unmatched=UNMATCHED_HASH),
+    "driver": dict(source="Driver - You Are the Wheelman (USA) (Rev 1)",
+                   target="Driver You Are the Wheelman [SLUS-00842]",
+                   serial="SLUS-00842", verified="96be802f3f536946b5906f06029766f1",
+                   unmatched=None),
+    "gt2-simulation": dict(source="Gran Turismo 2 (USA) (Simulation Mode) (Rev 2)",
+                           target="Gran Turismo 2 (Simulation Mode) [SCUS-94488]",
+                           serial="SCUS-94488", verified="4ea57dce50b86a32f0d5034479c1bc48",
+                           unmatched=None),
+}
+
 FILE_RE = re.compile(r'^(\s*FILE\s+)(?:"([^"]+)"|(\S+))(\s+[^\r\n]+)$', re.I)
 
 
@@ -61,12 +75,14 @@ def rewritten(lines, line_match, binary, enc):
     return "".join(out).encode(enc)
 
 
-def inspect(root, hasher):
+def inspect(root, hasher, profile="alundra"):
+    from report_ps1_audit import disc_serial
+    cfg = PROFILES[profile]
     folder = root / ROOT_REL
-    a_cue, a_bin = (folder / (SOURCE_NAME + suffix) for suffix in (".cue", ".bin"))
-    b_cue, b_bin = (folder / (TARGET_NAME + suffix) for suffix in (".cue", ".bin"))
-    backup_cue = folder / ("OLD_" + TARGET_NAME + ".cue")
-    backup_bin = folder / ("OLD_" + TARGET_NAME + ".bin")
+    a_cue, a_bin = (folder / (cfg["source"] + suffix) for suffix in (".cue", ".bin"))
+    b_cue, b_bin = (folder / (cfg["target"] + suffix) for suffix in (".cue", ".bin"))
+    backup_cue = folder / ("OLD_" + cfg["target"] + ".cue")
+    backup_bin = folder / ("OLD_" + cfg["target"] + ".bin")
     paths = [a_cue, a_bin, b_cue, b_bin]
     if any(not x.is_file() or x.is_symlink() for x in paths):
         return None
@@ -76,27 +92,33 @@ def inspect(root, hasher):
         raise RuntimeError("Case-folded name collision")
     for cue, binary in ((a_cue, a_bin), (b_cue, b_bin)):
         verify_pair(cue, binary)
+    if disc_serial(a_bin) != cfg["serial"] or disc_serial(b_bin) != cfg["serial"]:
+        raise RuntimeError("Disc serial differs from reviewed identity for " + profile)
     source_hash = ra_hash(hasher, a_bin)
     target_hash = ra_hash(hasher, b_bin)
-    if (source_hash, target_hash) != (RA_HASH, UNMATCHED_HASH):
-        raise RuntimeError("RA hash evidence changed: source=" + source_hash + " target=" + target_hash)
+    if source_hash != cfg["verified"] or target_hash == cfg["verified"]:
+        raise RuntimeError("Verified hash evidence changed for " + profile)
+    if cfg["unmatched"] is not None and target_hash != cfg["unmatched"]:
+        raise RuntimeError("Unmatched copy hash changed for " + profile)
+    if source_hash == target_hash:
+        raise RuntimeError("Identical disc hashes; not a collision to promote")
     return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
                 backup_cue=backup_cue, backup_bin=backup_bin,
                 verified_hash=source_hash, unmatched_hash=target_hash)
 
 
-def apply(root, hasher, journal, expected):
+def apply(root, hasher, journal, expected, profile="alundra"):
     if journal.exists():
         raise RuntimeError("Journal exists; refusing overwrite")
-    operation = inspect(root, hasher)
+    operation = inspect(root, hasher, profile)
     if operation is None:
-        raise RuntimeError("Alundra pairs changed since preview")
+        raise RuntimeError("Pairs changed since preview: " + profile)
     if (operation["verified_hash"], operation["unmatched_hash"]) != expected:
         raise RuntimeError("RA hashes changed since confirmed preview")
     src_raw, src_enc, src_lines, src_match = verify_pair(operation["source_cue"], operation["source_bin"])
     dst_raw, dst_enc, dst_lines, dst_match = verify_pair(operation["dest_cue"], operation["dest_bin"])
     def write(state):
-        record = {"operation": "alundra-ra-collision", "state": state,
+        record = {"operation": "verified-ps1-collision", "profile": profile, "state": state,
                   "created_utc": datetime.now(timezone.utc).isoformat(),
                   "paths": {k: str(v) for k, v in operation.items() if isinstance(v, Path)},
                   "verified_hash": operation["verified_hash"],
@@ -120,30 +142,31 @@ def apply(root, hasher, journal, expected):
     write("verified-cue-promoted")
     operation["dest_cue"].write_bytes(rewritten(src_lines, src_match, operation["dest_bin"], src_enc))
     write("verified-cue-relinked")
-    if ra_hash(hasher, operation["dest_bin"]) != RA_HASH or ra_hash(hasher, operation["backup_bin"]) != UNMATCHED_HASH:
+    if (ra_hash(hasher, operation["dest_bin"]), ra_hash(hasher, operation["backup_bin"])) != expected:
         raise RuntimeError("Post-rename RA verification failed; inspect journal immediately")
     write("applied")
-    print("[OK] Alundra: RA-compatible pair promoted; unmatched pair preserved as OLD_.")
+    print("[OK]", profile, "RA-compatible pair promoted; unmatched pair preserved as OLD_.")
 
 
 
 def verify_completed(journal, ro_root, hasher):
     """Finish only post-rename verification; never rename or rewrite collection files."""
     record = json.loads(journal.read_text(encoding="utf-8"))
-    if record.get("operation") != "alundra-ra-collision":
-        raise RuntimeError("Not an Alundra collision journal")
+    if record.get("operation") not in ("alundra-ra-collision", "verified-ps1-collision"):
+        raise RuntimeError("Not a PS1 collision journal")
+    cfg = PROFILES[record.get("profile", "alundra")]
     if record.get("state") not in ("verified-cue-relinked", "applied"):
         raise RuntimeError("Journal is not ready for final verification: " + str(record.get("state")))
     paths = record["paths"]
     expected_dir = (ro_root / ROOT_REL).resolve()
     for name in ("dest_cue", "dest_bin", "backup_cue", "backup_bin"):
         candidate = Path(paths[name])
-        if candidate.name != (("OLD_" if name.startswith("backup_") else "") + TARGET_NAME + (".cue" if name.endswith("cue") else ".bin")):
+        if candidate.name != (("OLD_" if name.startswith("backup_") else "") + cfg["target"] + (".cue" if name.endswith("cue") else ".bin")):
             raise RuntimeError("Journal contains unexpected filename for " + name)
-    active_cue = expected_dir / (TARGET_NAME + ".cue")
-    active_bin = expected_dir / (TARGET_NAME + ".bin")
-    backup_cue = expected_dir / ("OLD_" + TARGET_NAME + ".cue")
-    backup_bin = expected_dir / ("OLD_" + TARGET_NAME + ".bin")
+    active_cue = expected_dir / (cfg["target"] + ".cue")
+    active_bin = expected_dir / (cfg["target"] + ".bin")
+    backup_cue = expected_dir / ("OLD_" + cfg["target"] + ".cue")
+    backup_bin = expected_dir / ("OLD_" + cfg["target"] + ".bin")
     verify_pair(active_cue, active_bin)
     verify_pair(backup_cue, backup_bin)
     active_hash = ra_hash(hasher, active_bin)
@@ -175,20 +198,26 @@ def main():
             p.error("--journal required for verify-journal")
         verify_completed(args.journal, args.root, args.hasher)
         return
-    operation = inspect(args.root, args.hasher)
+    available = [(key, op) for key in PROFILES
+                 if (op := inspect(args.root, args.hasher, key)) is not None]
     if args.mode == "count":
-        print(1 if operation else 0)
+        print(len(available))
         return
-    if operation is None:
-        print("[INFO] No Alundra RA conflict requiring resolution")
+    if not available:
+        print("[INFO] No reviewed PS1 RA collision requiring resolution")
         return
-    print("[RA CONFLICT] Verified:", operation["source_cue"].name, "=>", operation["dest_cue"].name)
-    print("[PRESERVE] Unmatched:", operation["dest_cue"].name, "=>", operation["backup_cue"].name)
-    print("[INFO] Matching both disc hashes was mandatory; no files deleted.")
+    for profile, operation in available:
+        print("[RA CONFLICT]", profile, "verified:", operation["source_cue"].name,
+              "=>", operation["dest_cue"].name)
+        print("[PRESERVE]", operation["dest_cue"].name, "=>", operation["backup_cue"].name)
     if args.mode == "apply":
         if not args.journal:
             p.error("--journal required for apply")
-        apply(args.root, args.hasher, args.journal, (operation["verified_hash"], operation["unmatched_hash"]))
+        for profile, operation in available:
+            target_journal = args.journal.with_name(args.journal.stem + "-" + profile + ".json")
+            apply(args.root, args.hasher, target_journal,
+                  (operation["verified_hash"], operation["unmatched_hash"]), profile)
+            print("[JOURNAL]", target_journal)
     else:
         print("PREVIEW ONLY: no files changed.")
 
