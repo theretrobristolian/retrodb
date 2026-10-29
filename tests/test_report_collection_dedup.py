@@ -309,3 +309,24 @@ def test_disc_number_is_not_repeated_when_catalogue_title_has_it():
         "alternative_candidates": "",
     }
     assert report.row_for(row)[0] == "Parasite Eve (Disc 1)"
+
+
+def test_xcom_and_wipeout_reviewed_release_guidance():
+    shared = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "local_region": "Europe", "gamedb_title": "",
+        "local_friendly_title": "", "ra_set_status": "UNRESOLVED",
+        "recommended_ra_title": "", "recommended_ra_game_id": "",
+        "ra_game_id": "", "preferred_release_name": "",
+        "preferred_region": "", "preferred_patch_url": "",
+        "alternative_candidates": "", "release_guidance": "",
+    }
+    xcom = report.row_for({**shared, "local_serial": "SLES-00054",
+                           "path": "iso/X-Com Enemy Unknown [SLES-00054].cue"})
+    assert xcom[3] == "NO" and str(xcom[6]) == "13493"
+    assert "retroachievements.org/game/13493" in xcom[5]
+    wipeout = report.row_for({**shared, "local_serial": "SLUS-00865",
+                              "path": "iso/WipEout 3 [SLUS-00865].cue"})
+    assert wipeout[3] == "NO" and str(wipeout[6]) == "13912"
+    assert "Special Edition" in wipeout[7]
+    assert "distinct edition" in wipeout[5]
