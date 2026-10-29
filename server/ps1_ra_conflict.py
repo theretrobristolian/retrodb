@@ -96,7 +96,7 @@ def audit_pair(audit_path, cfg, source_hash, target_hash):
             or str(source.get("ra_game_id")) != game_id
             or source.get("local_ra_hash", "").lower() != source_hash
             or (not cfg.get("identical") and target.get("status") != "unmatched")
-            or str(target.get("recommended_ra_game_id")) != game_id
+            or str(target.get("ra_game_id") if cfg.get("identical") else target.get("recommended_ra_game_id")) != game_id
             or target.get("local_ra_hash", "").lower() != target_hash):
         raise RuntimeError("RA audit does not prove a verified source and unmatched destination")
     if (source.get("local_serial") != cfg["serial"]
