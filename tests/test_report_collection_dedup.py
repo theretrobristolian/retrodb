@@ -94,3 +94,21 @@ def test_source_verified_changes_patch_to_ready_but_not_ra_compatible():
     source = "/mnt/retrodb-retronas/PS2/SLUS_211.20.Psychonauts.iso"
     row = report.row_for(data, {(source, data["recommended_ra_title"])})
     assert (row[3], row[4], row[18], row[19]) == ("NO", "YES", "READY", "Anti-cheat")
+
+
+def test_gt2_arcade_not_excluded_by_verified_simulation():
+    arcade = entry("GT2 Arcade", "11278", "NO")
+    arcade[2] = "SCUS-94455"
+    simulation = entry("GT2 Simulation Rev 2", "11278", "YES")
+    simulation[2] = "SCUS-94488"
+    result = report.apply_collection_dedup([arcade, simulation])
+    assert result[0][13] == "COUNT"
+    assert result[1][13] == "COUNT — verified"
+
+
+def test_different_serials_under_same_ra_id_not_deduplicated():
+    first = entry("Driver 2 Disc 1", "11588", "YES")
+    first[2] = "SLUS-01161"
+    second = entry("Driver 2 Disc 2", "11588", "NO")
+    second[2] = "SLUS-01318"
+    assert report.apply_collection_dedup([first, second])[1][13] == "COUNT"
