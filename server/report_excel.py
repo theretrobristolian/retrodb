@@ -136,10 +136,10 @@ def apply_collection_dedup(entries):
             if row[3] == "YES":
                 row[13] = "COUNT — verified"
                 continue
-            if row[3] != "NO" or str(row[23] or "").upper() == "YES":
+            if row[3] != "NO" or (len(row) > 23 and str(row[23] or "").upper() == "YES"):
                 continue
             serial = str(row[2] or "").upper()
-            internal = str(row[21] or "").upper()
+            internal = str(row[21] or "").upper() if len(row) > 21 else ""
             if not serial or (internal and internal != serial):
                 continue
             variant = _disc_variant(row)
