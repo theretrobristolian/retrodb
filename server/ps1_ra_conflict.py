@@ -7,6 +7,7 @@ A journal is written BEFORE any rename; interrupted work requires manual review.
 import argparse
 import csv
 import hashlib
+import hashlib
 import json
 import os
 import re
@@ -91,10 +92,10 @@ def audit_pair(audit_path, cfg, source_hash, target_hash):
     source = unique(cfg["source"])
     target = unique(cfg["target"])
     game_id = cfg["ra_game_id"]
-    if (source.get("status") != "matched"
+    if (not cfg.get("identical") and source.get("status") != "matched"
             or str(source.get("ra_game_id")) != game_id
             or source.get("local_ra_hash", "").lower() != source_hash
-            or target.get("status") != "unmatched"
+            or (not cfg.get("identical") and target.get("status") != "unmatched")
             or str(target.get("recommended_ra_game_id")) != game_id
             or target.get("local_ra_hash", "").lower() != target_hash):
         raise RuntimeError("RA audit does not prove a verified source and unmatched destination")
@@ -141,25 +142,32 @@ def discover(audit, ps1_audit):
         if not serial or row.get("selected_serial") != serial:
             continue
         src, dst = ra(source_rel.stem), ra(target_rel.stem)
-        if not src or not dst or src.get("status") != "matched" or dst.get("status") != "unmatched":
+        if not src or not dst:
+            continue
+        identical = (src.get("status") == dst.get("status")
+                     and src.get("status") in ("matched", "unmatched")
+                     and src.get("local_ra_hash", "").lower() == dst.get("local_ra_hash", "").lower())
+        promotion = src.get("status") == "matched" and dst.get("status") == "unmatched"
+        if not (identical or promotion):
             continue
         if src.get("local_serial") != serial or dst.get("local_serial") != serial:
             continue
         if src.get("disc_id_conflict") == "YES" or dst.get("disc_id_conflict") == "YES":
             continue
         game_id = str(src.get("ra_game_id", ""))
-        if not game_id or str(dst.get("recommended_ra_game_id", "")) != game_id:
+        if not game_id or (not identical and str(dst.get("recommended_ra_game_id", "")) != game_id) or (identical and str(dst.get("ra_game_id", "")) != game_id):
             continue
         src_hash = src.get("local_ra_hash", "").lower()
         dst_hash = dst.get("local_ra_hash", "").lower()
         if not (re.fullmatch(r"[a-f0-9]{32}", src_hash)
                 and re.fullmatch(r"[a-f0-9]{32}", dst_hash)
-                and src_hash != dst_hash):
+                and (identical or src_hash != dst_hash)):
             continue
         key = str(target_rel)
         cfg = dict(source=source_rel.stem, target=target_rel.stem,
                    folder=source_rel.parent.as_posix(), serial=serial,
-                   ra_game_id=game_id, verified=src_hash, unmatched=dst_hash)
+                   ra_game_id=game_id, verified=src_hash, unmatched=dst_hash,
+                   identical=identical)
         candidates.setdefault(key, []).append(cfg)
     # A canonical destination with multiple eligible sources is ambiguous.
     return {"collision-%04d" % number: candidates[key][0]
@@ -188,12 +196,24 @@ def inspect(root, hasher, profile="alundra", audit=None):
         raise RuntimeError("Disc serial differs from reviewed identity for " + profile)
     source_hash = ra_hash(hasher, a_bin)
     target_hash = ra_hash(hasher, b_bin)
-    if source_hash != cfg["verified"] or target_hash == cfg["verified"]:
+    if source_hash != cfg["verified"] or (target_hash == cfg["verified"] and not cfg.get("identical")):
         raise RuntimeError("Verified hash evidence changed for " + profile)
     if cfg["unmatched"] is not None and target_hash != cfg["unmatched"]:
         raise RuntimeError("Unmatched copy hash changed for " + profile)
-    if source_hash == target_hash:
-        raise RuntimeError("Identical disc hashes; not a collision to promote")
+    if source_hash == target_hash and not cfg.get("identical"):
+        raise RuntimeError("Identical RA hashes require explicit duplicate mode")
+    if cfg.get("identical"):
+        if source_hash != target_hash:
+            raise RuntimeError("Duplicate images no longer have matching RA hashes")
+        def full_sha256(p):
+            digest = hashlib.sha256()
+            with p.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(4 * 1024 * 1024), b""):
+                    digest.update(chunk)
+            return digest.digest()
+        if (a_bin.stat().st_size != b_bin.stat().st_size
+                or full_sha256(a_bin) != full_sha256(b_bin)):
+            raise RuntimeError("RA hash matches but BIN contents differ; refusing OLD_")
     if profile != "alundra":
         audit_pair(audit, cfg, source_hash, target_hash)
     return dict(source_cue=a_cue, source_bin=a_bin, dest_cue=b_cue, dest_bin=b_bin,
