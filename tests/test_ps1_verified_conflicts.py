@@ -203,15 +203,27 @@ def test_generic_discovery_finds_identical_verified_collision(tmp_path):
     assert next(iter(plans.values()))["identical"] is True
 
 
-def test_identical_ra_hash_but_different_bin_is_rejected(tmp_path):
-    cfg, hash_impl = fixture_pairs(tmp_path, "driver")
-    cfg = dict(cfg, identical=True, unmatched=cfg["verified"])
+def test_same_ra_identity_archives_extra_and_keeps_canonical(tmp_path):
+    cfg, _ = fixture_pairs(tmp_path, "driver")
+    cfg = dict(cfg, identical=True, archive_source=True, unmatched="f" * 32)
+    journal = tmp_path / "archive.json"
+    def hash_impl(_hasher, path):
+        return cfg["verified"] if Path(path).read_bytes() == b"verified" else "f" * 32
     with patch.dict(resolver.PROFILES, {"duplicate-test": cfg}), \
          patch("report_ps1_audit.disc_serial", return_value=cfg["serial"]), \
-         patch.object(resolver, "ra_hash", return_value=cfg["verified"]), \
+         patch.object(resolver, "ra_hash", side_effect=hash_impl), \
          patch.object(resolver, "audit_pair"):
-        with pytest.raises(resolver.NotIdenticalDuplicate, match="different full BIN contents"):
-            resolver.inspect(tmp_path, Path("/unused/RAHasher"), "duplicate-test")
+        op = resolver.inspect(tmp_path, Path("/unused/RAHasher"), "duplicate-test")
+        resolver.apply(tmp_path, Path("/unused/RAHasher"), journal,
+                       (op["verified_hash"], op["unmatched_hash"]), "duplicate-test")
+        directory = tmp_path / "iso"
+        assert (directory / (cfg["target"] + ".bin")).read_bytes() == b"unmatched"
+        assert (directory / ("OLD_" + cfg["source"] + ".bin")).read_bytes() == b"verified"
+        assert not (directory / (cfg["source"] + ".cue")).exists()
+        assert 'FILE "OLD_' + cfg["source"] + '.bin"' in (
+            directory / ("OLD_" + cfg["source"] + ".cue")).read_text()
+        resolver.verify_completed(journal, tmp_path, Path("/unused/RAHasher"))
+
 
 
 def test_generic_discovery_no_set_identical_copies(tmp_path):
