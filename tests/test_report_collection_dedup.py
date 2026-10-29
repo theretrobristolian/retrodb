@@ -92,7 +92,7 @@ def test_source_verified_changes_patch_to_ready_but_not_ra_compatible():
         "ra_set_status": "HAS_SET", "release_guidance": "", "alternative_candidates": "",
     }
     source = "/mnt/retrodb-retronas/PS2/SLUS_211.20.Psychonauts.iso"
-    row = report.row_for(data, {(source, data["recommended_ra_title"])})
+    row = report.row_for(data, {(source, data["recommended_ra_game_id"]): {"patch_url": data["preferred_patch_url"], "required_release": data["preferred_release_name"]}})
     assert (row[3], row[4], row[18], row[19]) == ("NO", "YES", "READY", "Anti-cheat")
 
 
