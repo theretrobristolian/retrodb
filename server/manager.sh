@@ -447,7 +447,7 @@ PYCOUNT
     echo 'Temporary writable mount already active; refusing to proceed.'; return 1
   fi
   sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
-  # Resolve the specific verified Alundra collision first. Keep its
+  # Resolve reviewed RA-verified same-disc collisions first. Keep their
   # recovery journal separate from the ordinary PS1 bulk-rename journals.
   # Never run a second collision operation with an incomplete journal.
   local conflict_dir="$HOME/retrodb-exports/ps1-conflict-journals"
@@ -474,11 +474,15 @@ PYCONF
   if [[ "$result" -eq 0 && "$conflict_count" != 0 ]]; then
     cj="$conflict_dir/ps1-conflict-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
     sudo python3 "$HERE/ps1_ra_conflict.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$cj" || result=$?
-    if [[ -f "$cj" ]]; then
-      sudo chown "$(id -un):$(id -gn)" "$cj" || result=1
-      echo "Conflict journal: $cj"
-    else
-      echo "[INFO] Conflict operation failed before creating a journal; no rename started." >&2
+    local created=0 conflict_journal
+    for conflict_journal in "${cj%.json}"-*.json; do
+      [[ -f "$conflict_journal" ]] || continue
+      created=1
+      sudo chown "$(id -un):$(id -gn)" "$conflict_journal" || result=1
+      echo "Conflict journal: $conflict_journal"
+    done
+    if [[ "$created" == 0 ]]; then
+      echo "[INFO] No conflict journal created (the operation stopped before any rename)." >&2
     fi
   fi
   if [[ "$result" -eq 0 ]]; then
