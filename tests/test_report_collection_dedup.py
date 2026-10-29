@@ -134,3 +134,47 @@ def test_hash_error_still_requires_action():
     actions = report.action_rows([row], "Sony PlayStation")
     assert len(actions) == 1
     assert actions[0][5] == "Fix disc hash error"
+
+
+def test_us_verified_pal_copy_soft_hidden_without_changing_hash_status():
+    pal = entry("Harry Potter and the Philosopher's Stone", "11404", "NO")
+    pal[2] = "SLES-03662"
+    us = entry("Harry Potter and the Sorcerer's Stone", "11404", "YES")
+    us[2] = "SLUS-01503"
+    rows = report.apply_collection_dedup([pal, us])
+    assert rows[0][3] == "NO"
+    assert rows[0][13] == "EXCLUDE — verified alternative on share"
+    assert "verified RA-compatible" in rows[0][5]
+    assert rows[1][13] == "COUNT — verified"
+
+
+def test_cross_region_multidisc_same_number_is_covered():
+    pal = entry("Example Adventure (Disc 2)", "9001", "NO")
+    pal[2] = "SLES-11111"
+    us = entry("Example Adventure (Disc 2)", "9001", "YES")
+    us[2] = "SLUS-22222"
+    assert report.apply_collection_dedup([pal, us])[0][13].startswith("EXCLUDE")
+
+
+def test_cross_region_different_disc_numbers_not_covered():
+    pal = entry("Example Adventure (Disc 1)", "9001", "NO")
+    pal[2] = "SLES-11111"
+    us = entry("Example Adventure (Disc 2)", "9001", "YES")
+    us[2] = "SLUS-22222"
+    assert report.apply_collection_dedup([pal, us])[0][13] == "COUNT"
+
+
+def test_unlabelled_copy_not_hidden_when_verified_set_has_multiple_discs():
+    pal = entry("Example Adventure", "9001", "NO")
+    pal[2] = "SLES-11111"
+    us1 = entry("Example Adventure (Disc 1)", "9001", "YES")
+    us1[2] = "SLUS-22221"
+    us2 = entry("Example Adventure (Disc 2)", "9001", "YES")
+    us2[2] = "SLUS-22222"
+    assert report.apply_collection_dedup([pal, us1, us2])[0][13] == "COUNT"
+
+
+def test_unknown_identity_not_soft_hidden():
+    unknown = entry("Unrecognised release", "9001", "UNKNOWN")
+    compatible = entry("Recognised release", "9001", "YES")
+    assert report.apply_collection_dedup([unknown, compatible])[0][13] == "COUNT"
