@@ -801,10 +801,11 @@ def match_collection(
                         confidence += "-metadata-unavailable"
 
             manually_unlisted = (
-                slug == "playstation-2"
+                (slug == "playstation" and serial == "SLUS-01470" and item.ra_match_status == "unmatched" and not recommendation and not no_set_game)
+                or (slug == "playstation-2"
                 and serial in reviewed_no_listing
                 and item.ra_match_status == "unmatched"
-                and recommendation is None and no_set_game is None
+                and recommendation is None and no_set_game is None)
             )
             if manually_unlisted:
                 confidence = "manual-no-ra-listing"
