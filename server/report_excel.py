@@ -56,8 +56,8 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     # Preserve independently evidenced disc numbering in the displayed title.
     # The RA catalogue often uses one title for every disc of a game.
     file_stem = Path(r['path']).stem
-    disc_label = re.search(r"\\b(?:disc|disk|cd)\\s*[-_ ]*(\\d+)\\b", file_stem, re.I)
-    if disc_label and not re.search(r"\\b(?:disc|disk|cd)\\s*[-_ ]*\\d+\\b", title, re.I):
+    disc_label = re.search(r"\b(?:disc|disk|cd)\s*[-_ ]*(\d+)\b", file_stem, re.I)
+    if disc_label and not re.search(r"\b(?:disc|disk|cd)\s*[-_ ]*\d+\b", title, re.I):
         title += " (Disc " + str(int(disc_label.group(1))) + ")"
     source = str(Path(root) / r['path'])
     verified_variant = verified_sources.get((source, str(r.get('recommended_ra_game_id', '')))) if isinstance(verified_sources, dict) else None
