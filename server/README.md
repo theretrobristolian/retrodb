@@ -13,6 +13,19 @@ curl -fsS http://127.0.0.1:8000/health
 
 This updates the RetroDB application and its configured service. It does **not** replace a manually installed xeRAbora Linux binary or the PS2's OPL-RA ELF.
 
+## PS1 rename regression checks
+
+`server/build.sh` installs Debian's `python3-pytest` alongside other build prerequisites. The installed RetroDB application itself does **not** require pytest to run. After pulling source changes, validate the PS1 collision resolver before allowing a writable rename:
+
+```bash
+cd ~/retrodb
+python3 -m py_compile server/ps1_ra_conflict.py server/ps1_rename.py server/report_ps1_audit.py
+bash -n server/manager.sh
+python3 -m pytest tests/test_ps1_verified_conflicts.py -q
+```
+
+For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENAMEPS1` confirmation. Verified RA alternatives take priority. True duplicates require **byte-identical BIN files** (full SHA-256), not merely the same RetroAchievements hash. Pairs with different full BIN content are shown as `SKIP - REVIEW` and neither is modified. Collisions may be applied individually with journals; `OLD_` pairs must be reviewed before manual deletion. Never delete or rename a `SKIP - REVIEW` pair based only on RA hashes.
+
 ## Main tools
 
 | Task | Tool |
