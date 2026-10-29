@@ -93,7 +93,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
         if r['release_guidance']: reason += ' — ' + r['release_guidance']
     elif (r.get('platform') == 'Sony PlayStation'
           and r.get('local_serial') == 'SLES-00097'
-          and r.get('ra_set_status') == 'NO_SET'):
+          and r.get('status') == 'unmatched'):
         status = 'NO SET'
         reason = ('Exhumed (Europe) is PowerSlave on RetroAchievements (game 15920). '
                   'No PS1 achievements exist yet; PowerSlave (USA) is an optional '
@@ -117,9 +117,11 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
         release = 'Roll Away (USA) [SLUS-00724]'
     if (r.get('platform') == 'Sony PlayStation'
             and r.get('local_serial') == 'SLES-00097'
-            and r.get('ra_set_status') == 'NO_SET'):
+            and r.get('status') == 'unmatched'):
         title = 'Exhumed / PowerSlave'
         release = 'PowerSlave (USA) — optional; no PS1 achievement set'
+    if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SLES-00097' and r.get('status') == 'unmatched':
+        r = {**r, 'no_set_ra_game_id': 15920, 'ra_set_status': 'NO_SET', 'identity_resolution': 'reviewed-disc-id-no-set'}
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             (14865 if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SCES-01000' and 'kula world' in Path(r['path']).stem.casefold() else (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', ''))), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
