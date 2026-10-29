@@ -219,3 +219,22 @@ def test_exhumed_europe_is_powerslave_no_set_with_optional_us_guidance():
     assert "PowerSlave (USA)" in result[7]
     assert "NOT an RA-compatible upgrade" in result[5]
     assert "retroachievements.org/game/15920" in result[5]
+
+
+def test_exhumed_stale_unknown_csv_not_action_required():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Exhumed [SLES-00097].cue",
+        "local_serial": "SLES-00097", "local_region": "Europe",
+        "gamedb_title": "Exhumed", "local_friendly_title": "Exhumed",
+        "ra_set_status": "UNRESOLVED", "no_set_ra_game_id": "",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    shown = report.row_for(raw)
+    assert shown[3] == "NO SET"
+    assert shown[14] == "NO_SET"
+    assert str(shown[6]) == "15920"
+    assert report.action_rows([shown], "Sony PlayStation") == []
