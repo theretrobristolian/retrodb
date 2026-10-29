@@ -663,8 +663,9 @@ def match_collection(
                     curated_id = None
                 if curated_id and curated_id in counts_by_id and counts_by_id[curated_id] == 0:
                     no_set_game = next((g for g in no_sets if g.game_id == curated_id), None)
+            exhumed_fallback = (slug == "playstation" and serial == "SLES-00097" and item.ra_match_status == "unmatched" and 15920 not in counts_by_id)
             recommendation = None
-            confidence = ""
+            confidence = "reviewed-disc-id-no-set" if exhumed_fallback else ""
             score = 0.0
             alternatives = ""
             if item.ra_match_status == "unmatched" and slug == "playstation-2" and not special_disc and serial not in reviewed_no_listing:
@@ -704,7 +705,7 @@ def match_collection(
                         recommendation = reviewed_game
                         confidence = "reviewed-disc-id"
                         score = 1.0
-            if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game and serial not in reviewed_no_listing:
+            if item.ra_match_status == "unmatched" and not special_disc and not recommendation and not no_set_game and not exhumed_fallback and serial not in reviewed_no_listing:
                 if slug == "playstation-2":
                     recommendation, confidence, score = suggest_by_serial(
                         serial, with_sets, serial_aliases
@@ -740,7 +741,7 @@ def match_collection(
                 if recommendation:
                     counts["recommended"] += 1
 
-            if item.ra_match_status == "unmatched" and not recommendation and not no_set_game and not special_disc and serial not in reviewed_no_listing:
+            if item.ra_match_status == "unmatched" and not recommendation and not no_set_game and not exhumed_fallback and not special_disc and serial not in reviewed_no_listing:
                 identity = gamedb_title or friendly_local_title(item.relative_path)
                 candidate, method, _, review = resolve_catalogue_identity(
                     identity, no_sets
@@ -813,25 +814,25 @@ def match_collection(
                 "identity_review_reason": review_reason(
                     gamedb_title or friendly_local_title(item.relative_path),
                     alternatives, special_disc
-                ) if not recommendation and not no_set_game and not match else "",
+                ) if not recommendation and not no_set_game and not exhumed_fallback and not match else "",
                 "identity_resolution": (
                     "manual-no-ra-listing" if manually_unlisted else
                     "verified-ra-hash" if match else
-                    confidence if recommendation or no_set_game else
+                    confidence if recommendation or no_set_game or exhumed_fallback else
                     "special-disc" if special_disc else
                     "review-candidates" if alternatives else
                     "no-catalogue-crosswalk"
                 ),
                 "ra_set_status": ("NOT_LISTED" if manually_unlisted else "HAS_SET" if (recommendation or match) and
                     counts_by_id.get(recommendation.game_id if recommendation else match[0], 0) > 0
-                    else "NO_SET" if (no_set_game or match) else "UNRESOLVED"),
+                    else "NO_SET" if (no_set_game or match or exhumed_fallback) else "UNRESOLVED"),
                 "no_set_ra_game_id": (
                     no_set_game.game_id if no_set_game else
-                    match[0] if match and counts_by_id.get(match[0], 0) == 0 else ""
+                    match[0] if match and counts_by_id.get(match[0], 0) == 0 else 15920 if exhumed_fallback else ""
                 ),
                 "no_set_ra_title": (
                     no_set_game.title if no_set_game else
-                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else ""
+                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else "PowerSlave" if exhumed_fallback else ""
                 ),
                 "gamedb_identified": "YES" if gamedb_title else "NO",
                 "disc_classification": ("special-disc-review" if special_disc else "standard"),
