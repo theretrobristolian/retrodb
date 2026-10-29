@@ -163,6 +163,8 @@ def plan(root: Path, gamedb: dict[str, str] | None = None) -> list[dict[str, str
         if not selected_serial and not is_homebrew:
             issues.append("ID_MISSING")
         catalogue_title = gamedb.get(selected_serial, "")
+        if selected_serial == "SCES-01000" and re.search(r"\\bkula\\s+world\\b", cue.stem, re.I):
+            catalogue_title = "Kula World"
         if selected_serial == "SLES-03120":
             catalogue_title = "3, 2, 1, Smurf! My First Racing Game"
         # A catalogue serial match does not prove the image is that retail title.
