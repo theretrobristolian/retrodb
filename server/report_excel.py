@@ -99,7 +99,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                   'No PS1 achievements exist yet; PowerSlave (USA) is an optional '
                   'US-region replacement, NOT an RA-compatible upgrade. '
                   'https://retroachievements.org/game/15920')
-        elif r.get('ra_set_status') == 'NOT_LISTED':
+    elif r.get('ra_set_status') == 'NOT_LISTED':
         status, reason = 'NO SET', 'User-reviewed: no RetroAchievements game listing found (recheck if catalogue changes)'
     elif r.get('ra_set_status') == 'NO_SET':
         status, reason = 'NO SET', 'RetroAchievements lists this game but has no achievement set'
