@@ -210,7 +210,7 @@ def test_identical_ra_hash_but_different_bin_is_rejected(tmp_path):
          patch("report_ps1_audit.disc_serial", return_value=cfg["serial"]), \
          patch.object(resolver, "ra_hash", return_value=cfg["verified"]), \
          patch.object(resolver, "audit_pair"):
-        with pytest.raises(RuntimeError, match="BIN contents differ"):
+        with pytest.raises(resolver.NotIdenticalDuplicate, match="different full BIN contents"):
             resolver.inspect(tmp_path, Path("/unused/RAHasher"), "duplicate-test")
 
 
