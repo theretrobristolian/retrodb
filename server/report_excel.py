@@ -247,7 +247,24 @@ def apply_collection_dedup(entries):
             if not serial or (internal and internal != serial):
                 continue
             variant = _disc_variant(row)
-            if serial in verified_serials:
+            # Ace Combat 3's US release is a separate, shortened edition.
+            # Only suppress its Japanese recommendation if BOTH Japanese
+            # discs have independently passed the RA hash audit. A single
+            # Japanese disc cannot cover this two-disc recommendation.
+            complete_ace3_japan = (
+                str(row[6]).strip() == "11308"
+                and serial == "SLUS-00972"
+                and {
+                    ("SLPS-02020", "disc:1"),
+                    ("SLPS-02021", "disc:2"),
+                }.issubset({
+                    (str(v[2] or "").upper(), _disc_variant(v))
+                    for v in verified
+                })
+            )
+            if complete_ace3_japan:
+                covered = True
+            elif serial in verified_serials:
                 covered = True
             elif variant:
                 covered = any(_disc_variant(v) == variant for v in verified)
