@@ -378,3 +378,35 @@ def test_capcom_snk_pal_crosswalk_in_unresolved_export():
     assert row[14] == "HAS_SET"
     assert "retroachievements.org/game/13918" in row[5]
     assert report.action_rows([row], "Sony PlayStation") == []
+
+
+def test_ace_combat_3_us_covered_only_by_two_verified_japanese_discs():
+    us = entry("Ace Combat 3 Electrosphere", "11308", "NO")
+    us[2] = "SLUS-00972"
+    disc1 = entry("Ace Combat 3 Electrosphere (Disc 1)", "11308", "YES")
+    disc1[2] = "SLPS-02020"
+    disc2 = entry("Ace Combat 3 Electrosphere (Disc 2)", "11308", "YES")
+    disc2[2] = "SLPS-02021"
+    result = report.apply_collection_dedup([us, disc1, disc2])
+    assert result[0][13] == "EXCLUDE — verified alternative on share"
+    assert "already present" in result[0][5]
+    assert all(r[13] == "COUNT — verified" for r in result[1:])
+
+
+def test_ace_combat_3_us_not_covered_by_only_one_japanese_disc():
+    us = entry("Ace Combat 3 Electrosphere", "11308", "NO")
+    us[2] = "SLUS-00972"
+    disc1 = entry("Ace Combat 3 Electrosphere (Disc 1)", "11308", "YES")
+    disc1[2] = "SLPS-02020"
+    result = report.apply_collection_dedup([us, disc1])
+    assert result[0][13] == "COUNT"
+
+
+def test_ace_combat_3_unverified_japanese_files_do_not_cover_us():
+    us = entry("Ace Combat 3 Electrosphere", "11308", "NO")
+    us[2] = "SLUS-00972"
+    disc1 = entry("Ace Combat 3 Electrosphere (Disc 1)", "11308", "NO")
+    disc1[2] = "SLPS-02020"
+    disc2 = entry("Ace Combat 3 Electrosphere (Disc 2)", "11308", "NO")
+    disc2[2] = "SLPS-02021"
+    assert report.apply_collection_dedup([us, disc1, disc2])[0][13] == "COUNT"
