@@ -102,3 +102,44 @@ Installation requires confirmation before binary replacement and checks upstream
 This helper is **experimental and community supported**, with no guarantee of compatibility across all CPUs, PS2 loaders or networks.
 
 For implementation history and older troubleshooting, see the [archived xeRAbora development notes](../../docs/development-notes/XERABORA-README-HISTORY.md).
+
+## iPhone home-screen icon (upstream contribution)
+
+The xeRAbora web client is **embedded into the upstream binary**, not hosted
+by RetroDB. A user-added icon cannot become active on the existing xeRAbora
+phone page solely by changing this installer.
+
+For the creator to add a browser favicon and an iOS home-screen icon:
+
+1. Generate opaque PNG assets from the xeRAbora logo:
+   `apple-touch-icon.png` (180×180), `favicon-32.png` (32×32),
+   `icon-192.png` (192×192), `icon-512.png` (512×512), plus `favicon.ico`.
+2. Edit upstream **`client/ui/src/page.html`**, not generated
+   `client/ui/index.html`, adding inside `<head>`:
+
+   ```html
+   <link rel="icon" href="/favicon.ico" sizes="any">
+   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+   <link rel="manifest" href="/site.webmanifest">
+   <meta name="apple-mobile-web-app-title" content="xeRAbora">
+   <meta name="apple-mobile-web-app-capable" content="yes">
+   <meta name="theme-color" content="#000000">
+   ```
+
+3. **Expose the files over HTTP** from the client at those paths, with the
+   correct MIME types. The upstream client embeds a generated HTML page;
+   copying images beside the executable does **not** make those URLs work.
+   Alternatively, embed a base64 PNG in the `apple-touch-icon` HTML link
+   and serve or embed the favicon similarly. Test all endpoints on a phone.
+4. Add `site.webmanifest` with `name`, `short_name`, `display:
+   "standalone"`, dark colours and 192px/512px icons; this helps Android.
+5. Run `python3 tools/build-page.py` from upstream `client/`, then
+   rebuild/release the client. This regenerates `client/ui/index.html`,
+   `client/src/ui_page.c` and `docs/demo.html`.
+6. On the iPhone open xeRAbora in **Safari → Share → Add to Home Screen**.
+   Remove and recreate existing home-screen bookmarks to refresh the icon.
+
+The artwork and icon assets must be added upstream for a shared release.
+The RetroDB integration does not attempt to rewrite the xeRAbora executable.
+
