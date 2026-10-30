@@ -162,6 +162,18 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                  "recommended_ra_title": "X-COM: UFO Defense",
                  "ra_set_status": "HAS_SET",
                  "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLPS-02430":
+            title = "Chrono Trigger"
+            status = "NO"
+            release = "Final Fantasy Chronicles - Chrono Trigger (USA) (Rev 1)"
+            reason = ("Japanese PS1 Chrono Trigger is the same title as RA game 11243, "
+                      "but this disc hash is not supported. Use the USA Rev 1 "
+                      "release (accepted hash c6ba0838de81ae2fc7f797141143105e). "
+                      "https://retroachievements.org/game/11243")
+            r = {**r, "recommended_ra_game_id": 11243,
+                 "recommended_ra_title": "Final Fantasy Chronicles: Chrono Trigger",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "reviewed-disc-id"}
         elif r.get("local_serial") == "SLUS-00865":
             title = "WipEout 3"
             status = "NO"
