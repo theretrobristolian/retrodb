@@ -162,6 +162,19 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                  "recommended_ra_title": "X-COM: UFO Defense",
                  "ra_set_status": "HAS_SET",
                  "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLES-03889":
+            title = "Capcom vs. SNK: Millennium Fight 2000 Pro"
+            status = "NO"
+            release = "Capcom vs. SNK Pro (USA)"
+            reason = ("European PS1 release identified as RA game 13918; "
+                      "its hash is not supported. The accepted release is "
+                      "Capcom vs. SNK Pro (USA), RA hash "
+                      "cac39e00b80a31f3fe1498a7df72cd57. "
+                      "https://retroachievements.org/game/13918")
+            r = {**r, "recommended_ra_game_id": 13918,
+                 "recommended_ra_title": "Capcom vs. SNK Pro",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "reviewed-disc-id"}
         elif r.get("local_serial") == "SLPS-02430":
             title = "Chrono Trigger"
             status = "NO"
