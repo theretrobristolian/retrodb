@@ -711,6 +711,7 @@ def match_collection(
                 # hash matching remains the sole RA-compatible criterion.
                 reviewed_ps1 = {"SCES-01000": 14865,  # Kula World (Europe) = Roll Away (USA)
                                  "SLES-00054": 13493,  # X-Com: Enemy Unknown = X-COM: UFO Defense
+                                  "SLES-03889": 13918,  # Capcom vs. SNK Millennium Fight 2000 Pro (Europe)
                                   "SLPS-02430": 11243,  # Chrono Trigger Japan => Final Fantasy Chronicles USA
                                   "SCES-01706": 11305, "SCES-00242": 5332, "SLUS-00893": 11357,
                                 "SLES-01761": 823,  # Action Man: Mission Xtreme = Operation Extreme
