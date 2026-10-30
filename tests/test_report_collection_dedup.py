@@ -358,3 +358,23 @@ def test_japanese_chrono_trigger_reviewed_ra_identity_in_stale_report():
     assert "Chrono Trigger (USA) (Rev 1)" in result[7]
     assert "retroachievements.org/game/11243" in result[5]
     assert report.action_rows([result], "Sony PlayStation") == []
+
+def test_capcom_snk_pal_crosswalk_in_unresolved_export():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Capcom vs. SNK Millennium Fight 2000 Pro [SLES-03889].cue",
+        "local_serial": "SLES-03889", "local_region": "Europe",
+        "gamedb_title": "Capcom vs. SNK: Millennium Fight 2000 Pro",
+        "local_friendly_title": "", "ra_set_status": "UNRESOLVED",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[3] == "NO"
+    assert str(row[6]) == "13918"
+    assert row[7] == "Capcom vs. SNK Pro (USA)"
+    assert row[14] == "HAS_SET"
+    assert "retroachievements.org/game/13918" in row[5]
+    assert report.action_rows([row], "Sony PlayStation") == []
