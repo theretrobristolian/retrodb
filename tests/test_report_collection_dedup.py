@@ -330,3 +330,31 @@ def test_xcom_and_wipeout_reviewed_release_guidance():
     assert wipeout[3] == "NO" and str(wipeout[6]) == "13912"
     assert "Special Edition" in wipeout[7]
     assert "distinct edition" in wipeout[5]
+
+
+def test_japanese_chrono_trigger_reviewed_ra_identity_in_stale_report():
+    row = {
+        "platform": "Sony PlayStation",
+        "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Chrono Trigger [SLPS-02430].cue",
+        "local_serial": "SLPS-02430",
+        "local_region": "Japan",
+        "gamedb_title": "Chrono Trigger",
+        "local_friendly_title": "Chrono Trigger",
+        "ra_set_status": "UNRESOLVED",
+        "ra_game_id": "",
+        "recommended_ra_game_id": "",
+        "recommended_ra_title": "",
+        "preferred_patch_url": "",
+        "preferred_release_name": "",
+        "preferred_region": "",
+        "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    result = report.row_for(row)
+    assert result[0] == "Chrono Trigger"
+    assert result[3] == "NO"
+    assert str(result[6]) == "11243"
+    assert "Chrono Trigger (USA) (Rev 1)" in result[7]
+    assert "retroachievements.org/game/11243" in result[5]
+    assert report.action_rows([result], "Sony PlayStation") == []
