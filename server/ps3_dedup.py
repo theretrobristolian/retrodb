@@ -152,14 +152,19 @@ def extent_digest(handle, offset, size):
     return digest.digest()
 
 
-def compare_details(folder, iso):
+def compare_details(folder, iso, progress=None):
     details = []
     try:
         sources = extracted_index(folder)
         targets = iso_index(iso)
         matching = 0
+        total_files = len(sources.keys() | targets.keys())
+        if progress:
+            progress(f"Indexed {len(sources)} extracted / {len(targets)} ISO files; comparing {total_files} paths")
         with iso.open("rb") as handle:
-            for name in sorted(sources.keys() | targets.keys()):
+            for count, name in enumerate(sorted(sources.keys() | targets.keys()), 1):
+                if progress and (count == 1 or count % 100 == 0):
+                    progress(f"File {count}/{total_files}: {name[:100]}")
                 source = sources.get(name)
                 extents = targets.get(name)
                 file_size = source.stat().st_size if source is not None else None
@@ -203,7 +208,7 @@ def compare(folder, iso):
     return compare_details(folder, iso)[0]
 
 
-def audit(iso_root, games_root, details=None):
+def audit(iso_root, games_root, details=None, progress=None):
     if not iso_root.is_dir() or not games_root.is_dir():
         raise ValueError("PS3 ISO and extracted roots must exist")
     by_id = {}
@@ -211,10 +216,13 @@ def audit(iso_root, games_root, details=None):
         if iso.suffix.casefold() == ".iso" and iso.is_file() and not iso.is_symlink():
             by_id.setdefault(serial(iso.stem), []).append(iso)
     result = []
-    for folder in sorted(games_root.iterdir()):
+    folders = [folder for folder in sorted(games_root.iterdir()) if folder.is_dir() and not folder.is_symlink()]
+    for position, folder in enumerate(folders, 1):
         if not folder.is_dir() or folder.is_symlink():
             continue
         disc = serial(folder.name)
+        if progress:
+            progress(f"[{position}/{len(folders)}] START {folder.name}")
         choices = by_id.get(disc, []) if disc else []
         row = dict(status="", disc_id=disc, extracted=str(folder), iso="", iso_files=0,
                    extracted_files=0, matching_files=0, different_files=0, reason="")
@@ -226,7 +234,7 @@ def audit(iso_root, games_root, details=None):
             row.update(status="INCONCLUSIVE", reason="Multiple ISOs with this disc ID")
         else:
             iso = choices[0]
-            (status, iso_n, extracted_n, matched, changed, reason), differences = compare_details(folder, iso)
+            (status, iso_n, extracted_n, matched, changed, reason), differences = compare_details(folder, iso, progress=progress)
             if details is not None:
                 for difference in differences:
                     details.append({"disc_id": disc, "extracted": str(folder), "iso": str(iso), **difference})
@@ -234,6 +242,8 @@ def audit(iso_root, games_root, details=None):
                        extracted_files=extracted_n, matching_files=matched,
                        different_files=changed, reason=reason)
         result.append(row)
+        if progress:
+            progress(f"[{position}/{len(folders)}] DONE {row['status']}, {row['matching_files']} matched")
     return result
 
 
@@ -305,7 +315,8 @@ def main():
         remove_verified(args.iso_root, args.games_root, args.confirm)
         return
     differences = []
-    rows = audit(args.iso_root, args.games_root, differences)
+    rows = audit(args.iso_root, args.games_root, differences,
+                 progress=lambda message: print("[PROGRESS] " + message, flush=True))
     for row in rows:
         print(f'{row["status"]:15} {Path(row["extracted"]).name} | {Path(row["iso"]).name if row["iso"] else "(no exact ISO)"} | '
               f'{row["matching_files"]}/{row["extracted_files"]} matched | {row["reason"]}')
