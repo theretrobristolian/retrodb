@@ -473,7 +473,7 @@ def ps1_action_row(r):
             source]
 
 
-def main(source,destination,preparation=None,ps1_audit=None):
+def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
     entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
@@ -558,6 +558,24 @@ def main(source,destination,preparation=None,ps1_audit=None):
                 continue
             all_actions.append(ps1_action_row(r))
         print(f'[INFO] PS1 file audit: {len(ps1_rows)} disc/file records integrated.')
+    if ps3_audit and Path(ps3_audit).is_file():
+        with open(ps3_audit, newline='', encoding='utf-8-sig') as handle:
+            ps3_records = list(csv.DictReader(handle))
+        columns = ['Type', 'Status', 'Disc ID', 'GameDB title', 'Existing file / folder',
+                   'Proposed name', 'Associated sidecars', 'Reason / next action',
+                   'RA compatibility']
+        ps3_rows = []
+        for record in ps3_records:
+            location = record.get('existing_iso', '')
+            kind = 'Extracted folder' if record.get('status', '').startswith('EXTRACTED_') else 'ISO'
+            ps3_rows.append([kind, record.get('status', ''),
+                record.get('disc_id', '') or 'UNKNOWN',
+                record.get('catalogue_title', ''),
+                location, record.get('proposed_iso', ''),
+                record.get('sidecars', ''), record.get('reason', ''),
+                'NOT CHECKED — naming inventory only'])
+        sheets.append(('PlayStation 3', [columns] + ps3_rows))
+        print(f'[INFO] PS3 inventory: {len(ps3_rows)} ISO/folder records integrated.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
@@ -596,5 +614,5 @@ def main(source,destination,preparation=None,ps1_audit=None):
     print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4,5): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv]')
-    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)==5 else None)
+    if len(sys.argv) not in (3,4,5,6): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv]')
+    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None)
