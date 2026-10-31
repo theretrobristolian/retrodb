@@ -467,3 +467,24 @@ def test_motor_toon_grand_prix_2_pal_is_ra_8746_no_set():
     assert str(row[6]) == "8746"
     assert row[14] == "NO_SET"
     assert report.action_rows([row], "Sony PlayStation") == []
+
+
+def test_max_power_racing_uk_is_c3_racing_with_active_ra_set():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Max Power Racing [SLES-01694].cue",
+        "local_serial": "SLES-01694", "local_region": "Europe",
+        "gamedb_title": "Max Power Racing", "local_friendly_title": "",
+        "ra_set_status": "UNRESOLVED", "ra_game_id": "",
+        "recommended_ra_game_id": "", "recommended_ra_title": "",
+        "preferred_patch_url": "", "preferred_release_name": "",
+        "preferred_region": "", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    result = report.row_for(raw)
+    assert result[0] == "Max Power Racing"
+    assert result[3] == "NO"
+    assert str(result[6]) == "17911"
+    assert result[14] == "HAS_SET"
+    assert "retroachievements.org/game/17911" in result[5]
+    assert result[1] == "Max Power Racing [SLES-01694].cue"
