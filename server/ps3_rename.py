@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -194,7 +195,12 @@ def audit(root, titles):
                             if other.is_symlink() or not other.is_file():
                                 status, reason = "REVIEW", "Conflicting ISO is not a regular file"
                             elif iso.samefile(other):
-                                status, reason = "REVIEW_CASE_ONLY", "Source and target resolve to the same file on this filesystem; no duplicate"
+                                # SMB can resolve differently-cased spellings to the same inode.
+                                # Staging under a unique temporary name changes the actual case safely.
+                                if all(not dst.exists() or src.samefile(dst) for src, dst in moves):
+                                    status, reason = "RENAME_CANDIDATE", "Case-only SMB alias; staged rename required"
+                                else:
+                                    status, reason = "REVIEW_SIDECAR", "Case-only ISO but another sidecar destination is occupied"
                             elif iso.stat().st_size == other.stat().st_size and sha256(iso) == sha256(other):
                                 old_name = "OLD_" + iso.name
                                 if (folder / old_name).exists():
@@ -248,40 +254,108 @@ def audit_extracted(root):
                          reason="Extracted game directory; audit only, no rename"))
     return rows
 
+def _save_journal(journal, payload):
+    """Persist state before and after each filesystem mutation."""
+    temp = journal.with_name(journal.name + ".tmp")
+    with temp.open("w", encoding="utf-8") as stream:
+        json.dump(payload, stream, indent=2)
+        stream.write("\\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temp, journal)
+
+
+def _run_journal(journal):
+    data = json.loads(journal.read_text(encoding="utf-8"))
+    for op in data["operations"]:
+        source, staged, target = (Path(op[name]) for name in ("source", "staged", "target"))
+        state = op["state"]
+        if state == "done":
+            if not target.is_file() or staged.exists():
+                raise RuntimeError(f"Completed operation has inconsistent target: {target}")
+            continue
+        if state in {"pending", "staging"}:
+            # A crash after rename but before journal update leaves the unique temp.
+            if staged.exists() and not source.exists():
+                op["state"] = "staged"
+                _save_journal(journal, data)
+            elif source.is_file() and not source.is_symlink() and not staged.exists():
+                # A target that resolves to the source is a case-insensitive alias.
+                if target.exists() and not source.samefile(target):
+                    raise RuntimeError(f"Target already occupied: {target}")
+                op["state"] = "staging"
+                _save_journal(journal, data)
+                os.rename(source, staged)
+                op["state"] = "staged"
+                _save_journal(journal, data)
+            else:
+                raise RuntimeError(f"Unexpected stage state for: {source}")
+        if op["state"] in {"staged", "finalizing"}:
+            if staged.exists() and not target.exists():
+                op["state"] = "finalizing"
+                _save_journal(journal, data)
+                os.rename(staged, target)
+                op["state"] = "done"
+                _save_journal(journal, data)
+            elif not staged.exists() and target.is_file():
+                op["state"] = "done"
+                _save_journal(journal, data)
+            else:
+                raise RuntimeError(f"Unexpected finalization state for: {target}")
+    print(f"[OK] Completed {len(data['operations'])} file renames; journal: {journal}")
+
+
 def apply(plans, journal):
     if journal.exists():
-        raise ValueError("Journal already exists")
+        raise ValueError("Journal already exists; use recover with that journal")
     journal.parent.mkdir(parents=True, exist_ok=True)
-    ops = [{"source": src, "target": dst, "state": "pending"} for plan in plans for src, dst in plan]
-    def save():
-        tmp = journal.with_name(journal.name + ".tmp")
-        tmp.write_text(json.dumps({"created_utc": datetime.now(timezone.utc).isoformat(),
-                                   "operations": ops}, indent=2) + "\n", encoding="utf-8")
-        os.replace(tmp, journal)
-    save()
-    # Revalidate immediately before touching any filename. Atomic renames, no overwrite.
-    for op in ops:
-        src, dst = Path(op["source"]), Path(op["target"])
-        if (src.is_symlink() or not src.is_file() or dst.exists()
-                or not src.parent.samefile(dst.parent)):
-            op["state"] = "blocked"
-            save()
-            raise RuntimeError(f"Safety check failed for {src}; journal: {journal}")
-        os.rename(src, dst)
-        op["state"] = "renamed"
-        save()
-    print(f"[OK] Renamed {len(ops)} files. Journal: {journal}")
+    ops = []
+    reserved = set()
+    for plan in plans:
+        for src_text, dst_text in plan:
+            source, target = Path(src_text), Path(dst_text)
+            if source.parent != target.parent or not source.is_file() or source.is_symlink():
+                raise RuntimeError(f"Unsafe source or target: {source}")
+            if target.exists() and not source.samefile(target):
+                raise RuntimeError(f"Occupied destination: {target}")
+            if str(target).casefold() in reserved:
+                raise RuntimeError(f"Duplicate destination: {target}")
+            reserved.add(str(target).casefold())
+            temp = source.parent / (".retrodb-ps3-" + uuid.uuid4().hex + ".tmp")
+            if temp.exists():
+                raise RuntimeError(f"Temporary name occupied: {temp}")
+            ops.append({"source": str(source), "staged": str(temp),
+                        "target": str(target), "state": "pending"})
+    _save_journal(journal, {"version": 2, "created_utc": datetime.now(timezone.utc).isoformat(),
+                            "operations": ops})
+    _run_journal(journal)
+
+
+def recover(journal):
+    if not journal.is_file():
+        raise ValueError("Journal not found")
+    data = json.loads(journal.read_text(encoding="utf-8"))
+    if data.get("version") != 2:
+        raise ValueError("Unsupported journal version; manual investigation required")
+    _run_journal(journal)
 
 def main():
     parser = argparse.ArgumentParser(description="PS3 title/serial audit and safe rename")
-    parser.add_argument("command", choices=["audit", "preview", "apply"])
-    parser.add_argument("--root", type=Path, required=True)
-    parser.add_argument("--catalogue", type=Path, required=True)
+    parser.add_argument("command", choices=["audit", "preview", "apply", "recover"])
+    parser.add_argument("--root", type=Path)
+    parser.add_argument("--catalogue", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--journal", type=Path)
     parser.add_argument("--games-root", type=Path)
     parser.add_argument("--confirm", default="")
     args = parser.parse_args()
+    if args.command == "recover":
+        if not args.journal:
+            parser.error("Recover requires --journal")
+        recover(args.journal)
+        return
+    if not args.root or not args.catalogue:
+        parser.error("Audit/preview/apply require --root and --catalogue")
     rows, plans = audit(args.root, catalogue(args.catalogue))
     if args.games_root:
         rows.extend(audit_extracted(args.games_root))
