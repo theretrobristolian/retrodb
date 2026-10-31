@@ -223,7 +223,7 @@ audit() {
   printf '[OK] RetroNAS mounted; RAHasher available.\n'
   step "2/8" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
   step "3/8" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
-  step "4/8" "Inventory PS1 / PS2 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
+  step "4/8" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
   step "5/8" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
   step "6/8" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
   step "7/8" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
