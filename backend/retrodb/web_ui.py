@@ -160,14 +160,27 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
 <main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/library"&&(p.startsWith("/library")||p.startsWith("/game/")))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
 
+PS3_SERIAL_RE = re.compile(r"(?<![A-Z0-9])((?:BL|BC)[A-Z]{2})[-_ .]?(\d{5})(?![A-Z0-9])", re.I)
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
 def disc_id(item: LibraryItem) -> str:
+    match3 = PS3_SERIAL_RE.search(item.filename)
+    if match3:
+        return (match3.group(1) + match3.group(2)).upper()
     match = SERIAL_RE.search(item.filename) or SERIAL_RE.search(item.relative_path)
     return f"{match.group(1).upper()}-{match.group(2)}{match.group(3)}" if match else ""
 
 def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
     """Conservative PS1/PS2 disc-prefix region hints, not guaranteed disc origin."""
+    if platform_slug == "playstation-3" and serial:
+        prefix = serial[:4].upper()
+        if prefix in ("BLUS", "BCUS"):
+            return ("🇺🇸", "North America (disc prefix)")
+        if prefix in ("BLES", "BCES"):
+            return ("🇪🇺", "Europe / PAL (disc prefix)")
+        if prefix in ("BLJS", "BLJM", "BCJS", "BCJM"):
+            return ("🇯🇵", "Japan (disc prefix)")
+        return ("🌐", "Region unknown")
     if platform_slug not in ("playstation", "playstation-2") or not serial:
         return ("🌐", "Region unknown")
     prefix = serial.split("-", 1)[0].upper()
@@ -189,7 +202,7 @@ def _gamedb_titles(slug: str, mtime_ns: int) -> dict[str, str]:
         return {}
 
 def gamedb_title(item: LibraryItem, slug: str | None) -> str:
-    if slug not in ("playstation", "playstation-2"):
+    if slug not in ("playstation", "playstation-2", "playstation-3"):
         return ""
     serial = disc_id(item)
     if not serial:
@@ -277,7 +290,8 @@ def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
 
 def platform_counts(db: Session):
     stmt = (select(Platform, func.count(LibraryItem.id))
-            .outerjoin(LibraryItem, (LibraryItem.platform_id == Platform.id) & (LibraryItem.is_missing.is_(False)))
+            .outerjoin(LibraryItem, (LibraryItem.platform_id == Platform.id) & (LibraryItem.is_missing.is_(False))
+                       & or_(Platform.slug != "playstation", func.lower(LibraryItem.extension) != "bin"))
             .group_by(Platform.id).order_by(Platform.name))
     return db.execute(stmt).all()
 
@@ -365,7 +379,7 @@ def consoles(request: Request, db: Session = Depends(get_session),
         cards.append(f'<a class="card" href="/library/{quote(p.slug)}">'
                      f'<div class="eyebrow">{escape(subtitle or "Console")}</div>'
                      f'<h2>{escape(p.name)}</h2><div class="metric">{count:,}</div>'
-                     '<span class="muted">indexed files · Explore →</span></a>')
+                     '<span class="muted">games · Explore →</span></a>')
     return page("Consoles", f"""<div class="eyebrow">Systems catalogue</div>
 <h1>Consoles</h1><p class="muted">Discover platforms by manufacturer, generation or release year.</p>
 <form action="/consoles" method="get" class="panel" style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
@@ -462,6 +476,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         args.update(changes)
         return base + "?" + urlencode(args)
     alphabet = ' '.join(f'<a class="pill" href="{escape(link(letter=c,page=1), quote=True)}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    ps3_only = slug == "playstation-3"
     rows = []
     for item in items:
         disc = disc_id(item)
@@ -471,7 +486,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
 <td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
-<td data-column="ra"><span class="ra-icon {'yes' if supported else 'no'}" role="img" aria-label="{escape(badge,quote=True)}" title="{escape(badge,quote=True)}">🏆</span></td>
+{'' if ps3_only else '<td data-column="ra"><span class="ra-icon '+('yes' if supported else 'no')+'" role="img" aria-label="'+escape(badge,quote=True)+'" title="'+escape(badge,quote=True)+'">🏆</span></td>'}
 </tr>""")
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
@@ -494,26 +509,23 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 {f'<label class="label">Console <select name="console">{console_options}</select></label>' if not slug else ''}
 <label class="label">Generation <select name="generation">{generation_options}</select></label>
 <label class="label">Region <select name="region">{region_options}</select></label>
-<label class="label">RA <select name="ra"><option value="all">All</option>
-<option value="yes" {'selected' if ra_filter=='yes' else ''}>Verified</option>
-<option value="other" {'selected' if ra_filter=='other' else ''}>Other / unknown</option></select></label>
+{'' if ps3_only else '<label class="label">RA <select name="ra"><option value="all">All</option><option value="yes">Verified</option><option value="other">Other / unknown</option></select></label>'}
 <label class="label">Sort <select name="sort">
 <option value="title" {'selected' if sort_by=='title' else ''}>Game name</option>
 <option value="disc" {'selected' if sort_by=='disc' else ''}>Filename</option>
-<option value="id" {'selected' if sort_by=='id' else ''}>RA ID</option>
-<option value="ra" {'selected' if sort_by=='ra' else ''}>RA status</option></select></label>
+{'' if ps3_only else '<option value="id">RA ID</option><option value="ra">RA status</option>'}</select></label>
 <select name="order"><option value="asc">Ascending</option><option value="desc" {'selected' if order=='desc' else ''}>Descending</option></select>
 <button class="btn" type="submit">Apply</button><a class="btn" href="{base}">Reset</a></form>
 <div class="column-picker"><span class="label">Columns</span>
 <label><input type="checkbox" data-toggle="disc" checked> Disc ID</label>
 <label><input type="checkbox" data-toggle="region" checked> Region</label>
-<label><input type="checkbox" data-toggle="ra" checked> Achievements</label>
+{'' if ps3_only else '<label><input type="checkbox" data-toggle="ra" checked> Achievements</label>'}
 </div>
 <div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
 <div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">Disc ID</th>
-<th data-column="region">Region</th><th data-column="ra" title="RetroAchievements">RA</th></tr></thead>
-<tbody>{''.join(rows) or '<tr><td colspan="4">No games match the current filters.</td></tr>'}</tbody></table></div>
-<p class="muted">Region flags are inferred from recognised PS1/PS2 disc prefixes; unknown prefixes show 🌐. Gold 🏆 means a verified RA disc hash and RA game ID; muted crossed trophy means no verified match in the current audit (not necessarily unsupported). Names without RA titles are cleaned filename fallbacks; exact Excel identity enrichment is not yet stored here.</p>
+<th data-column="region">Region</th>{'' if ps3_only else '<th data-column="ra" title="RetroAchievements">RA</th>'}</tr></thead>
+<tbody>{''.join(rows) or ('<tr><td colspan="3">No games match the current filters.</td></tr>' if ps3_only else '<tr><td colspan="4">No games match the current filters.</td></tr>')}</tbody></table></div>
+<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
