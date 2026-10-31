@@ -809,11 +809,38 @@ ps3_audit_rename() {
   sudo chown retrodb:retrodb "$cache" || return 1
   mkdir -p "$HOME/retrodb-exports/ps3-rename-journals"
   if [[ "$command" == apply ]]; then
-    local answer journal
+    local answer journal source result=0 prior
+    local rwroot="$PILOT_ROOT/roms/sony/playstation3/iso"
     read -rp 'Type RENAMEPS3 to apply all eligible PS3 ISO/sidecar renames: ' answer
     [[ "$answer" == RENAMEPS3 ]] || { echo 'Cancelled'; return 0; }
+    # A previous interrupted job must be recovered before any new batch.
+    for prior in "$HOME"/retrodb-exports/ps3-rename-journals/*.json; do
+      [[ -f "$prior" ]] || continue
+      if ! sudo python3 - "$prior" <<'PYPS3J'
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    complete = data.get("version") == 2 and all(
+        x.get("state") == "done" for x in data.get("operations", []))
+except (OSError, ValueError, KeyError):
+    complete = False
+sys.exit(0 if complete else 1)
+PYPS3J
+      echo "[STOP] Incomplete PS3 journal: $prior"
+      echo "Recover it using the temporary writable mount before starting another batch."
+      return 1
+    done
+    source="$(retronas_cifs_source)" || return 1
+    [[ "$source" == //* ]] || { echo "[STOP] Unexpected CIFS source"; return 1; }
+    sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+    if mountpoint -q "$PILOT_ROOT"; then
+      echo '[STOP] Temporary writable mount already active'; return 1
+    fi
+    sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
     journal="$HOME/retrodb-exports/ps3-rename-journals/ps3-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-    sudo python3 "$HERE/ps3_rename.py" apply --root "$root" --catalogue "$cache" --games-root "$games_root" --output "$report" --journal "$journal" --confirm RENAMEPS3 || return 1
+    sudo python3 "$HERE/ps3_rename.py" apply --root "$rwroot" --catalogue "$cache" --journal "$journal" --confirm RENAMEPS3 || result=$?
+    sudo umount "$PILOT_ROOT" || { echo '[WARNING] PS3 writable mount remains active'; return 1; }
+    [[ $result == 0 ]] || { echo "[STOP] Rename interrupted. Preserve journal: $journal"; return "$result"; }
   else
     sudo python3 "$HERE/ps3_rename.py" preview --root "$root" --catalogue "$cache" --games-root "$games_root" --output "$report" || return 1
   fi
