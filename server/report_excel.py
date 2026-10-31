@@ -263,6 +263,30 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                  "recommended_ra_title": "WipEout 3: Special Edition",
                  "ra_set_status": "HAS_SET",
                  "identity_resolution": "supported-alternative-edition"}
+    # Explicitly triaged PS1 titles: names and conventional disc IDs are
+    # established, but no RA game crosswalk is confirmed in our catalogue.
+    # Treat as non-actionable, not a broken disc or a proven absent RA set.
+    unlisted_ps1 = {
+        "SLES-04060",  # All Star Watersports
+        "SLUS-01230",  # Championship Motocross 2001, NOT 1999 title
+        "SLES-02220",  # Extreme 500
+        "SLUS-00225",  # Impact Racing
+        "SLUS-01247",  # WarJetz, NOT Thunder Tanks
+        "SLUS-00704",  # X Games Pro Boarder
+    }
+    if (r.get("platform") == "Sony PlayStation"
+            and r.get("status") == "unmatched"
+            and r.get("local_serial") in unlisted_ps1
+            and not r.get("ra_game_id") and not r.get("recommended_ra_game_id")
+            and not r.get("no_set_ra_game_id")
+            and r.get("gamedb_title")):
+        status = "NO SET"
+        reason = ("No confirmed RetroAchievements listing for this title in the "
+                  "current catalogue. GameDB disc ID and filename recognised; "
+                  "no action required. This does not prove RA will never add a set.")
+        r = {**r, "ra_set_status": "NOT_LISTED",
+             "identity_resolution": "triaged-no-confirmed-ra-crosswalk",
+             "alternative_candidates": ""}
     return [title, Path(r['path']).name, r['local_serial'], status, patch_status, reason,
             (14865 if r.get('platform') == 'Sony PlayStation' and r.get('local_serial') == 'SCES-01000' and 'kula world' in Path(r['path']).stem.casefold() else (r.get('ra_game_id') or r.get('recommended_ra_game_id') or r.get('no_set_ra_game_id', ''))), release,
             r['local_region'], patch, r.get('gamedb_title', ''), r.get('alternative_candidates', ''), r.get('disc_classification', 'standard'), 'COUNT', r.get('ra_set_status', 'UNRESOLVED'), r.get('no_set_ra_game_id', ''), r.get('identity_resolution', ''), r.get('identity_review_reason', ''), patch_state, patch_kind(r) if patch else '', warning, r.get('internal_disc_serial', ''), r.get('disc_id_source', 'unidentified'), r.get('disc_id_conflict', 'NO')]
