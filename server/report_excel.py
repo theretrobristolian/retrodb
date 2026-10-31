@@ -155,6 +155,18 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                       "recheck if catalogue changes")
             r = {**r, "ra_set_status": "NOT_LISTED",
                  "identity_resolution": "manual-no-ra-listing"}
+    # Gran Turismo 2 Arcade and Simulation are distinct playable discs even
+    # when the RA catalogue shares one game ID. Never recommend one as the
+    # substitute for the other.
+    if (r.get("platform") == "Sony PlayStation"
+            and r.get("local_serial") == "SCUS-94455"
+            and r.get("status") == "unmatched"):
+        title = "Gran Turismo 2 (Arcade Mode)"
+        if "simulation" in str(release).casefold():
+            release = "Gran Turismo 2 (Arcade Mode) — matching RA-supported revision required"
+            reason = ("Arcade Mode disc is not RA hash-verified; the listed "
+                      "Simulation Mode Rev 2 release is a different disc "
+                      "and cannot replace the Arcade Mode disc.")
     # Reviewed crosswalk fallback also supports previously exported raw audits.
     if r.get("platform") == "Sony PlayStation" and r.get("status") == "unmatched":
         if r.get("local_serial") == "SLES-00054":
