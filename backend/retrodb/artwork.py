@@ -146,6 +146,28 @@ def ps3_sidecar_art(item_id: int, db: Session = Depends(get_session)):
     return FileResponse(art, media_type="image/png",
                         headers={"Cache-Control": "private, max-age=3600"})
 
+
+TGDB_CACHE = Path("/var/cache/retrodb/providers/thegamesdb")
+
+def thegamesdb_metadata(item_id: int) -> dict:
+    try:
+        record = json.loads((TGDB_CACHE / f"{int(item_id)}.json").read_text(encoding="utf-8"))
+        return record if record.get("source") == "thegamesdb" else {}
+    except (OSError, ValueError, TypeError, AttributeError):
+        return {}
+
+@router.get("/art/thegamesdb/{item_id}", include_in_schema=False)
+def thegamesdb_cover(item_id: int):
+    record = thegamesdb_metadata(item_id)
+    filename = record.get("artwork", "")
+    if filename not in (f"{item_id}.jpg", f"{item_id}.png"):
+        raise HTTPException(404, "No cached cover")
+    path = TGDB_CACHE / filename
+    if not path.is_file():
+        raise HTTPException(404, "No cached cover")
+    return FileResponse(path, media_type="image/png" if filename.endswith(".png") else "image/jpeg",
+                        headers={"Cache-Control": "private, max-age=86400"})
+
 RA_KINDS = {"icon", "box", "title", "ingame"}
 
 @router.get("/art/ra/{game_id}/{kind}", include_in_schema=False)
