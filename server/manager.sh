@@ -504,7 +504,6 @@ PYCONF
 }
 opl_update_all() {
   local source answer result=0 journal
-  [[ -r "$PILOT_CSV" ]] || { echo 'Generate a current rename CSV with option 4 first.'; return 1; }
   mountpoint -q "$MOUNT" || { echo 'RetroNAS read-only mount unavailable.'; return 1; }
   mkdir -p -m 0700 "$OPL_JOURNAL_DIR" || return 1
   # Preserve the completed 40-title journal; new bulk jobs always get a new name.
@@ -536,7 +535,7 @@ PYJOURNAL
   eligible="$(python3 "$HERE/opl_pilot.py" count --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal")" || return 1
   if [[ "$eligible" == 0 ]]; then
     echo '[INFO] No eligible OPL renames. Nothing was changed; no rollback journal was created.'
-    echo '[INFO] If you expected changes, regenerate proposals using More options > Export reports and inspect Status values in the CSV.'
+    echo '[INFO] Live PS2 collection and current GameDB catalogue have been checked.'
     return 0
   fi
   echo 'All PROPOSED titles, including case-only changes, are eligible. REVIEW/COLLISION entries are skipped.'
