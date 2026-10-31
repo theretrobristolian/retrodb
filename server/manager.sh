@@ -849,6 +849,15 @@ PYPS3COUNT
     echo '[STOP] Unable to calculate rename totals.'; return 1;
   }
   printf '\n[SUMMARY] PS3 ISO/sidecar groups: %s | extracted folders: %s\n' "$iso_count" "$folder_count"
+  local dedup_answer dedup_report="$HOME/retrodb-exports/RetroDB-PS3-Dedup.csv"
+  read -rp 'Run read-only extracted-vs-ISO file/hash comparison? [y/N]: ' dedup_answer
+  if [[ "$dedup_answer" =~ ^[Yy]$ ]]; then
+    echo '[CHECK] Comparing internal ISO files against extracted copies; no files will be changed.'
+    sudo python3 "$HERE/ps3_dedup.py" --iso-root "$root" --games-root "$games_root" --output "$dedup_report" || return 1
+    sudo chown "$(id -un):$(id -gn)" "$dedup_report" || return 1
+    chmod 0600 "$dedup_report" || return 1
+    echo "PS3 dedup report: $dedup_report"
+  fi
   if (( iso_count == 0 && folder_count == 0 )); then
     echo '[OK] All eligible PS3 names are already correct.'
     return 0
