@@ -394,8 +394,8 @@ def main():
         for row in rows:
             print(f'{row["status"]:28} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
         if args.command == "extracted-apply":
-            if args.confirm != "RENAMEEXTRACTED" or not args.journal:
-                parser.error("Extracted apply requires --confirm RENAMEEXTRACTED and --journal")
+            if args.confirm != "RENAME ALL" or not args.journal:
+                parser.error("Extracted apply requires --confirm 'RENAME ALL' and --journal")
             rename_extracted(rows, args.journal)
         return
     rows, plans = audit(args.root, titles)
@@ -411,8 +411,8 @@ def main():
             writer.writerows(rows)
     print(f"Audited {len(rows)} ISOs; {len(plans)} safe rename groups. SHA256 computed only for conflicting ISOs; OLD_ proposals are review-only.")
     if args.command == "apply":
-        if args.confirm != "RENAMEPS3" or not args.journal:
-            parser.error("Apply requires --confirm RENAMEPS3 and --journal PATH")
+        if args.confirm != "RENAME ALL" or not args.journal:
+            parser.error("Apply requires --confirm 'RENAME ALL' and --journal PATH")
         apply(plans, args.journal)
 if __name__ == "__main__":
     main()
