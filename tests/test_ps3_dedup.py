@@ -1,5 +1,7 @@
 """Synthetic ISO9660 comparisons: never assume a matching disc ID means identical bytes."""
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
 from ps3_dedup import compare, audit, iso_index
 
 
