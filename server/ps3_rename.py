@@ -110,7 +110,7 @@ def duplicate_target(folder, stem, sources, files):
     source_names = {p.casefold() for p in sources}
     for number in range(1, 1000):
         suffix = " - duplicate" if number == 1 else f" - duplicate {number}"
-        match = re.fullmatch(r"(.+) (\\[[A-Z0-9]+\\])", stem)
+        match = re.fullmatch(r"(.+) (\[[A-Z0-9]+\])", stem)
         candidate = (match.group(1) + suffix + " " + match.group(2)) if match else stem + suffix
         destinations = [candidate + Path(name).suffix.lower() for name in sources]
         if not any(dst.casefold() in occupied and dst.casefold() not in source_names
