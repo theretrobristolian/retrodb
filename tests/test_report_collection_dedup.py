@@ -621,4 +621,5 @@ def test_gt2_arcade_must_not_recommend_simulation_disc():
     assert row[0] == "Gran Turismo 2 (Arcade Mode)"
     assert "Arcade Mode" in row[7]
     assert "Simulation Mode" not in row[7]
-    assert "different disc" in row[5]
+    assert row[7] == "Gran Turismo 2 (USA) (Arcade Mode) (Rev 1)"
+    assert "fb87d46db9130276f28f804ec0dcd6a1" in row[5]
