@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
-from ps3_rename import audit, catalogue, safe_title, audit_extracted
+from ps3_rename import audit, catalogue, safe_title, audit_extracted, duplicate_target, internal_disc_id
 
 class TestPS3Rename(unittest.TestCase):
     def test_grouped_sidecars_and_uppercase_iso(self):
@@ -31,6 +31,27 @@ class TestPS3Rename(unittest.TestCase):
             self.assertEqual(rows[0]["status"], "SKIPPED_EXTRACTED")
             self.assertEqual(rows[0]["disc_id"], "BCES00141")
             self.assertEqual(entry.name, "BCES00141-[LittleBigPlanet]")
+
+    def test_duplicate_suffix_stays_review_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "WRONG [BLES00246].iso").touch()
+            (root / "Metal Gear Solid 4 [BLES00246].iso").touch()
+            rows, plans = audit(root, {"BLES00246": "Metal Gear Solid 4"})
+            duplicates = [row for row in rows if row["status"] == "REVIEW_DUPLICATE"]
+            self.assertEqual(len(duplicates), 1)
+            self.assertTrue(duplicates[0]["proposed_iso"].endswith(" - duplicate.iso"))
+            self.assertFalse(plans)
+
+    def test_missing_id_unreadable_iso_does_not_guess(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            path = root / "F1 2010.ISO"
+            path.write_bytes(b"not an ISO volume")
+            self.assertFalse(internal_disc_id(path)[0])
+            rows, plans = audit(root, {})
+            self.assertEqual(rows[0]["status"], "REVIEW")
+            self.assertFalse(plans)
 
     def test_unknown_id_not_renamed(self):
         with tempfile.TemporaryDirectory() as temp:
