@@ -21,6 +21,7 @@ router = APIRouter(include_in_schema=False)
 CACHE = Path("/var/cache/retrodb/artwork")
 RA_CACHE = CACHE / "ra"
 PSBBN_CACHE = CACHE / "psbbn"
+PS3_MOUNT = Path("/mnt/retrodb-retronas")
 RA_TTL = 30 * 86400
 FAIL_TTL = 86400
 SERIAL = re.compile(r"^(?:SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)_[0-9]{3}\.[0-9]{2}$")
@@ -122,7 +123,7 @@ def ps3_sidecar_art(item_id: int, db: Session = Depends(get_session)):
     platform = db.get(Platform, item.platform_id)
     if platform is None or platform.slug != "playstation-3":
         raise HTTPException(404, "PS3 artwork unavailable")
-    root = Path("/mnt/retrodb-retronas")
+    root = PS3_MOUNT
     try:
         mounted_root = root.resolve(strict=True)
         # The scanner records relative paths; use its inventory, not user-supplied filenames.
