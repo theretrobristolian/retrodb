@@ -30,3 +30,36 @@ def test_ps1_console_counts_exclude_bin_tracks():
     sql = str(db.stmt.compile(compile_kwargs={"literal_binds": True}))
     assert "'cue'" in sql
     assert "'bin'" not in sql
+
+
+def test_ps3_artwork_uses_only_matching_png_sidecar(tmp_path, monkeypatch):
+    from fastapi import HTTPException
+    from retrodb import artwork
+    from retrodb.models import LibraryItem, Platform
+
+    monkeypatch.setattr(artwork, "PS3_MOUNT", tmp_path)
+    relative = "roms/sony/playstation3/iso/F1 2010 [BLES00917].iso"
+    iso = tmp_path / relative
+    iso.parent.mkdir(parents=True)
+    iso.write_bytes(b"test ISO")
+    cover = iso.with_suffix(".png")
+    cover.write_bytes(b"\x89PNG\r\n\x1a\n" + b"cover")
+
+    class DB:
+        def get(self, model, id):
+            if model is LibraryItem:
+                return SimpleNamespace(id=id, platform_id=3, is_missing=False,
+                                       extension="iso", relative_path=relative)
+            if model is Platform:
+                return SimpleNamespace(id=3, slug="playstation-3")
+            return None
+
+    response = artwork.ps3_sidecar_art(7, db=DB())
+    assert response.path == str(cover)
+
+    cover.unlink()
+    try:
+        artwork.ps3_sidecar_art(7, db=DB())
+        assert False, "A missing sidecar must not be served"
+    except HTTPException as exc:
+        assert exc.status_code == 404
