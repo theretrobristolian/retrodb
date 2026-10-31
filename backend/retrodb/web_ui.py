@@ -633,8 +633,9 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                  detail("File format", item.extension.upper()) +
                  detail("Size (GiB)", f"{item.size_bytes / 1024**3:.2f}") +
                  detail("Collection path", item.relative_path))
-    from retrodb.artwork import game_metadata, art_location, serial_key
+    from retrodb.artwork import game_metadata, art_location, serial_key, thegamesdb_metadata
     meta = game_metadata(item.ra_game_id)
+    tgdb = thegamesdb_metadata(item.id) if platform and platform.slug == "playstation-3" else {}
     serial = serial_key(item.filename) or serial_key(item.relative_path)
     icon_url = art_location(item.ra_game_id, "icon", meta.get("ImageIcon"))
     box_url = art_location(item.ra_game_id, "box", meta.get("ImageBoxArt"))
@@ -645,7 +646,8 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     # Choose only one cover, with RA preferred and PSBBN on load failure.
     # The fallback is never displayed alongside the preferred artwork.
     if ps3_cover_url:
-        artwork = '<p class="muted">Cover art will be available once verified artwork is cached.</p>'
+        artwork = (f'<img class="game-cover" src="/art/thegamesdb/{item.id}" alt="PS3 box art" loading="lazy">'
+                   if tgdb.get("artwork") else '<p class="muted">No verified cover art cached for this release yet.</p>')
     elif box_url:
         fallback_attr = (f' data-fallback="{escape(psbbn_url, quote=True)}"'
                          if psbbn_url else "")
@@ -667,10 +669,11 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     ratings = extra.get("age_ratings", [])
     modes = extra.get("game_modes", [])
     release_years = extra.get("release_dates", [])
-    release = (detail("Released", meta.get("Released")) +
+    release = (detail("Released", tgdb.get("release_date") or meta.get("Released")) +
                detail("Publisher", meta.get("Publisher")) +
                detail("Developer", meta.get("Developer")) +
-               detail("Genre", meta.get("Genre")))
+               detail("Genre", meta.get("Genre")) +
+               detail("Players", tgdb.get("players")) )
     online = online_record(item)
     flags = []
     def badge(symbol, text):
@@ -720,7 +723,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
         extra_info += detail("Genres", ", ".join(extra["genres"][:4]))
     meta_panel = ('<div class="info-pairs">' + release + '</div>') if release else '<p class="muted">No release metadata available yet.</p>'
     online_panel = online_details(online) if online else ""
-    source_label = ("Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
+    source_label = ("TheGamesDB cache and local GameDB" if tgdb else "Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
                     else "RetroAchievements")
     if extra:
         source_label += " + GameDB/IGDB"
