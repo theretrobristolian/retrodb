@@ -3,7 +3,30 @@ set -Eeuo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # Refresh the checkout before opening the interactive manager. No sudo or
 # background updates: clean main, trusted origin and fast-forward only.
-auto_update_menu() {
+auto_update_ps3_audit_rename() {
+  local command="${1:-preview}"
+  local root="$MOUNT/roms/sony/playstation3"
+  local cache="/var/cache/retrodb/providers/gamedb/playstation-3.json"
+  local report="$HOME/retrodb-exports/RetroDB-PS3-Audit.csv"
+  mount_ready || return 1
+  sudo test -d "$root" || { echo "[STOP] PS3 directory unavailable: $root"; return 1; }
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-3 || return 1
+  mkdir -p "$HOME/retrodb-exports/ps3-rename-journals"
+  if [[ "$command" == apply ]]; then
+    local answer journal
+    read -rp 'Type RENAMEPS3 to apply all eligible PS3 ISO/sidecar renames: ' answer
+    [[ "$answer" == RENAMEPS3 ]] || { echo 'Cancelled'; return 0; }
+    journal="$HOME/retrodb-exports/ps3-rename-journals/ps3-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+    sudo python3 "$HERE/ps3_rename.py" apply --root "$root" --catalogue "$cache" --output "$report" --journal "$journal" --confirm RENAMEPS3 || return 1
+  else
+    sudo python3 "$HERE/ps3_rename.py" preview --root "$root" --catalogue "$cache" --output "$report" || return 1
+  fi
+  sudo chown "$(id -un):$(id -gn)" "$report" || return 1
+  chmod 0600 "$report" || return 1
+  echo "PS3 CSV: $report"
+}
+menu() {
   local root remote current target
   root="$(cd "$HERE/.." && pwd -P)"
   command -v git >/dev/null || { echo '[INFO] Git unavailable; opening installed menu.'; return 0; }
@@ -802,7 +825,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 preview / PS2 confirmed changes'
+    echo '  3) Rename games      - PS1 / PS2 / PS3 (safe preview)'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  0) Exit'
@@ -819,10 +842,14 @@ menu() {
       3)
         echo '  1) PlayStation 1 - Rename all eligible BIN/CUE pairs'
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
+        echo '  3) PlayStation 3 - Preview ISO/DKEY/PNG naming audit'
+        echo '  4) PlayStation 3 - Apply verified preview with journal'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
           2) run opl_update_all ;;
+          3) run ps3_audit_rename preview ;;
+          4) run ps3_audit_rename apply ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
