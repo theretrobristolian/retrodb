@@ -237,12 +237,62 @@ def audit(iso_root, games_root, details=None):
     return result
 
 
+FIRMWARE_PATH = "ps3_update/ps3updat.pup"
+
+
+def removable_candidates(iso_root, games_root):
+    """Only a perfect SHA-256 match, ignoring one ISO-only firmware updater."""
+    rows = audit(iso_root, games_root)
+    candidates = []
+    for row in rows:
+        if row["status"] != "DIFFERENT" or row["different_files"] != 1 or not row["iso"]:
+            continue
+        folder, iso = Path(row["extracted"]), Path(row["iso"])
+        summary, details = compare_details(folder, iso)
+        if (summary[0] == "DIFFERENT" and summary[3] == summary[2] > 0
+                and len(details) == 1 and details[0]["status"] == "ISO_ONLY"
+                and details[0]["path"] == FIRMWARE_PATH):
+            candidates.append((folder, iso))
+    return candidates
+
+
+def remove_verified(iso_root, games_root, confirm):
+    """Irreversible removal, restricted to individually revalidated candidates."""
+    if confirm != "DELETE VERIFIED":
+        raise ValueError("Explicit DELETE VERIFIED confirmation required")
+    if iso_root.is_symlink() or games_root.is_symlink():
+        raise ValueError("Symlink root refused")
+    candidates = removable_candidates(iso_root, games_root)
+    if not candidates:
+        print("[OK] No verified redundant extracted folders.")
+        return
+    import shutil
+    for folder, iso in candidates:
+        if folder.is_symlink() or folder.parent != games_root or not folder.is_dir():
+            raise ValueError(f"Unsafe deletion target: {folder}")
+        # Reverify immediately before deleting; never trust the earlier CSV.
+        summary, details = compare_details(folder, iso)
+        if not (summary[0] == "DIFFERENT" and summary[3] == summary[2] > 0
+                and len(details) == 1 and details[0]["status"] == "ISO_ONLY"
+                and details[0]["path"] == FIRMWARE_PATH):
+            raise RuntimeError(f"Verification changed; refusing deletion: {folder}")
+        print(f"[REMOVE] Verified redundant extracted game: {folder.name}")
+        shutil.rmtree(folder)
+    print(f"[OK] Removed {len(candidates)} SHA-256 verified redundant extracted folders.")
+
+
+
 def main():
     parser = argparse.ArgumentParser(description="Read-only PS3 extracted versus ISO deduplication audit")
     parser.add_argument("--iso-root", type=Path, required=True)
     parser.add_argument("--games-root", type=Path, required=True)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--remove-verified", action="store_true")
+    parser.add_argument("--confirm", default="")
     args = parser.parse_args()
+    if args.remove_verified:
+        remove_verified(args.iso_root, args.games_root, args.confirm)
+        return
     differences = []
     rows = audit(args.iso_root, args.games_root, differences)
     for row in rows:
