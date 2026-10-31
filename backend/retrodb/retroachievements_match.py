@@ -655,6 +655,8 @@ def match_collection(
                     curated_id = 16649
                 elif serial in {"SLES-11881", "SLES-21881", "SLES-31881"}:
                     curated_id = 20367  # Capcom Generations PAL discs 2, 3, 4
+                elif serial == "SCES-00245":
+                    curated_id = 8746  # Motor Toon Grand Prix 2 (Europe)
                 elif serial == "SLES-02017":
                     curated_id = 18622  # 4x4 World Trophy = Test Drive: Off-Road 3
                 elif serial == "SLES-04129":
@@ -672,7 +674,7 @@ def match_collection(
             reviewed_no_set_ids = {"SLES-00097": 15920, "SLES-02017": 18622,
                                    "SLES-04129": 19456,
                                    "SLES-11881": 20367, "SLES-21881": 20367,
-                                   "SLES-31881": 20367}
+                                   "SLES-31881": 20367, "SCES-00245": 8746}
             fallback_no_set_id = (reviewed_no_set_ids.get(serial)
                                   if slug == "playstation" and item.ra_match_status == "unmatched"
                                   else None)
@@ -857,7 +859,7 @@ def match_collection(
                 ),
                 "no_set_ra_title": (
                     no_set_game.title if no_set_game else
-                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else {15920: "PowerSlave", 18622: "Test Drive: Off-Road 3", 19456: "Dance:UK", 20367: "Capcom Generations"}.get(fallback_no_set_id, "") if exhumed_fallback else ""
+                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else {15920: "PowerSlave", 18622: "Test Drive: Off-Road 3", 19456: "Dance:UK", 20367: "Capcom Generations", 8746: "Motor Toon Grand Prix 2"}.get(fallback_no_set_id, "") if exhumed_fallback else ""
                 ),
                 "gamedb_identified": "YES" if gamedb_title else "NO",
                 "disc_classification": ("special-disc-review" if special_disc else "standard"),
