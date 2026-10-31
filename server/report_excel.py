@@ -166,6 +166,17 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                  "recommended_ra_title": "X-COM: UFO Defense",
                  "ra_set_status": "HAS_SET",
                  "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLES-01694":
+            title = "Max Power Racing"
+            status = "NO"
+            reason = ("Max Power Racing is the UK release of C3 Racing: Car "
+                      "Constructors Championship (RA 17911). This disc is "
+                      "not verified by an accepted RA hash. "
+                      "https://retroachievements.org/game/17911")
+            r = {**r, "recommended_ra_game_id": 17911,
+                 "recommended_ra_title": "C3 Racing: Car Constructors Championship",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "reviewed-disc-id"}
         elif r.get("local_serial") == "SLES-03889":
             title = "Capcom vs. SNK: Millennium Fight 2000 Pro"
             status = "NO"
