@@ -414,8 +414,9 @@ PYJ
       return 1
     fi
   done < <(find "$journal_dir" -maxdepth 1 -name '*.json' -type f | sort)
-  # Require GameDB titles from the same authoritative catalogue as PS2 naming.
-  sync_gamedb || return 1
+  # PS1 rename needs only the PlayStation (PS1) catalogue, not the PS2 cache.
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation || return 1
   # Always rescan before a rename; cached proposals can be stale after a prior run.
   ( umask 077; sudo python3 "$HERE/report_ps1_audit.py" --root "$MOUNT/roms/sony/playstation1" --output "$csv" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$csv" || return 1
