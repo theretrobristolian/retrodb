@@ -106,6 +106,20 @@ def audit(root, titles):
         clean.append(plan)
     return rows, clean
 
+def audit_extracted(root):
+    """Inventory extracted PS3 folders; deliberately do not rename their contents."""
+    rows = []
+    if not root.is_dir():
+        return rows
+    for entry in sorted(root.iterdir()):
+        if entry.is_symlink() or not entry.is_dir():
+            continue
+        ident = serial(entry.name)
+        rows.append(dict(status="SKIPPED_EXTRACTED", disc_id=ident, catalogue_title="",
+                         existing_iso=str(entry), proposed_iso="", sidecars="",
+                         reason="Extracted game directory; audit only, no rename"))
+    return rows
+
 def apply(plans, journal):
     if journal.exists():
         raise ValueError("Journal already exists")
@@ -137,9 +151,12 @@ def main():
     parser.add_argument("--catalogue", type=Path, required=True)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--journal", type=Path)
+    parser.add_argument("--games-root", type=Path)
     parser.add_argument("--confirm", default="")
     args = parser.parse_args()
     rows, plans = audit(args.root, catalogue(args.catalogue))
+    if args.games_root:
+        rows.extend(audit_extracted(args.games_root))
     for row in rows:
         print(f'{row["status"]:17} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
     if args.output:
