@@ -162,7 +162,10 @@ def audit(root, titles):
             elif not ident:
                 status, reason = "REVIEW", "Missing disc ID; " + id_source
             elif not filename_id:
-                status, reason = "REVIEW", f"Internal disc ID recovered from {id_source}; verify before renaming"
+                if title and id_source == "PARAM.SFO TITLE_ID":
+                    status, reason = "VALID", f"Verified internal {id_source} and matched GameDB"
+                else:
+                    status, reason = "REVIEW", f"Internal disc ID recovered from {id_source}; verify before renaming"
             elif not title:
                 status, reason = "REVIEW", "Disc ID not found / ambiguous in GameDB"
             else:
