@@ -409,7 +409,9 @@ def main():
             writer = csv.DictWriter(stream, fieldnames=FIELDS)
             writer.writeheader()
             writer.writerows(rows)
-    print(f"Audited {len(rows)} ISOs; {len(plans)} safe rename groups. SHA256 computed only for conflicting ISOs; OLD_ proposals are review-only.")
+    extracted_count = sum(row["status"].startswith("EXTRACTED_") for row in rows)
+    print(f"Audited {len(rows) - extracted_count} ISOs and {extracted_count} extracted folders; "
+          f"{len(plans)} safe ISO rename groups. SHA256 only for conflicting ISO names.")
     if args.command == "apply":
         if args.confirm != "RENAME ALL" or not args.journal:
             parser.error("Apply requires --confirm 'RENAME ALL' and --journal PATH")
