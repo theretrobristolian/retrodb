@@ -410,3 +410,40 @@ def test_ace_combat_3_unverified_japanese_files_do_not_cover_us():
     disc2 = entry("Ace Combat 3 Electrosphere (Disc 2)", "11308", "NO")
     disc2[2] = "SLPS-02021"
     assert report.apply_collection_dedup([us, disc1, disc2])[0][13] == "COUNT"
+
+
+def test_capcom_generations_multidisc_no_set_and_championship_bass_unlisted():
+    base = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "local_region": "Europe", "gamedb_title": "",
+        "local_friendly_title": "", "ra_set_status": "UNRESOLVED",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "no_set_ra_game_id": "",
+        "preferred_patch_url": "", "preferred_release_name": "",
+        "preferred_region": "", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    for disc, serial, subtitle in (
+        (2, "SLES-11881", "Chronicles of Arthur"),
+        (3, "SLES-21881", "The First Generation"),
+        (4, "SLES-31881", "Blazing Guns"),
+    ):
+        row = report.row_for({
+            **base, "local_serial": serial,
+            "path": f"iso/Capcom Generations (Disc {disc}) ({subtitle}) [{serial}].cue",
+        })
+        assert row[3] == "NO SET"
+        assert row[14] == "NO_SET"
+        assert str(row[6]) == "20367"
+        assert f"Disc {disc}" in row[0]
+        assert report.action_rows([row], "Sony PlayStation") == []
+
+    bass = report.row_for({
+        **base, "local_serial": "SLUS-01084", "local_region": "USA",
+        "path": "iso/Championship Bass [SLUS-01084].cue",
+        "gamedb_title": "Championship Bass",
+    })
+    assert bass[3] == "NO SET"
+    assert bass[14] == "NOT_LISTED"
+    assert not bass[6]
+    assert report.action_rows([bass], "Sony PlayStation") == []
