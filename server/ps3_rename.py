@@ -281,7 +281,7 @@ def _run_journal(journal):
         source, staged, target = (Path(op[name]) for name in ("source", "staged", "target"))
         state = op["state"]
         if state == "done":
-            if not target.is_file() or staged.exists():
+            if not target.exists() or staged.exists():
                 raise RuntimeError(f"Completed operation has inconsistent target: {target}")
             continue
         if state in {"pending", "staging"}:
@@ -289,7 +289,7 @@ def _run_journal(journal):
             if staged.exists() and not source.exists():
                 op["state"] = "staged"
                 _save_journal(journal, data)
-            elif source.is_file() and not source.is_symlink() and not staged.exists():
+            elif source.exists() and not source.is_symlink() and not staged.exists():
                 # A target that resolves to the source is a case-insensitive alias.
                 if target.exists() and not source.samefile(target):
                     raise RuntimeError(f"Target already occupied: {target}")
@@ -307,7 +307,7 @@ def _run_journal(journal):
                 os.rename(staged, target)
                 op["state"] = "done"
                 _save_journal(journal, data)
-            elif not staged.exists() and target.is_file():
+            elif not staged.exists() and target.exists():
                 op["state"] = "done"
                 _save_journal(journal, data)
             else:
@@ -349,9 +349,29 @@ def recover(journal):
         raise ValueError("Unsupported journal version; manual investigation required")
     _run_journal(journal)
 
+def rename_extracted(rows, journal):
+    """Only rename top-level extracted directories, with a resumable journal."""
+    if journal.exists():
+        raise ValueError("Journal already exists; recover it first")
+    moves = []
+    for row in rows:
+        if row["status"] != "EXTRACTED_RENAME_CANDIDATE":
+            continue
+        source = Path(row["existing_iso"])
+        target = source.parent / row["proposed_iso"]
+        if not source.is_dir() or source.is_symlink() or target.exists():
+            raise RuntimeError(f"Unsafe extracted folder rename: {source}")
+        temp = source.parent / (".retrodb-ps3-extracted-" + uuid.uuid4().hex)
+        moves.append({"source": str(source), "staged": str(temp),
+                      "target": str(target), "state": "pending"})
+    journal.parent.mkdir(parents=True, exist_ok=True)
+    _save_journal(journal, {"version": 2, "operations": moves})
+    _run_journal(journal)
+
+
 def main():
     parser = argparse.ArgumentParser(description="PS3 title/serial audit and safe rename")
-    parser.add_argument("command", choices=["audit", "preview", "apply", "recover"])
+    parser.add_argument("command", choices=["audit", "preview", "apply", "recover", "extracted-preview", "extracted-apply"])
     parser.add_argument("--root", type=Path)
     parser.add_argument("--catalogue", type=Path)
     parser.add_argument("--output", type=Path)
@@ -366,7 +386,19 @@ def main():
         return
     if not args.root or not args.catalogue:
         parser.error("Audit/preview/apply require --root and --catalogue")
-    rows, plans = audit(args.root, catalogue(args.catalogue))
+    titles = catalogue(args.catalogue)
+    if args.command in ("extracted-preview", "extracted-apply"):
+        if not args.games_root:
+            parser.error("--games-root required")
+        rows = audit_extracted(args.games_root, titles)
+        for row in rows:
+            print(f'{row["status"]:28} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
+        if args.command == "extracted-apply":
+            if args.confirm != "RENAMEEXTRACTED" or not args.journal:
+                parser.error("Extracted apply requires --confirm RENAMEEXTRACTED and --journal")
+            rename_extracted(rows, args.journal)
+        return
+    rows, plans = audit(args.root, titles)
     if args.games_root:
         rows.extend(audit_extracted(args.games_root, catalogue(args.catalogue)))
     for row in rows:
