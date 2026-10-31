@@ -826,9 +826,11 @@ except (OSError, ValueError, KeyError):
     complete = False
 sys.exit(0 if complete else 1)
 PYPS3J
-      echo "[STOP] Incomplete PS3 journal: $prior"
-      echo "Recover it using the temporary writable mount before starting another batch."
-      return 1
+      then
+        echo "[STOP] Incomplete PS3 journal: $prior"
+        echo "Recover it using the temporary writable mount before starting another batch."
+        return 1
+      fi
     done
     source="$(retronas_cifs_source)" || return 1
     [[ "$source" == //* ]] || { echo "[STOP] Unexpected CIFS source"; return 1; }
