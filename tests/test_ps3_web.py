@@ -1,4 +1,5 @@
 """PS3 web catalogue naming and platform-count regressions."""
+from pathlib import Path
 from types import SimpleNamespace
 
 from retrodb.web_ui import disc_id, disc_region, name, platform_counts
@@ -55,7 +56,7 @@ def test_ps3_artwork_uses_only_matching_png_sidecar(tmp_path, monkeypatch):
             return None
 
     response = artwork.ps3_sidecar_art(7, db=DB())
-    assert response.path == str(cover)
+    assert Path(response.path) == cover
 
     cover.unlink()
     try:
