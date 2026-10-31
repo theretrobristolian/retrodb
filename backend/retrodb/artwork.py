@@ -11,8 +11,11 @@ import time
 from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+from retrodb.database import get_session
+from retrodb.models import LibraryItem, Platform
 
 router = APIRouter(include_in_schema=False)
 CACHE = Path("/var/cache/retrodb/artwork")
@@ -108,6 +111,39 @@ def psbbn_art(serial: str):
         except OSError:
             pass
         raise HTTPException(404, "No PSBBN artwork for this release")
+
+
+@router.get("/art/ps3/{item_id}", include_in_schema=False)
+def ps3_sidecar_art(item_id: int, db: Session = Depends(get_session)):
+    """Serve only a matching PNG sidecar of an indexed PS3 ISO, never arbitrary paths."""
+    item = db.get(LibraryItem, item_id)
+    if item is None or item.is_missing or item.extension.casefold() != "iso":
+        raise HTTPException(404, "PS3 artwork unavailable")
+    platform = db.get(Platform, item.platform_id)
+    if platform is None or platform.slug != "playstation-3":
+        raise HTTPException(404, "PS3 artwork unavailable")
+    root = Path("/mnt/retrodb-retronas")
+    try:
+        mounted_root = root.resolve(strict=True)
+        # The scanner records relative paths; use its inventory, not user-supplied filenames.
+        iso = (root / item.relative_path).resolve(strict=True)
+        if not iso.is_relative_to(mounted_root / "roms/sony/playstation3/iso"):
+            raise HTTPException(404, "PS3 artwork unavailable")
+        art = iso.with_suffix(".png")
+        if art.is_symlink():
+            raise HTTPException(404, "PS3 artwork unavailable")
+        art = art.resolve(strict=True)
+        if not art.is_relative_to(mounted_root / "roms/sony/playstation3/iso"):
+            raise HTTPException(404, "PS3 artwork unavailable")
+        if not art.is_file() or not 8 <= art.stat().st_size <= 8_000_000:
+            raise HTTPException(404, "PS3 artwork unavailable")
+        with art.open("rb") as picture:
+            if picture.read(8) != b"\x89PNG\r\n\x1a\n":
+                raise HTTPException(404, "PS3 artwork unavailable")
+    except (OSError, ValueError):
+        raise HTTPException(404, "PS3 artwork unavailable")
+    return FileResponse(art, media_type="image/png",
+                        headers={"Cache-Control": "private, max-age=3600"})
 
 RA_KINDS = {"icon", "box", "title", "ingame"}
 
