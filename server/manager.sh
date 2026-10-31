@@ -803,7 +803,10 @@ ps3_audit_rename() {
   mount_ready || return 1
   sudo test -d "$root" || { echo "[STOP] PS3 directory unavailable: $root"; return 1; }
   sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
-  sudo -u retrodb env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-3 || return 1
+  # The service account may not traverse the user home checkout.
+  # Sync as root from the checkout, then restore cache ownership.
+  sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-3 || return 1
+  sudo chown retrodb:retrodb "$cache" || return 1
   mkdir -p "$HOME/retrodb-exports/ps3-rename-journals"
   if [[ "$command" == apply ]]; then
     local answer journal
