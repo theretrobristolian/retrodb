@@ -808,11 +808,16 @@ ps3_audit_rename() {
   sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-3 || return 1
   sudo chown retrodb:retrodb "$cache" || return 1
   mkdir -p "$HOME/retrodb-exports/ps3-rename-journals"
-  if [[ "$command" == apply ]]; then
+  if [[ "$command" == apply || "$command" == extracted-apply ]]; then
     local answer journal source result=0 prior
     local rwroot="$PILOT_ROOT/roms/sony/playstation3/iso"
-    read -rp 'Type RENAMEPS3 to apply all eligible PS3 ISO/sidecar renames: ' answer
-    [[ "$answer" == RENAMEPS3 ]] || { echo 'Cancelled'; return 0; }
+    if [[ "$command" == extracted-apply ]]; then
+      read -rp 'Type RENAMEEXTRACTED to rename verified PS3 extracted folders (no contents changed): ' answer
+      [[ "$answer" == RENAMEEXTRACTED ]] || { echo 'Cancelled'; return 0; }
+    else
+      read -rp 'Type RENAMEPS3 to apply eligible PS3 ISO/sidecar renames: ' answer
+      [[ "$answer" == RENAMEPS3 ]] || { echo 'Cancelled'; return 0; }
+    fi
     # A previous interrupted job must be recovered before any new batch.
     for prior in "$HOME"/retrodb-exports/ps3-rename-journals/*.json; do
       [[ -f "$prior" ]] || continue
@@ -840,9 +845,16 @@ PYPS3J
     fi
     sudo mount -t cifs "$source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
     journal="$HOME/retrodb-exports/ps3-rename-journals/ps3-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-    sudo python3 "$HERE/ps3_rename.py" apply --root "$rwroot" --catalogue "$cache" --journal "$journal" --confirm RENAMEPS3 || result=$?
+    if [[ "$command" == extracted-apply ]]; then
+      sudo python3 "$HERE/ps3_rename.py" extracted-apply --root "$rwroot" --games-root "$PILOT_ROOT/roms/sony/playstation3/games" --catalogue "$cache" --journal "$journal" --confirm RENAMEEXTRACTED || result=$?
+    else
+      sudo python3 "$HERE/ps3_rename.py" apply --root "$rwroot" --catalogue "$cache" --journal "$journal" --confirm RENAMEPS3 || result=$?
+    fi
     sudo umount "$PILOT_ROOT" || { echo '[WARNING] PS3 writable mount remains active'; return 1; }
     [[ $result == 0 ]] || { echo "[STOP] Rename interrupted. Preserve journal: $journal"; return "$result"; }
+  elif [[ "$command" == extracted-preview ]]; then
+    sudo python3 "$HERE/ps3_rename.py" extracted-preview --root "$root" --games-root "$games_root" --catalogue "$cache" || return 1
+    return 0
   else
     sudo python3 "$HERE/ps3_rename.py" preview --root "$root" --catalogue "$cache" --games-root "$games_root" --output "$report" || return 1
   fi
@@ -877,12 +889,16 @@ menu() {
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         echo '  3) PlayStation 3 - Preview ISO/DKEY/PNG naming audit'
         echo '  4) PlayStation 3 - Apply verified preview with journal'
+        echo '  5) PlayStation 3 - Preview extracted folder names'
+        echo '  6) PlayStation 3 - Rename extracted folders with journal'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
           2) run opl_update_all ;;
           3) run ps3_audit_rename preview ;;
           4) run ps3_audit_rename apply ;;
+          5) run ps3_audit_rename extracted-preview ;;
+          6) run ps3_audit_rename extracted-apply ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
