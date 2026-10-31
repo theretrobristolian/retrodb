@@ -13,8 +13,9 @@ from retrodb.models import CollectionSource, LibraryItem, Platform
 PLATFORM_PATHS = {
     "playstation": Path("roms/sony/playstation1"),
     "playstation-2": Path("roms/sony/playstation2"),
+    "playstation-3": Path("roms/sony/playstation3/iso"),
 }
-PLATFORM_LABELS = {"playstation": "PlayStation", "playstation-2": "PlayStation 2"}
+PLATFORM_LABELS = {"playstation": "PlayStation", "playstation-2": "PlayStation 2", "playstation-3": "PlayStation 3"}
 GAME_EXTENSIONS = {".bin", ".ccd", ".chd", ".cso", ".cue", ".img", ".iso", ".mdf", ".mds", ".pbp", ".zso"}
 
 class LibraryScanError(RuntimeError):
@@ -104,7 +105,7 @@ def scan_retronas(session: Session, root: Path) -> ScanSummary:
                     continue
                 path = directory_path / filename
                 extension = path.suffix.casefold() or "(none)"
-                if extension not in GAME_EXTENSIONS:
+                if extension not in GAME_EXTENSIONS or (platform_slug == "playstation-3" and extension != ".iso"):
                     summary.skipped_extensions[extension.lstrip(".")] += 1
                     continue
                 try:
