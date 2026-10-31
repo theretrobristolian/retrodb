@@ -287,7 +287,10 @@ def remove_verified(iso_root, games_root, confirm):
             continue
         folder, iso = folders[0], isos[0]
         print(f"[VERIFY] {disc}: hashing ISO against {folder.name}", flush=True)
-        summary, details = compare_details(folder, iso)
+        summary, details = compare_details(
+            folder, iso,
+            progress=lambda message: print(f"[VERIFY {disc}] {message}", flush=True),
+        )
         if not (summary[0] == "DIFFERENT" and summary[3] == summary[2] > 0
                 and len(details) == 1 and details[0]["status"] == "ISO_ONLY"
                 and details[0]["path"] == FIRMWARE_PATH):
