@@ -322,8 +322,8 @@ def homepage(request: Request, db: Session = Depends(get_session)):
 <p class="muted">A home for your retro gaming collection: explore classic systems,
 review RetroAchievements compatibility and keep your gaming services in sight.</p>
 <div class="grid">
-<div class="card"><div class="label">Indexed files</div><div class="metric">{total:,}</div>
-<p class="muted">Library inventory records, including PS1 BIN/CUE pairs</p></div>
+<div class="card"><div class="label">Indexed games / disc entries</div><div class="metric">{total:,}</div>
+<p class="muted">Playable entries; PS1 BIN track files excluded from totals</p></div>
 <div class="card"><div class="label">Systems in collection</div><div class="metric">{available}</div>
 <p class="muted">Of {len(platforms)} catalogued platforms</p></div>
 <a class="card" href="/consoles"><div class="eyebrow">Browse</div><h2>Consoles →</h2>
