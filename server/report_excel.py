@@ -148,7 +148,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                       "https://retroachievements.org/game/" + str(ra_id))
             r = {**r, "no_set_ra_game_id": ra_id, "ra_set_status": "NO_SET",
                  "identity_resolution": "reviewed-disc-id-no-set"}
-        elif serial in {"SLUS-01470", "SLUS-01084"}:
+        elif serial in {"SLUS-01470", "SLUS-01084", "SLUS-01162"}:
             status = "NO SET"
             reason = ("No confirmed RetroAchievements game listing for this PS1 release; "
                       "recheck if catalogue changes")
@@ -166,6 +166,26 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                  "recommended_ra_title": "X-COM: UFO Defense",
                  "ra_set_status": "HAS_SET",
                  "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLES-03388":
+            title = "Power Diggerz"
+            status = "NO"
+            reason = ("Power Diggerz is the European release of Power Shovel "
+                      "(RA 18046); the current disc hash is not RA verified. "
+                      "https://retroachievements.org/game/18046")
+            r = {**r, "recommended_ra_game_id": 18046,
+                 "recommended_ra_title": "Power Shovel",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLUS-01230":
+            # The similarly named 1999 original has RA game ID 17195.
+            # Championship Motocross 2001 is a distinct sequel.
+            title = "Championship Motocross 2001 featuring Ricky Carmichael"
+            status = "UNKNOWN"
+            reason = ("Championship Motocross 2001 is distinct from the 1999 "
+                      "Championship Motocross (RA 17195). Do not cross-map "
+                      "the sequel without its own RetroAchievements identity.")
+            r = {**r, "ra_set_status": "UNRESOLVED",
+                 "identity_resolution": "review-sequel-distinct-from-original"}
         elif r.get("local_serial") == "SLES-01694":
             title = "Max Power Racing"
             status = "NO"
