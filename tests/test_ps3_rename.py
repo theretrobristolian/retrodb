@@ -85,6 +85,44 @@ class TestPS3Rename(unittest.TestCase):
             self.assertFalse((root / (original + ".ISO")).exists())
             self.assertFalse(list(root.glob(".retrodb-ps3-*.tmp")))
 
+    def test_missing_filename_id_recovered_from_sfo_is_eligible(self):
+        def record(filename, block, size):
+            name = filename.encode("ascii")
+            item = bytearray(33 + len(name))
+            item[0] = len(item)
+            item[2:6] = block.to_bytes(4, "little")
+            item[10:14] = size.to_bytes(4, "little")
+            item[32] = len(name)
+            item[33:] = name
+            return item
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            payload = bytearray(23 * 2048)
+            pvd = bytearray(2048)
+            pvd[1:6] = b"CD001"
+            pvd[156:156 + 34] = record("R", 20, 2048)[:34]
+            payload[16 * 2048:17 * 2048] = pvd
+            game_record = record("PS3_GAME", 21, 2048)
+            payload[20 * 2048:20 * 2048 + len(game_record)] = game_record
+            sfo_record = record("PARAM.SFO;1", 22, 128)
+            payload[21 * 2048:21 * 2048 + len(sfo_record)] = sfo_record
+            sfo = bytearray(128)
+            sfo[:4] = b"\x00PSF"
+            sfo[8:12] = (36).to_bytes(4, "little")
+            sfo[12:16] = (60).to_bytes(4, "little")
+            sfo[16:20] = (1).to_bytes(4, "little")
+            sfo[36:45] = b"TITLE_ID\x00"
+            sfo[60:70] = b"BLES00917\x00"
+            payload[22 * 2048:22 * 2048 + 128] = sfo
+            (root / "F1 2010.ISO").write_bytes(payload)
+            (root / "F1 2010.png").write_bytes(b"sidecar")
+            self.assertEqual(internal_disc_id(root / "F1 2010.ISO")[0], "BLES00917")
+            rows, plans = audit(root, {"BLES00917": "F1 2010"})
+            self.assertEqual(rows[0]["status"], "RENAME_CANDIDATE")
+            self.assertEqual(rows[0]["proposed_iso"], "F1 2010 [BLES00917].iso")
+            self.assertEqual(len(plans[0]), 2)
+
     def test_missing_id_unreadable_iso_does_not_guess(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
