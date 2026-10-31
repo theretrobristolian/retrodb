@@ -89,8 +89,8 @@ class TestPS3Rename(unittest.TestCase):
     def test_target_conflict_blocks(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "WRONG [BLES00246].iso").touch()
-            (root / "Metal Gear Solid 4 [BLES00246].iso").touch()
+            (root / "WRONG [BLES00246].iso").write_bytes(b"different-source")
+            (root / "Metal Gear Solid 4 [BLES00246].iso").write_bytes(b"different-target")
             rows, plans = audit(root, {"BLES00246": "Metal Gear Solid 4"})
             self.assertFalse(plans)
             self.assertIn("REVIEW_DUPLICATE", {r["status"] for r in rows})
