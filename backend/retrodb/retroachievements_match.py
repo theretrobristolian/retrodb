@@ -653,6 +653,8 @@ def match_collection(
                 observed_title = (gamedb_title or friendly_local_title(item.relative_path)).casefold()
                 if "supersonic racers" in observed_title or "dare devil derby 3d" in observed_title:
                     curated_id = 16649
+                elif serial in {"SLES-11881", "SLES-21881", "SLES-31881"}:
+                    curated_id = 20367  # Capcom Generations PAL discs 2, 3, 4
                 elif serial == "SLES-02017":
                     curated_id = 18622  # 4x4 World Trophy = Test Drive: Off-Road 3
                 elif serial == "SLES-04129":
@@ -668,7 +670,9 @@ def match_collection(
                 if curated_id and curated_id in counts_by_id and counts_by_id[curated_id] == 0:
                     no_set_game = next((g for g in no_sets if g.game_id == curated_id), None)
             reviewed_no_set_ids = {"SLES-00097": 15920, "SLES-02017": 18622,
-                                   "SLES-04129": 19456}
+                                   "SLES-04129": 19456,
+                                   "SLES-11881": 20367, "SLES-21881": 20367,
+                                   "SLES-31881": 20367}
             fallback_no_set_id = (reviewed_no_set_ids.get(serial)
                                   if slug == "playstation" and item.ra_match_status == "unmatched"
                                   else None)
@@ -812,7 +816,7 @@ def match_collection(
                         confidence += "-metadata-unavailable"
 
             manually_unlisted = (
-                (slug == "playstation" and serial == "SLUS-01470" and item.ra_match_status == "unmatched" and not recommendation and not no_set_game)
+                (slug == "playstation" and serial in {"SLUS-01470", "SLUS-01084"} and item.ra_match_status == "unmatched" and not recommendation and not no_set_game)
                 or (slug == "playstation-2"
                 and serial in reviewed_no_listing
                 and item.ra_match_status == "unmatched"
@@ -853,7 +857,7 @@ def match_collection(
                 ),
                 "no_set_ra_title": (
                     no_set_game.title if no_set_game else
-                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else {15920: "PowerSlave", 18622: "Test Drive: Off-Road 3", 19456: "Dance:UK"}.get(fallback_no_set_id, "") if exhumed_fallback else ""
+                    match[1] if match and counts_by_id.get(match[0], 0) == 0 else {15920: "PowerSlave", 18622: "Test Drive: Off-Road 3", 19456: "Dance:UK", 20367: "Capcom Generations"}.get(fallback_no_set_id, "") if exhumed_fallback else ""
                 ),
                 "gamedb_identified": "YES" if gamedb_title else "NO",
                 "disc_classification": ("special-disc-review" if special_disc else "standard"),
