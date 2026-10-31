@@ -439,7 +439,7 @@ PYCOUNT
   conflict_count="$(sudo python3 "$HERE/ps1_ra_conflict.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT" --ps1-audit "$csv")" || return 1
   serialless_count="$(sudo python3 "$HERE/ps1_ra_no_serial.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT")" || return 1
   local lost_world_cleanup=0
-  if [[ -f "$MOUNT/roms/sony/playstation1/iso/Lost World, The - Jurassic Park - Special Edition (USA).cue" ]]; then
+  if sudo test -f "$MOUNT/roms/sony/playstation1/iso/Lost World, The - Jurassic Park - Special Edition (USA).cue"; then
     echo '[CHECK] Lost World reviewed duplicate:'
     if sudo python3 "$HERE/ps1_lost_world_cleanup.py" preview --root "$MOUNT/roms/sony/playstation1"; then
       lost_world_cleanup=1
