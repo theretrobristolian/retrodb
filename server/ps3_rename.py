@@ -193,6 +193,8 @@ def audit(root, titles):
                             other = conflict_isos[0]
                             if other.is_symlink() or not other.is_file():
                                 status, reason = "REVIEW", "Conflicting ISO is not a regular file"
+                            elif iso.samefile(other):
+                                status, reason = "REVIEW_CASE_ONLY", "Source and target resolve to the same file on this filesystem; no duplicate"
                             elif iso.stat().st_size == other.stat().st_size and sha256(iso) == sha256(other):
                                 old_name = "OLD_" + iso.name
                                 if (folder / old_name).exists():
