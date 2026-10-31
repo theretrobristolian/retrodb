@@ -259,7 +259,7 @@ def _save_journal(journal, payload):
     temp = journal.with_name(journal.name + ".tmp")
     with temp.open("w", encoding="utf-8") as stream:
         json.dump(payload, stream, indent=2)
-        stream.write("\\n")
+        stream.write("\n")
         stream.flush()
         os.fsync(stream.fileno())
     os.replace(temp, journal)
