@@ -66,3 +66,43 @@ def test_different_disc_id_is_not_declared_duplicate(tmp_path):
     image.parent.mkdir()
     image.write_bytes(b"no matter")
     assert audit(image.parent, folder.parent)[0]["status"] == "NO_EXACT_ISO"
+
+def test_multi_extent_file_is_compared(tmp_path):
+    folder = tmp_path / "games" / "Example [BLES12345] - extracted"
+    folder.mkdir(parents=True)
+    (folder / "FILE.BIN").write_bytes(b"abcdef")
+    image = tmp_path / "iso" / "Example [BLES12345].iso"
+    image.parent.mkdir()
+    buf = bytearray(24 * 2048)
+    pvd = bytearray(2048)
+    pvd[0] = 1
+    pvd[1:6] = b"CD001"
+    root = entry(bytes([0]), 20, 2048, True)
+    pvd[156:156+len(root)] = root
+    buf[16*2048:17*2048] = pvd
+    first = entry("FILE.BIN;1", 21, 3)
+    first[25] = 0x80
+    second = entry("FILE.BIN;1", 22, 3)
+    buf[20*2048:20*2048+len(first)] = first
+    buf[20*2048+len(first):20*2048+len(first)+len(second)] = second
+    buf[21*2048:21*2048+3] = b"abc"
+    buf[22*2048:22*2048+3] = b"def"
+    image.write_bytes(buf)
+    assert len(iso_index(image)["file.bin"]) == 2
+    assert compare(folder, image)[0] == "BYTE_IDENTICAL"
+
+
+def test_full_difference_details(tmp_path):
+    from ps3_dedup import compare_details
+    folder = tmp_path / "games" / "Example [BLES12345] - extracted"
+    folder.mkdir(parents=True)
+    (folder / "FILE.BIN").write_bytes(b"bad")
+    (folder / "EXTRA.DAT").write_bytes(b"extra")
+    image = tmp_path / "iso" / "Example [BLES12345].iso"
+    image.parent.mkdir()
+    make_iso(image, b"abc")
+    summary, files = compare_details(folder, image)
+    assert summary[0] == "DIFFERENT"
+    assert {record["status"] for record in files} == {"HASH_DIFFERENT", "EXTRACTED_ONLY"}
+    assert all(record["extracted_sha256"] for record in files)
+    assert files[0]["path"] == "extra.dat"
