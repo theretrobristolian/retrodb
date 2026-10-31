@@ -260,29 +260,37 @@ def removable_candidates(iso_root, games_root):
 
 
 def remove_verified(iso_root, games_root, confirm):
-    """Irreversible removal, restricted to individually revalidated candidates."""
+    """Hash each approved Red Dead pair once immediately before removal."""
     if confirm != "DELETE VERIFIED":
         raise ValueError("Explicit DELETE VERIFIED confirmation required")
     if iso_root.is_symlink() or games_root.is_symlink():
         raise ValueError("Symlink root refused")
-    candidates = removable_candidates(iso_root, games_root)
-    if not candidates:
-        print("[OK] No verified redundant extracted folders.")
-        return
     import shutil
-    for folder, iso in candidates:
-        if folder.is_symlink() or folder.parent != games_root or not folder.is_dir():
-            raise ValueError(f"Unsafe deletion target: {folder}")
-        # Reverify immediately before deleting; never trust the earlier CSV.
+    deleted = 0
+    for disc in sorted(APPROVED_DISC_IDS):
+        folders = [p for p in games_root.iterdir()
+                   if p.is_dir() and not p.is_symlink() and serial(p.name) == disc]
+        isos = [p for p in iso_root.rglob("*.iso")
+                if p.is_file() and not p.is_symlink() and serial(p.stem) == disc]
+        if len(folders) != 1 or len(isos) != 1:
+            print(f"[SKIP] {disc}: expected one extracted folder and one matching ISO")
+            continue
+        folder, iso = folders[0], isos[0]
+        print(f"[VERIFY] {disc}: hashing ISO against {folder.name}", flush=True)
         summary, details = compare_details(folder, iso)
         if not (summary[0] == "DIFFERENT" and summary[3] == summary[2] > 0
                 and len(details) == 1 and details[0]["status"] == "ISO_ONLY"
                 and details[0]["path"] == FIRMWARE_PATH):
-            raise RuntimeError(f"Verification changed; refusing deletion: {folder}")
-        print(f"[REMOVE] Verified redundant extracted game: {folder.name}")
+            print(f"[SKIP] {disc}: content no longer qualifies ({summary[0]})", flush=True)
+            continue
+        if folder.parent != games_root or folder.is_symlink():
+            raise ValueError(f"Unsafe deletion target: {folder}")
+        # Refuse symlinks and nonregular files anywhere inside before rmtree.
+        extracted_index(folder)
+        print(f"[REMOVE] {folder.name}: all shared game files SHA-256 identical", flush=True)
         shutil.rmtree(folder)
-    print(f"[OK] Removed {len(candidates)} SHA-256 verified redundant extracted folders.")
-
+        deleted += 1
+    print(f"[OK] Removed {deleted} verified redundant extracted folders.", flush=True)
 
 
 def main():

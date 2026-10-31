@@ -859,13 +859,23 @@ PYPS3COUNT
     echo "PS3 dedup summary: $dedup_report"
     echo "PS3 per-file differences: ${dedup_report%.csv}-Files.csv"
     local candidate_list delete_answer
-    candidate_list="$(sudo python3 - "$HERE" "$root" "$games_root" <<'PYPS3DELETE'
-import sys
+    candidate_list="$(python3 - "$dedup_report" "${dedup_report%.csv}-Files.csv" <<'PYPS3DELETE'
+import csv, sys
 from pathlib import Path
-sys.path.insert(0, sys.argv[1])
-from ps3_dedup import removable_candidates
-for folder, iso in removable_candidates(Path(sys.argv[2]), Path(sys.argv[3])):
-    print(folder.name)
+allowed = {"BLES00680", "BLES01179"}
+with open(sys.argv[1], newline="", encoding="utf-8") as handle:
+    summary = list(csv.DictReader(handle))
+with open(sys.argv[2], newline="", encoding="utf-8") as handle:
+    diffs = list(csv.DictReader(handle))
+for row in summary:
+    disc = row["disc_id"]
+    if disc not in allowed or row["status"] != "DIFFERENT":
+        continue
+    disc_diffs = [d for d in diffs if d["disc_id"] == disc]
+    if (len(disc_diffs) == 1 and disc_diffs[0]["status"] == "ISO_ONLY"
+            and disc_diffs[0]["path"] == "ps3_update/ps3updat.pup"
+            and int(row["matching_files"]) == int(row["extracted_files"]) > 0):
+        print(Path(row["extracted"]).name)
 PYPS3DELETE
 )" || return 1
     if [[ -n "$candidate_list" ]]; then
