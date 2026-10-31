@@ -438,7 +438,16 @@ PYCOUNT
 )" || return 1
   conflict_count="$(sudo python3 "$HERE/ps1_ra_conflict.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT" --ps1-audit "$csv")" || return 1
   serialless_count="$(sudo python3 "$HERE/ps1_ra_no_serial.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT")" || return 1
-  if [[ "$eligible" == 0 && "$conflict_count" == 0 && "$serialless_count" == 0 ]]; then
+  local lost_world_cleanup=0
+  if [[ -f "$MOUNT/roms/sony/playstation1/iso/Lost World, The - Jurassic Park - Special Edition (USA).cue" ]]; then
+    echo '[CHECK] Lost World reviewed duplicate:'
+    if sudo python3 "$HERE/ps1_lost_world_cleanup.py" preview --root "$MOUNT/roms/sony/playstation1"; then
+      lost_world_cleanup=1
+    else
+      echo '[INFO] Lost World cleanup not eligible; left unchanged.'
+    fi
+  fi
+  if [[ "$eligible" == 0 && "$conflict_count" == 0 && "$serialless_count" == 0 && "$lost_world_cleanup" == 0 ]]; then
     echo '[OK] No eligible PS1 renames remain; nothing changed and no journal created.'
     return 0
   fi
@@ -506,6 +515,14 @@ PYCONF
     if [[ -f "$ra_journal" ]]; then
       sudo chown "$(id -un):$(id -gn)" "$ra_journal" || result=1
       echo "RA-verified PS1 rename journal: $ra_journal"
+    fi
+  fi
+  if [[ "$result" -eq 0 && "$lost_world_cleanup" == 1 ]]; then
+    local lw_journal="$journal_dir/ps1-lost-world-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+    sudo python3 "$HERE/ps1_lost_world_cleanup.py" archive --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$lw_journal" || result=$?
+    if [[ -f "$lw_journal" ]]; then
+      sudo chown "$(id -un):$(id -gn)" "$lw_journal" || result=1
+      echo "Lost World recovery journal: $lw_journal"
     fi
   fi
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active!'; return 1; }
