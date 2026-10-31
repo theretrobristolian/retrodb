@@ -522,6 +522,13 @@ PYJOURNAL
       return 1
     fi
   done < <(find "$OPL_JOURNAL_DIR" -maxdepth 1 -type f -name 'opl-rename-*.json' | sort)
+  echo '[CHECK] Refreshing PS2 GameDB metadata...'
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-2 || return 1
+  echo '[CHECK] Rescanning current PS2 ISO collection and rebuilding OPL proposals...'
+  sudo python3 "$HERE/ps2_live_rename.py" --root "$MOUNT" --output "$PILOT_CSV" || return 1
+  sudo chown "$(id -un):$(id -gn)" "$PILOT_CSV" || return 1
+  chmod 0600 "$PILOT_CSV" || return 1
   journal="$OPL_JOURNAL_DIR/opl-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
   echo 'OPL full-library rename — proposed changes (read-only):'
   python3 "$HERE/opl_pilot.py" preview --csv "$PILOT_CSV" --root "$MOUNT" --journal "$journal" || return 1
