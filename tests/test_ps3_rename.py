@@ -35,13 +35,38 @@ class TestPS3Rename(unittest.TestCase):
     def test_duplicate_suffix_stays_review_only(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
-            (root / "WRONG [BLES00246].iso").touch()
-            (root / "Metal Gear Solid 4 [BLES00246].iso").touch()
+            (root / "WRONG [BLES00246].iso").write_bytes(b"source")
+            (root / "Metal Gear Solid 4 [BLES00246].iso").write_bytes(b"target")
             rows, plans = audit(root, {"BLES00246": "Metal Gear Solid 4"})
             duplicates = [row for row in rows if row["status"] == "REVIEW_DUPLICATE"]
             self.assertEqual(len(duplicates), 1)
-            self.assertTrue(duplicates[0]["proposed_iso"].endswith(" - duplicate.iso"))
+            self.assertTrue(duplicates[0]["proposed_iso"].endswith(" - duplicate [BLES00246].iso"))
             self.assertFalse(plans)
+
+    def test_identical_iso_proposes_old_not_execution(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "WRONG [BLES00246].iso").write_bytes(b"identical")
+            (root / "Metal Gear Solid 4 [BLES00246].iso").write_bytes(b"identical")
+            rows, plans = audit(root, {"BLES00246": "Metal Gear Solid 4"})
+            flagged = [x for x in rows if x["status"] == "REVIEW_IDENTICAL"]
+            self.assertEqual(len(flagged), 1)
+            self.assertTrue(flagged[0]["proposed_iso"].startswith("OLD_"))
+            self.assertFalse(plans)
+
+    def test_gt5_xl_edition_preserved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Gran Turismo 5 - XL Edition [BCUS98114].iso").touch()
+            rows, _ = audit(root, {"BCUS98114": "Gran Turismo 5"})
+            self.assertIn("XL Edition", rows[0]["proposed_iso"])
+
+    def test_street_fighter_arcade_edition_preserved(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "Super Street Fighter IV - Arcade Edition [BLES00770].iso").touch()
+            rows, _ = audit(root, {"BLES00770": "Super Street Fighter IV"})
+            self.assertIn("Arcade Edition", rows[0]["proposed_iso"])
 
     def test_missing_id_unreadable_iso_does_not_guess(self):
         with tempfile.TemporaryDirectory() as temp:
