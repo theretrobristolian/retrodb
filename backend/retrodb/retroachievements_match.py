@@ -372,10 +372,29 @@ def release_region(name: str) -> str:
 def preferred_release(
     details: list[dict[str, object]],
     game_id: int | None = None,
+    local_serial: str = "",
 ) -> tuple[str, str, str, str, str]:
     """Choose RA's cleanest preferred TV-console release and final revision."""
     if not details:
         return "", "", "", "", ""
+
+    # Some RA games combine separately bootable discs under a single game ID.
+    # A recommendation must preserve the local disc's actual mode. Do not
+    # substitute a Simulation disc or combined-disc patch for Arcade Mode.
+    if game_id == 11278 and local_serial in {"SCUS-94455", "SCUS-94488"}:
+        required_mode = ("arcade" if local_serial == "SCUS-94455"
+                         else "simulation")
+        mode_entries = [
+            entry for entry in details
+            if required_mode + " mode" in str(entry.get("Name", "")).casefold()
+            and "combined disc" not in str(entry.get("Name", "")).casefold()
+        ]
+        if mode_entries:
+            details = mode_entries
+        else:
+            # Missing mode-specific metadata is not evidence that a different
+            # mode is a valid replacement.
+            return "", "", "", "", ""
 
     def sort_key(entry: dict[str, object]) -> tuple[int, int, int, int, str]:
         name = str(entry.get("Name", ""))
@@ -818,7 +837,7 @@ def match_collection(
                             preferred_hash,
                             preferred_labels,
                             preferred_patch_url,
-                        ) = preferred_release(details, recommendation.game_id)
+                        ) = preferred_release(details, recommendation.game_id, serial)
                     except RetroAchievementsError:
                         confidence += "-metadata-unavailable"
 
