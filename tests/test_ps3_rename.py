@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
-from ps3_rename import audit, catalogue, safe_title, audit_extracted, duplicate_target, internal_disc_id
+from ps3_rename import audit, catalogue, safe_title, audit_extracted, duplicate_target, internal_disc_id, apply, recover
 
 class TestPS3Rename(unittest.TestCase):
     def test_grouped_sidecars_and_uppercase_iso(self):
@@ -67,6 +67,23 @@ class TestPS3Rename(unittest.TestCase):
             (root / "Super Street Fighter IV - Arcade Edition [BLES00770].iso").touch()
             rows, _ = audit(root, {"BLES00770": "Super Street Fighter IV"})
             self.assertIn("Arcade Edition", rows[0]["proposed_iso"])
+
+    def test_case_only_rename_group_and_recovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            original = "BATTLEFIELD 3 [BLES01275]"
+            target = "Battlefield 3 [BLES01275]"
+            for ext in (".ISO", ".dkey", ".png"):
+                (root / (original + ext)).write_bytes(ext.encode())
+            rows, plans = audit(root, {"BLES01275": "Battlefield 3"})
+            self.assertEqual(rows[0]["status"], "RENAME_CANDIDATE")
+            journal = root / "journal.json"
+            apply(plans, journal)
+            recover(journal)
+            for ext in (".iso", ".dkey", ".png"):
+                self.assertTrue((root / (target + ext)).is_file())
+            self.assertFalse((root / (original + ".ISO")).exists())
+            self.assertFalse(list(root.glob(".retrodb-ps3-*.tmp")))
 
     def test_missing_id_unreadable_iso_does_not_guess(self):
         with tempfile.TemporaryDirectory() as temp:
