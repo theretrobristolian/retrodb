@@ -243,18 +243,25 @@ def audit(root, titles):
         clean.append(plan)
     return rows, clean
 
-def audit_extracted(root):
+def audit_extracted(root, titles=None):
     """Inventory extracted PS3 folders; deliberately do not rename their contents."""
     rows = []
+    titles = titles or {}
     if not root.is_dir():
         return rows
     for entry in sorted(root.iterdir()):
         if entry.is_symlink() or not entry.is_dir():
             continue
         ident = serial(entry.name)
-        rows.append(dict(status="SKIPPED_EXTRACTED", disc_id=ident, catalogue_title="",
-                         existing_iso=str(entry), proposed_iso="", sidecars="",
-                         reason="Extracted game directory; audit only, no rename"))
+        title = titles.get(ident) if ident else None
+        target = f"{safe_title(title)} [{ident}] - extracted" if title else ""
+        status = ("EXTRACTED_VALID" if target == entry.name else
+                  "EXTRACTED_RENAME_CANDIDATE" if target and not (entry.parent / target).exists() else
+                  "EXTRACTED_REVIEW")
+        rows.append(dict(status=status, disc_id=ident, catalogue_title=title or "",
+                         existing_iso=str(entry), proposed_iso=target, sidecars="",
+                         reason="Disc ID matched GameDB; folder only, contents untouched" if title
+                                else "Unmatched disc ID; manual review"))
     return rows
 
 def _save_journal(journal, payload):
@@ -361,7 +368,7 @@ def main():
         parser.error("Audit/preview/apply require --root and --catalogue")
     rows, plans = audit(args.root, catalogue(args.catalogue))
     if args.games_root:
-        rows.extend(audit_extracted(args.games_root))
+        rows.extend(audit_extracted(args.games_root, catalogue(args.catalogue)))
     for row in rows:
         print(f'{row["status"]:17} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
     if args.output:
