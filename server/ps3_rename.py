@@ -2,6 +2,7 @@
 """Conservative PS3 ISO/sidecar naming audit. No ISO content is ever modified."""
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -109,12 +110,30 @@ def duplicate_target(folder, stem, sources, files):
     source_names = {p.casefold() for p in sources}
     for number in range(1, 1000):
         suffix = " - duplicate" if number == 1 else f" - duplicate {number}"
-        candidate = stem + suffix
+        match = re.fullmatch(r"(.+) (\\[[A-Z0-9]+\\])", stem)
+        candidate = (match.group(1) + suffix + " " + match.group(2)) if match else stem + suffix
         destinations = [candidate + Path(name).suffix.lower() for name in sources]
         if not any(dst.casefold() in occupied and dst.casefold() not in source_names
                    for dst in destinations):
             return candidate
     return ""
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(4 * 1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+def edition_title(filename, catalogue_title):
+    """Keep explicitly named special editions even when title catalogue omits them."""
+    stem = re.sub(r"\s*\[[A-Z]{4}\d{5}\]\s*$", "", filename, flags=re.I).strip()
+    if re.search(r"\bXL Edition\b", stem, re.I):
+        return safe_title(stem), True
+    if re.search(r"\bArcade Edition\b", stem, re.I):
+        return safe_title(stem), True
+    return safe_title(catalogue_title), False
 
 def audit(root, titles):
     rows, plans = [], []
@@ -147,7 +166,8 @@ def audit(root, titles):
                 status, reason = "REVIEW", "Disc ID not found / ambiguous in GameDB"
             else:
                 status, reason = "VALID", "Filename matches catalogue"
-            target_stem = f"{safe_title(title)} [{ident}]" if title else ""
+            display_title, protected_edition = edition_title(iso.stem, title) if title else ("", False)
+            target_stem = f"{display_title} [{ident}]" if title else ""
             proposed = f"{target_stem}.iso" if target_stem else ""
             moves = []
             if status == "VALID":
@@ -165,14 +185,30 @@ def audit(root, titles):
                     elif len({str(dst).casefold() for _, dst in moves}) != len(moves):
                         status, reason = "REVIEW", "Duplicate proposed sidecars"
                     elif any(dst.exists() and dst != src for src, dst in moves):
-                        alternative = duplicate_target(folder, target_stem, matches, files)
-                        if alternative:
-                            target_stem = alternative
-                            proposed = alternative + ".iso"
-                            moves = [(src, folder / (alternative + src.suffix.lower())) for src, _ in moves]
-                            status, reason = "REVIEW_DUPLICATE", "Target exists; duplicate suffix proposed for manual review"
+                        # Only a conflicting ISO proves that two ISO paths exist.
+                        # Never hash sidecars as substitutes for disc images.
+                        conflict_isos = [dst for src, dst in moves if src.suffix.lower() == ".iso"
+                                         and dst.exists() and dst != src]
+                        if conflict_isos:
+                            other = conflict_isos[0]
+                            if other.is_symlink() or not other.is_file():
+                                status, reason = "REVIEW", "Conflicting ISO is not a regular file"
+                            elif iso.stat().st_size == other.stat().st_size and sha256(iso) == sha256(other):
+                                old_name = "OLD_" + iso.name
+                                if (folder / old_name).exists():
+                                    status, reason = "REVIEW", "Identical ISO; OLD_ destination already exists"
+                                else:
+                                    status, reason = "REVIEW_IDENTICAL", "SHA256 identical to " + other.name + "; OLD_ proposed (not automatic)"
+                                    proposed = old_name
+                            else:
+                                alternative = duplicate_target(folder, target_stem, matches, files)
+                                if alternative:
+                                    proposed = alternative + ".iso"
+                                    status, reason = "REVIEW_DUPLICATE", "Different ISO SHA256 from " + other.name + "; duplicate name proposed"
+                                else:
+                                    status, reason = "REVIEW", "No safe duplicate name"
                         else:
-                            status, reason = "REVIEW", "No safe duplicate target"
+                            status, reason = "REVIEW_SIDECAR", "Only sidecar target occupied; ISO not duplicated"
                     elif any(dst.name.casefold() in lower_names and
                              dst.name.casefold() not in {src.name.casefold() for src, _ in moves}
                              for _, dst in moves):
@@ -255,7 +291,7 @@ def main():
             writer = csv.DictWriter(stream, fieldnames=FIELDS)
             writer.writeheader()
             writer.writerows(rows)
-    print(f"Audited {len(rows)} ISOs; {len(plans)} safe rename groups. ISO contents inspected only for missing disc IDs.")
+    print(f"Audited {len(rows)} ISOs; {len(plans)} safe rename groups. SHA256 computed only for conflicting ISOs; OLD_ proposals are review-only.")
     if args.command == "apply":
         if args.confirm != "RENAMEPS3" or not args.journal:
             parser.error("Apply requires --confirm RENAMEPS3 and --journal PATH")
