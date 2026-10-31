@@ -134,6 +134,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     reviewed = {
         "SLES-02017": (18622, "4x4 World Trophy / Test Drive: Off-Road 3"),
         "SCES-00245": (8746, "Motor Toon Grand Prix 2"),
+        "SLES-00314": (13442, "Monster Trucks / Thunder Truck Rally"),
         "SLES-04129": (19456, "Dance Europe / Dance:UK"),
         "SLES-11881": (20367, "Capcom Generations (Disc 2) (Chronicles of Arthur)"),
         "SLES-21881": (20367, "Capcom Generations (Disc 3) (The First Generation)"),
