@@ -858,6 +858,39 @@ PYPS3COUNT
     chmod 0600 "$dedup_report" "${dedup_report%.csv}-Files.csv" || return 1
     echo "PS3 dedup summary: $dedup_report"
     echo "PS3 per-file differences: ${dedup_report%.csv}-Files.csv"
+    local candidate_list delete_answer
+    candidate_list="$(sudo python3 - "$HERE" "$root" "$games_root" <<'PYPS3DELETE'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from ps3_dedup import removable_candidates
+for folder, iso in removable_candidates(Path(sys.argv[2]), Path(sys.argv[3])):
+    print(folder.name)
+PYPS3DELETE
+)" || return 1
+    if [[ -n "$candidate_list" ]]; then
+      echo '[VERIFIED] Extracted folders fully matching their ISOs (except PS3UPDAT.PUP):'
+      printf '%s\n' "$candidate_list"
+      read -rp 'Remove these verified redundant extracted folders? [y/N]: ' delete_answer
+      if [[ "$delete_answer" =~ ^[Yy]$ ]]; then
+        echo '[WARNING] This permanently removes the listed extracted folders, not their ISOs.'
+        read -rp 'Type DELETE VERIFIED to confirm permanent removal: ' delete_answer
+        if [[ "$delete_answer" == "DELETE VERIFIED" ]]; then
+          local delete_source delete_result=0
+          delete_source="$(retronas_cifs_source)" || return 1
+          sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+          mountpoint -q "$PILOT_ROOT" && { echo '[STOP] Writable mount already active'; return 1; }
+          sudo mount -t cifs "$delete_source" "$PILOT_ROOT" -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+          sudo python3 "$HERE/ps3_dedup.py" --iso-root "$PILOT_ROOT/roms/sony/playstation3/iso" --games-root "$PILOT_ROOT/roms/sony/playstation3/games" --remove-verified --confirm "DELETE VERIFIED" || delete_result=$?
+          sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active'; return 1; }
+          (( delete_result == 0 )) || return "$delete_result"
+        else
+          echo 'Deletion cancelled.'
+        fi
+      fi
+    else
+      echo '[OK] No extracted folders qualify for safe deduplication.'
+    fi
   fi
   if (( iso_count == 0 && folder_count == 0 )); then
     echo '[OK] All eligible PS3 names are already correct.'
