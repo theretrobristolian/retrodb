@@ -2,13 +2,13 @@
 
 **Very much a work in progress.** RetroDB is a personal, open-source companion application for managing and exploring a retro-game collection. It currently runs **standalone on a Debian 13 VM**, with the longer-term ambition of becoming an optional application that can run **alongside or on top of RetroNAS**.
 
-The starting focus is **original PlayStation (PS1) and PlayStation 2 (PS2)**. The goal is not to replace RetroNAS or a console's loader; it's to make a collection easier to **audit, identify, organise, repair where supported, and browse**.
+The starting focus is **original PlayStation (PS1), PlayStation 2 (PS2), and PlayStation 3 (PS3) collection management**. The goal is not to replace RetroNAS or a console's loader; it's to make a collection easier to **audit, identify, organise, repair where supported, and browse**.
 
 ## What it's for
 
 - **Audit ROM/disc-image libraries:** index files, identify serials and releases, check filenames and flag questionable or unmatched copies.
 - **Match RetroAchievements:** identify supported games and known-good hashes, and help spot versions that may need attention.
-- **Help repair and organise games:** support individually confirmed PS1 BIN/CUE and PS2 patching workflows, reversible `OLD_` backups, OPL-compatible naming and rename reports—without silently modifying a library.
+- **Help repair and organise games:** support individually confirmed PS1 BIN/CUE and PS2 patching workflows, reversible `OLD_` backups, OPL-compatible naming, PS3 ISO/extracted-folder rename previews, and rename reports—without silently modifying a library.
 - **Provide a web-based catalogue:** browse the games actually in your collection on a desktop, tablet or phone, with artwork, platform/region information, search and available game metadata.
 - **Bring metadata together:** enrich the collection using sources such as RetroAchievements and GameDB/IGDB while caching results responsibly.
 - **Connect related services:** optionally link RetroAchievements profiles and xeRAbora for supported real-hardware PS2 setups.
@@ -17,7 +17,7 @@ Eventually RetroDB could offer better release/disc auditing, collection curation
 
 ## Current state
 
-The application has a functioning FastAPI/PostgreSQL backend, a responsive read-only game-library web interface, PS1/PS2 indexing, RetroAchievements auditing and metadata/artwork enrichment. It also has optional helpers for PS1/PS2 patch verification and PS1 NAS deployment, OPL filenames, online-service catalogues and xeRAbora integration.
+The application has a functioning FastAPI/PostgreSQL backend, a responsive read-only game-library web interface, PS1/PS2 indexing, PS3 collection naming audits, RetroAchievements auditing and metadata/artwork enrichment. It also has optional helpers for PS1/PS2 patch verification and PS1 NAS deployment, OPL filenames, online-service catalogues and xeRAbora integration.
 
 **Expect rough edges.** This is an actively evolving personal project, not a supported production release. Some imports require manual review, regional identification is sometimes inferred from disc prefixes, and metadata such as exact player counts or peripherals is incomplete. No game ROMs or commercial artwork are included in this repository.
 
@@ -37,7 +37,9 @@ This deploys RetroDB; it **does not automatically update** the separate xeRAbora
 
 ## Auditing, patching and multi-disc names
 
-Run `retrodb` for the interactive terminal manager. **1) Audit games** scans the read-only RetroNAS collection and creates compatibility and naming reports. **2) Patch PS1 / PS2** selects one RetroAchievements game ID; compatible sources are verified before local patching. For PS1, the manager can then offer a separately confirmed writable NAS deployment that preserves the original CUE/BIN files under `OLD_` names and verifies the patched pair. PS2's older network deployment mechanism is not yet integrated into this new menu flow. **3) Rename games** previews and confirms paired PS1 BIN/CUE or OPL PS2 ISO renames. See the [RetroNAS procedures](docs/retronas-scanning.md) for the exact safety rules and limitations.
+Run `retrodb` for the interactive terminal manager. **1) Audit games** scans the read-only RetroNAS collection and creates compatibility and naming reports. **2) Patch PS1 / PS2** selects one RetroAchievements game ID; compatible sources are verified before local patching. For PS1, the manager can then offer a separately confirmed writable NAS deployment that preserves the original CUE/BIN files under `OLD_` names and verifies the patched pair. PS2's older network deployment mechanism is not yet integrated into this new menu flow. **3) Rename games** has separate PS1, PS2 and PS3 workflows. PS1 refreshes its GameDB cache and audits BIN/CUE pairs; PS2 refreshes its GameDB cache and rebuilds OPL ISO rename proposals from the current mounted collection; PS3 refreshes its own GameDB cache, previews ISO/sidecar and extracted-folder names, and offers a separate read-only extracted-versus-ISO SHA-256 comparison. See the [RetroNAS procedures](docs/retronas-scanning.md) for the exact safety rules and limitations.
+
+For PS3, the deduplication audit exports `~/retrodb-exports/RetroDB-PS3-Dedup.csv` and `RetroDB-PS3-Dedup-Files.csv`. The comparison reports byte-identical files, mismatches and unsupported/no-exact-ISO cases; it does not claim boot compatibility. A separately confirmed cleanup is currently limited to **Red Dead Redemption (BLES00680)** and **Undead Nightmare (BLES01179)** when all extracted game files match the corresponding ISO by SHA-256 and the sole ISO-only file is `PS3_UPDATE/PS3UPDAT.PUP`. Deletion requires `DELETE VERIFIED` and a fresh content recheck; all other extracted games are preserved.
 
 PS1 multi-disc titles display `(Disc N)` when supported by an explicitly reviewed disc serial or an existing filename label. RetroDB never determines disc order from alphabetical sorting; unrecognised, unlabelled discs still require review. Revision text is omitted from friendly display names; this does not alter the game's underlying data.
 
