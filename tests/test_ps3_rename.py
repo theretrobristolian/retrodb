@@ -68,7 +68,7 @@ class TestPS3Rename(unittest.TestCase):
             (root / "Metal Gear Solid 4 [BLES00246].iso").touch()
             rows, plans = audit(root, {"BLES00246": "Metal Gear Solid 4"})
             self.assertFalse(plans)
-            self.assertIn("REVIEW", {r["status"] for r in rows})
+            self.assertIn("REVIEW_DUPLICATE", {r["status"] for r in rows})
 
 if __name__ == "__main__":
     unittest.main()
