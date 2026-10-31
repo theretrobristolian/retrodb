@@ -134,6 +134,9 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     reviewed = {
         "SLES-02017": (18622, "4x4 World Trophy / Test Drive: Off-Road 3"),
         "SLES-04129": (19456, "Dance Europe / Dance:UK"),
+        "SLES-11881": (20367, "Capcom Generations (Disc 2) (Chronicles of Arthur)"),
+        "SLES-21881": (20367, "Capcom Generations (Disc 3) (The First Generation)"),
+        "SLES-31881": (20367, "Capcom Generations (Disc 4) (Blazing Guns)"),
     }
     serial = r.get("local_serial", "")
     if r.get("platform") == "Sony PlayStation" and r.get("status") == "unmatched":
@@ -144,9 +147,9 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                       "https://retroachievements.org/game/" + str(ra_id))
             r = {**r, "no_set_ra_game_id": ra_id, "ra_set_status": "NO_SET",
                  "identity_resolution": "reviewed-disc-id-no-set"}
-        elif serial == "SLUS-01470":
+        elif serial in {"SLUS-01470", "SLUS-01084"}:
             status = "NO SET"
-            reason = ("Aces of the Air: no confirmed RA game listing; "
+            reason = ("No confirmed RetroAchievements game listing for this PS1 release; "
                       "recheck if catalogue changes")
             r = {**r, "ra_set_status": "NOT_LISTED",
                  "identity_resolution": "manual-no-ra-listing"}
