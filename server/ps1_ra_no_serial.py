@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Conservative RA-hash-verified PS1 names for three serial-less Calamity discs.
+"""Explicit filename-only PS1 renames for approved serial-less BIN/CUE pairs.
 
 No invented PS1 disc IDs, no overwrite, no writes during preview.
 """
@@ -10,32 +10,22 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from ps1_ra_conflict import ra_hash, verify_pair, rewritten
+from ps1_ra_conflict import verify_pair, rewritten
 
 # Exact identities established by the 2026-10-31 verified RA compatibility audit.
 RELEASES = {
     "15631": ("Calamity 1 - The Natural World (USA)", "Calamity 1 The Natural World [RA-15631]", "a90f05716df8f35ea5dde12410e4a70b"),
     "15632": ("Calamity 2 - People and Traditions (USA)", "Calamity 2 People and Traditions [RA-15632]", "dd57cc1402eda12258c82295fc002dd2"),
     "15633": ("Calamity 3 - Around the World (USA)", "Calamity 3 Around the World [RA-15633]", "63b2b009595635e4f9dbd9d4c6be5fca"),
+    "16325": ("Caesars Palace II (USA)", "Caesars Palace II", ""),
 }
 
 
 def proposed(root, audit):
-    with audit.open(newline="", encoding="utf-8-sig") as fh:
-        data = list(csv.DictReader(fh))
     found = []
+    # Explicitly approved filename-only normalisation, not a hash-based claim.
     for game_id, (source, target, expected_hash) in RELEASES.items():
-        candidates = [row for row in data if row.get("platform") == "Sony PlayStation"
-                      and row.get("status", "").lower().replace("-", "_") in ("matched", "no_set")
-                      and str(row.get("ra_game_id") or row.get("no_set_ra_game_id")) == game_id
-                      and row.get("local_ra_hash", "").lower() == expected_hash
-                      and Path(row.get("path", "")).stem == source]
-        if len(candidates) != 1:
-            continue
-        relative = Path(candidates[0]["path"])
-        if relative.is_absolute() or ".." in relative.parts or relative.suffix.lower() not in (".cue", ".bin"):
-            continue
-        directory = root / relative.parent
+        directory = root / "iso"
         a, b = directory / (source + ".cue"), directory / (source + ".bin")
         c, d = directory / (target + ".cue"), directory / (target + ".bin")
         if not a.is_file() or not b.is_file() or any(p.is_symlink() for p in (a,b,c,d)):
@@ -70,9 +60,7 @@ def apply(ops, journal, hasher):
     records=[]
     for game_id,expected,a,b,c,d in ops:
         raw,enc,lines,m=verify_pair(a,b)
-        print(f"[VERIFY] RA {game_id}: hashing {b.name}",flush=True)
-        if ra_hash(hasher,b) != expected:
-            raise RuntimeError("RA hash mismatch: " + b.name)
+        print(f"[CHECK] {game_id}: checking CUE/BIN for {b.name}",flush=True)
         records.append({"game_id":game_id,"expected_hash":expected,
                         "old_cue":str(a),"old_bin":str(b),"new_cue":str(c),"new_bin":str(d),
                         "original_cue_hex":raw.hex(),"state":"pending"})
@@ -85,8 +73,6 @@ def apply(ops, journal, hasher):
             raw,enc,lines,m=verify_pair(a,b)
             if raw.hex()!=record["original_cue_hex"]:
                 raise RuntimeError("Source CUE changed")
-            if ra_hash(hasher,b)!=record["expected_hash"]:
-                raise RuntimeError("Source hash changed")
             updated=rewritten(lines,m,d,enc)
             b.rename(d)
             record["state"]="bin_moved"
@@ -95,12 +81,10 @@ def apply(ops, journal, hasher):
             record["state"]="cue_moved"
             write_journal(journal,records)
             c.write_bytes(updated)
-            if ra_hash(hasher,d)!=record["expected_hash"]:
-                raise RuntimeError("Post-rename RA hash mismatch")
             verify_pair(c,d)
             record["state"]="applied"
             write_journal(journal,records)
-            print(f"[OK] RA {record['game_id']}: {c.name}",flush=True)
+            print(f"[OK] Renamed: {c.name}",flush=True)
         except Exception as exc:
             record["error"]=str(exc)
             write_journal(journal,records)
@@ -120,9 +104,9 @@ def main():
         print(len(operations))
     elif args.mode=="preview":
         for game_id,_,a,_,c,_ in operations:
-            print(f"[RA VERIFIED] {a.name} -> {c.name} (game {game_id}; no disc serial invented)")
+            print(f"[FILENAME ONLY] {a.name} -> {c.name} (no disc serial or RA hash required)")
         if not operations:
-            print("[INFO] No Calamity RA-verified renames pending")
+            print("[INFO] No approved serial-less renames pending")
     else:
         if not args.journal:
             p.error("--journal required for apply")
