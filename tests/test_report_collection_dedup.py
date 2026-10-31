@@ -488,3 +488,58 @@ def test_max_power_racing_uk_is_c3_racing_with_active_ra_set():
     assert result[14] == "HAS_SET"
     assert "retroachievements.org/game/17911" in result[5]
     assert result[1] == "Max Power Racing [SLES-01694].cue"
+
+
+def test_power_diggerz_pal_is_power_shovel_with_active_set():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "iso/Power Diggerz [SLES-03388].cue",
+        "local_serial": "SLES-03388", "local_region": "Europe",
+        "gamedb_title": "Power Diggerz", "local_friendly_title": "",
+        "ra_set_status": "UNRESOLVED", "ra_game_id": "",
+        "recommended_ra_game_id": "", "recommended_ra_title": "",
+        "preferred_patch_url": "", "preferred_release_name": "",
+        "preferred_region": "", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[3] == "NO"
+    assert str(row[6]) == "18046"
+    assert row[14] == "HAS_SET"
+
+
+def test_mike_tyson_boxing_unlisted_not_no_set():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "iso/Mike Tyson Boxing [SLUS-01162].cue",
+        "local_serial": "SLUS-01162", "local_region": "USA",
+        "gamedb_title": "Mike Tyson Boxing", "local_friendly_title": "",
+        "ra_set_status": "UNRESOLVED", "ra_game_id": "",
+        "recommended_ra_game_id": "", "recommended_ra_title": "",
+        "preferred_patch_url": "", "preferred_release_name": "",
+        "preferred_region": "", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[3] == "NO SET"
+    assert row[14] == "NOT_LISTED"
+    assert not row[6]
+
+
+def test_championship_motocross_sequel_does_not_inherit_predecessor_ra_id():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "iso/Championship Motocross 2001 featuring Ricky Carmichael [SLUS-01230].cue",
+        "local_serial": "SLUS-01230", "local_region": "USA",
+        "gamedb_title": "Championship Motocross 2001 featuring Ricky Carmichael",
+        "local_friendly_title": "", "ra_set_status": "UNRESOLVED",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[3] == "UNKNOWN"
+    assert row[14] == "UNRESOLVED"
+    assert str(row[6]) != "17195"
+    assert "distinct" in row[5]
