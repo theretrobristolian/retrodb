@@ -37,6 +37,85 @@ def catalogue(path):
             found[ident] = value
     return found
 
+
+def internal_disc_id(path):
+    """Best-effort ISO9660 PARAM.SFO TITLE_ID / PS3_DISC.SFB scan, bounded reads."""
+    try:
+        with path.open("rb") as fh:
+            fh.seek(16 * 2048)
+            pvd = fh.read(2048)
+            if len(pvd) != 2048 or pvd[1:6] != b"CD001":
+                return "", "ISO9660 volume descriptor unavailable (possibly encrypted)"
+            def directory(record):
+                if len(record) < 34:
+                    return None
+                block = int.from_bytes(record[2:6], "little")
+                size = int.from_bytes(record[10:14], "little")
+                if not block or not 0 < size <= 16 * 1024 * 1024:
+                    return None
+                fh.seek(block * 2048)
+                return fh.read(size)
+            def entries(blob):
+                pos = 0
+                found = {}
+                while pos < len(blob):
+                    n = blob[pos]
+                    if n == 0:
+                        pos = (pos // 2048 + 1) * 2048
+                        continue
+                    if n < 34 or pos + n > len(blob):
+                        break
+                    entry = blob[pos:pos+n]
+                    ln = entry[32]
+                    label = entry[33:33+ln].decode("ascii", "ignore").split(";")[0].upper()
+                    found[label] = entry
+                    pos += n
+                return found
+            roots = entries(directory(pvd[156:190]) or b"")
+            game = roots.get("PS3_GAME")
+            if game:
+                inside = entries(directory(game) or b"")
+                sfo = inside.get("PARAM.SFO")
+                if sfo:
+                    blob = directory(sfo)
+                    if blob and blob[:4] == b"\x00PSF" and len(blob) >= 20:
+                        key_start = int.from_bytes(blob[8:12], "little")
+                        value_start = int.from_bytes(blob[12:16], "little")
+                        count = min(int.from_bytes(blob[16:20], "little"), 512)
+                        for i in range(count):
+                            entry = blob[20+i*16:36+i*16]
+                            if len(entry) < 16:
+                                break
+                            ko = int.from_bytes(entry[:2], "little")
+                            vo = int.from_bytes(entry[12:16], "little")
+                            key = blob[key_start+ko:key_start+ko+32].split(b"\0")[0]
+                            if key == b"TITLE_ID":
+                                candidate = blob[value_start+vo:value_start+vo+32].split(b"\0")[0].decode("ascii", "ignore")
+                                return (serial(candidate), "PARAM.SFO TITLE_ID") if serial(candidate) else ("", "Invalid PARAM.SFO TITLE_ID")
+            sfb = roots.get("PS3_DISC.SFB")
+            if sfb:
+                blob = directory(sfb) or b""
+                candidates = set(re.findall(rb"(?:BL|BC)[A-Z]{2}[-_ .]?\d{5}", blob, re.I))
+                ids = {serial(x.decode("ascii", "ignore")) for x in candidates}
+                if len(ids) == 1:
+                    return ids.pop(), "PS3_DISC.SFB"
+            return "", "No readable internal disc ID"
+    except (OSError, ValueError) as exc:
+        return "", f"Metadata unavailable: {type(exc).__name__}"
+
+def duplicate_target(folder, stem, sources, files):
+    """Reserve a case-insensitive unused duplicate basename for the whole sidecar group."""
+    occupied = {f.casefold() for f in files}
+    source_names = {p.casefold() for p in sources}
+    for number in range(1, 1000):
+        suffix = " - duplicate" if number == 1 else f" - duplicate {number}"
+        candidate = stem + suffix
+        destinations = [candidate + Path(name).suffix.lower() for name in sources]
+        if not any(dst.casefold() in occupied and dst.casefold() not in source_names
+                   for dst in destinations):
+            return candidate
+    return ""
+
 def audit(root, titles):
     rows, plans = [], []
     if not root.is_dir() or root.is_symlink():
@@ -51,7 +130,9 @@ def audit(root, titles):
             iso = folder / name
             if iso.suffix.lower() != ".iso" or iso.is_symlink() or not iso.is_file():
                 continue
-            ident = serial(iso.stem)
+            filename_id = serial(iso.stem)
+            internal_id, id_source = internal_disc_id(iso) if not filename_id else ("", "not checked")
+            ident = filename_id or internal_id
             title = titles.get(ident) if ident else None
             matches = [p for p in files if Path(p).stem.casefold() == iso.stem.casefold()
                        and Path(p).suffix.lower() in EXTENSIONS]
@@ -59,7 +140,9 @@ def audit(root, titles):
             if any(len(lower_names[x.casefold()]) > 1 for x in matches):
                 status, reason = "REVIEW", "Case-insensitive source collision"
             elif not ident:
-                status, reason = "REVIEW", "Missing disc ID; internal ISO ID not checked"
+                status, reason = "REVIEW", "Missing disc ID; " + id_source
+            elif not filename_id:
+                status, reason = "REVIEW", f"Internal disc ID recovered from {id_source}; verify before renaming"
             elif not title:
                 status, reason = "REVIEW", "Disc ID not found / ambiguous in GameDB"
             else:
@@ -82,7 +165,14 @@ def audit(root, titles):
                     elif len({str(dst).casefold() for _, dst in moves}) != len(moves):
                         status, reason = "REVIEW", "Duplicate proposed sidecars"
                     elif any(dst.exists() and dst != src for src, dst in moves):
-                        status, reason = "REVIEW", "Target exists"
+                        alternative = duplicate_target(folder, target_stem, matches, files)
+                        if alternative:
+                            target_stem = alternative
+                            proposed = alternative + ".iso"
+                            moves = [(src, folder / (alternative + src.suffix.lower())) for src, _ in moves]
+                            status, reason = "REVIEW_DUPLICATE", "Target exists; duplicate suffix proposed for manual review"
+                        else:
+                            status, reason = "REVIEW", "No safe duplicate target"
                     elif any(dst.name.casefold() in lower_names and
                              dst.name.casefold() not in {src.name.casefold() for src, _ in moves}
                              for _, dst in moves):
@@ -165,7 +255,7 @@ def main():
             writer = csv.DictWriter(stream, fieldnames=FIELDS)
             writer.writeheader()
             writer.writerows(rows)
-    print(f"Audited {len(rows)} ISOs; {len(plans)} safe rename groups. No ISO contents inspected.")
+    print(f"Audited {len(rows)} ISOs; {len(plans)} safe rename groups. ISO contents inspected only for missing disc IDs.")
     if args.command == "apply":
         if args.confirm != "RENAMEPS3" or not args.journal:
             parser.error("Apply requires --confirm RENAMEPS3 and --journal PATH")
