@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
-from ps3_rename import audit, catalogue, safe_title, audit_extracted, duplicate_target, internal_disc_id, apply, recover
+from ps3_rename import audit, catalogue, safe_title, audit_extracted, duplicate_target, internal_disc_id, apply, recover, rename_extracted
 
 class TestPS3Rename(unittest.TestCase):
     def test_grouped_sidecars_and_uppercase_iso(self):
@@ -28,9 +28,25 @@ class TestPS3Rename(unittest.TestCase):
             entry = root / "BCES00141-[LittleBigPlanet]"
             (entry / "PS3_GAME" / "USRDIR" / "gamedata").mkdir(parents=True)
             rows = audit_extracted(root)
-            self.assertEqual(rows[0]["status"], "SKIPPED_EXTRACTED")
+            self.assertEqual(rows[0]["status"], "EXTRACTED_REVIEW")
             self.assertEqual(rows[0]["disc_id"], "BCES00141")
             self.assertEqual(entry.name, "BCES00141-[LittleBigPlanet]")
+
+    def test_extracted_folder_title_correction_and_journal(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            extracted = root / "BLES01179-[Red Dead Redemption]"
+            (extracted / "PS3_GAME").mkdir(parents=True)
+            (extracted / "PS3_GAME" / "PARAM.SFO").write_bytes(b"keep original")
+            rows = audit_extracted(root, {"BLES01179": "Red Dead Redemption Undead Nightmare"})
+            self.assertEqual(rows[0]["status"], "EXTRACTED_RENAME_CANDIDATE")
+            self.assertEqual(rows[0]["proposed_iso"], "Red Dead Redemption Undead Nightmare [BLES01179] - extracted")
+            journal = root / "journal.json"
+            rename_extracted(rows, journal)
+            recover(journal)
+            destination = root / rows[0]["proposed_iso"]
+            self.assertTrue((destination / "PS3_GAME" / "PARAM.SFO").is_file())
+            self.assertFalse(extracted.exists())
 
     def test_duplicate_suffix_stays_review_only(self):
         with tempfile.TemporaryDirectory() as temp:
