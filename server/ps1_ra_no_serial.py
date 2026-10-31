@@ -26,7 +26,7 @@ def proposed(root, audit):
     found = []
     for game_id, (source, target, expected_hash) in RELEASES.items():
         candidates = [row for row in data if row.get("platform") == "Sony PlayStation"
-                      and row.get("status") == "matched"
+                      and row.get("status", "").lower().replace("-", "_") in ("matched", "no_set")
                       and str(row.get("ra_game_id") or row.get("no_set_ra_game_id")) == game_id
                       and row.get("local_ra_hash", "").lower() == expected_hash
                       and Path(row.get("path", "")).stem == source]
