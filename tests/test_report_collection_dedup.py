@@ -582,3 +582,43 @@ def test_monster_trucks_pal_is_thunder_truck_rally_no_set():
     assert str(row[6]) == "13442"
     assert row[0] == "Monster Trucks / Thunder Truck Rally"
     assert report.action_rows([row], "Sony PlayStation") == []
+
+
+def test_pro_racer_pal_regional_alias_ra_17187():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "iso/Pro Racer [SLES-03962].cue",
+        "local_serial": "SLES-03962", "local_region": "Europe",
+        "gamedb_title": "Pro Racer (Rev 1)", "local_friendly_title": "",
+        "ra_set_status": "UNRESOLVED", "ra_game_id": "",
+        "recommended_ra_game_id": "", "recommended_ra_title": "",
+        "preferred_patch_url": "", "preferred_release_name": "",
+        "preferred_region": "", "release_guidance": "",
+        "alternative_candidates": "Moto Racer [RA 13959]",
+    }
+    row = report.row_for(raw)
+    assert row[0] == "Pro Racer (Rev 1)"
+    assert row[3] == "NO"
+    assert str(row[6]) == "17187"
+    assert row[14] == "HAS_SET"
+
+
+def test_gt2_arcade_must_not_recommend_simulation_disc():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "iso/Gran Turismo 2 (Arcade Mode) [SCUS-94455].cue",
+        "local_serial": "SCUS-94455", "local_region": "USA",
+        "gamedb_title": "Gran Turismo 2", "local_friendly_title": "",
+        "ra_set_status": "HAS_SET", "ra_game_id": "",
+        "recommended_ra_game_id": 11278,
+        "recommended_ra_title": "Gran Turismo 2",
+        "preferred_patch_url": "",
+        "preferred_release_name": "Gran Turismo 2 (USA) (Simulation Mode) (Rev 2)",
+        "preferred_region": "USA", "release_guidance": "",
+        "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[0] == "Gran Turismo 2 (Arcade Mode)"
+    assert "Arcade Mode" in row[7]
+    assert "Simulation Mode" not in row[7]
+    assert "different disc" in row[5]
