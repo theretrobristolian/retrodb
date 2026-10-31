@@ -13,18 +13,18 @@ curl -fsS http://127.0.0.1:8000/health
 
 This updates the RetroDB application and its configured service. It does **not** replace a manually installed xeRAbora Linux binary or the PS2's OPL-RA ELF.
 
-## PS1 rename regression checks
+## Rename regression checks
 
-`server/build.sh` installs Debian's `python3-pytest` alongside other build prerequisites. The installed RetroDB application itself does **not** require pytest to run. After pulling source changes, validate the PS1 collision resolver before allowing a writable rename:
+`server/build.sh` installs Debian's `python3-pytest` alongside other build prerequisites. The installed RetroDB application itself does **not** require pytest to run. After pulling source changes, validate rename scripts before allowing a writable rename:
 
 ```bash
 cd ~/retrodb
-python3 -m py_compile server/ps1_ra_conflict.py server/ps1_rename.py server/report_ps1_audit.py
+python3 -m py_compile server/ps1_ra_conflict.py server/ps1_rename.py server/report_ps1_audit.py server/ps2_live_rename.py server/ps3_rename.py server/ps3_dedup.py
 bash -n server/manager.sh
-python3 -m pytest tests/test_ps1_verified_conflicts.py -q
+python3 -m pytest tests/test_ps1_verified_conflicts.py tests/test_ps3_rename.py tests/test_ps3_dedup.py -q
 ```
 
-For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENAMEPS1` confirmation. Verified RA alternatives take priority. When an existing canonical pair and another image share a verified game identity and the same internal disc serial, the canonical pair remains active and the extra pair is preserved as `OLD_`, even if their BIN files differ. The resolver compares live RA hashes against the audit before writing, retains a recovery journal, and refuses ambiguous disc, mode, or special-edition pairs. Without a reviewed RA identity, differing hashes still require manual review. An unmatched source is never preferred over an RA-matched canonical image. Collisions may be applied individually with journals; `OLD_` pairs must be reviewed before manual deletion. Never delete or rename a `SKIP - REVIEW` pair based only on RA hashes.
+For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENAME ALL` confirmation for eligible bulk renames. Verified RA alternatives take priority. When an existing canonical pair and another image share a verified game identity and the same internal disc serial, the canonical pair remains active and the extra pair is preserved as `OLD_`, even if their BIN files differ. The resolver compares live RA hashes against the audit before writing, retains a recovery journal, and refuses ambiguous disc, mode, or special-edition pairs. Without a reviewed RA identity, differing hashes still require manual review. An unmatched source is never preferred over an RA-matched canonical image. Collisions may be applied individually with journals; `OLD_` pairs must be reviewed before manual deletion. Never delete or rename a `SKIP - REVIEW` pair based only on RA hashes.
 
 ## Main tools
 
@@ -49,10 +49,21 @@ Run `retrodb` as your normal user:
 |---|---|
 | 1 | Full PS1/PS2 read-only audit and Excel/CSV export |
 | 2 | Patch one verified RA game ID locally; for PS1, offer confirmed deployment to RetroNAS with verified `OLD_` BIN/CUE backups |
-| 3 | PS1 paired BIN/CUE renames or PS2 OPL rename workflow, with preview and explicit confirmation |
+| 3 | PS1 BIN/CUE, PS2 OPL ISO and PS3 ISO/extracted-folder rename workflows, each with preview and explicit confirmation; optional PS3 read-only dedup audit |
 | 4 | More options: exports, diagnostics, maintenance and connection settings |
 
 The normal collection mount stays read-only. The confirmed PS1 deployment temporarily mounts the same share writable, validates the supplied patched CUE/BIN pair, copies and checksum-verifies `OLD_` backups, then publishes the verified patch. The PS2 legacy network deployment code still exists but is **not** part of the current menu-2 completion path. Check journals before retrying an interrupted write. Detailed instructions: [RetroNAS scanning](../docs/retronas-scanning.md).
+
+### PS3 rename and extracted-folder deduplication
+
+Under `retrodb → 3 → 3`, the PS3 workflow refreshes the cached PS3 GameDB catalogue and previews ISO/sidecar and extracted-folder filenames. Nothing is renamed without the separate `RENAME ALL` confirmation. An optional **read-only** check compares extracted game directories to matching disc-ID ISOs by file path, size and SHA-256. The process prints per-game and per-100-file progress and writes:
+
+- `~/retrodb-exports/RetroDB-PS3-Dedup.csv` — summary per extracted game.
+- `~/retrodb-exports/RetroDB-PS3-Dedup-Files.csv` — per-file differences, sizes and hashes.
+
+`NO_EXACT_ISO`, `DIFFERENT` and `INCONCLUSIVE` do **not** authorise deletion. Only the two explicitly approved Red Dead releases (`BLES00680`, `BLES01179`) can currently qualify for cleanup, and only when every extracted file matches the ISO contents byte-for-byte, with the **only** ISO-only path being `PS3_UPDATE/PS3UPDAT.PUP`. The script lists eligible folders, asks for removal approval, requires the exact phrase `DELETE VERIFIED`, and rehashes before deletion via a temporary writable RetroNAS mount. ISO files are preserved. This checks content equivalence, **not console boot behaviour**. A normal scan does not remove anything.
+
+PS2's `retrodb → 3 → 2` workflow now independently refreshes its **PS2-only** GameDB cache and rebuilds OPL rename proposals from the live collection before previewing them; it does not require a previous export.
 
 PS1 friendly titles show verified disc numbers, including the four Geppy-X discs; unknown disc numbering is not invented. Revision labels are omitted from friendly titles.
 
