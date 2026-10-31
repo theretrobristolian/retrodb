@@ -150,6 +150,20 @@ export_csv() {
     echo '[WARNING] PS1 folder unavailable; export will omit the PS1 file audit.'
     rm -f "$ps1_csv"
   fi
+  local ps3_csv="$HOME/retrodb-exports/RetroDB-PS3-Audit.csv"
+  local ps3_iso="$MOUNT/roms/sony/playstation3/iso"
+  local ps3_games="$MOUNT/roms/sony/playstation3/games"
+  local ps3_cache="/var/cache/retrodb/providers/gamedb/playstation-3.json"
+  if sudo test -d "$ps3_iso"; then
+    sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
+    sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-3 || return 1
+    ( umask 077; sudo python3 "$HERE/ps3_rename.py" audit --root "$ps3_iso" --games-root "$ps3_games" --catalogue "$ps3_cache" --output "$ps3_csv" ) || return 1
+    sudo chown "$(id -un):$(id -gn)" "$ps3_csv" || return 1
+    chmod 0600 "$ps3_csv" || return 1
+  else
+    echo '[WARNING] PS3 ISO directory unavailable; export will omit PS3 inventory.'
+    rm -f "$ps3_csv"
+  fi
   local prep_arg="-"
   if sudo -n test -f "$prepare" 2>/dev/null || sudo test -f "$prepare"; then
     sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$prepare" "$prepared_copy" || return 1
@@ -157,11 +171,10 @@ export_csv() {
   else
     echo '[INFO] Patch preparation unavailable; verified patch evidence omitted.'
   fi
-  if [[ -f "$ps1_csv" ]]; then
-    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_csv" ) || return 1
-  else
-    ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" ) || return 1
-  fi
+  local ps1_arg="-" ps3_arg="-"
+  [[ -f "$ps1_csv" ]] && ps1_arg="$ps1_csv"
+  [[ -f "$ps3_csv" ]] && ps3_arg="$ps3_csv"
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
