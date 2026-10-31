@@ -148,7 +148,7 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                       "https://retroachievements.org/game/" + str(ra_id))
             r = {**r, "no_set_ra_game_id": ra_id, "ra_set_status": "NO_SET",
                  "identity_resolution": "reviewed-disc-id-no-set"}
-        elif serial in {"SLUS-01470", "SLUS-01084", "SLUS-01162"}:
+        elif serial in {"SLUS-01470", "SLUS-01084", "SLUS-01162", "SLES-01178"}:
             status = "NO SET"
             reason = ("No confirmed RetroAchievements game listing for this PS1 release; "
                       "recheck if catalogue changes")
