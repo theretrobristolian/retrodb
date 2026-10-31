@@ -2,10 +2,10 @@
 from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import os
 from pathlib import Path
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 from retrodb.models import CollectionSource, LibraryItem, Platform
@@ -93,7 +93,16 @@ def scan_retronas(session: Session, root: Path) -> ScanSummary:
         summaries.append(summary)
         platform = session.scalar(select(Platform).where(Platform.slug == platform_slug))
         if platform is None:
-            raise LibraryScanError(f"Platform is missing from the database: {platform_slug}")
+            if platform_slug != "playstation-3":
+                raise LibraryScanError(f"Platform is missing from the database: {platform_slug}")
+            # Initial schema seeded PS1 and PS2 with explicit IDs. Assign the
+            # next free ID, without relying on the database sequence position.
+            next_id = (session.scalar(select(func.max(Platform.id))) or 0) + 1
+            platform = Platform(id=next_id, slug="playstation-3",
+                                name="PlayStation 3", manufacturer="Sony",
+                                generation=7, release_date=date(2006, 11, 11))
+            session.add(platform)
+            session.flush()
         if not summary.exists:
             continue
         for directory, directory_names, filenames in os.walk(scan_root, followlinks=False):
