@@ -447,3 +447,23 @@ def test_capcom_generations_multidisc_no_set_and_championship_bass_unlisted():
     assert bass[14] == "NOT_LISTED"
     assert not bass[6]
     assert report.action_rows([bass], "Sony PlayStation") == []
+
+
+def test_motor_toon_grand_prix_2_pal_is_ra_8746_no_set():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Motor Toon Grand Prix 2 [SCES-00245].cue",
+        "local_serial": "SCES-00245", "local_region": "Europe",
+        "gamedb_title": "Motor Toon Grand Prix 2", "local_friendly_title": "",
+        "ra_set_status": "UNRESOLVED", "ra_game_id": "",
+        "recommended_ra_game_id": "", "recommended_ra_title": "",
+        "no_set_ra_game_id": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[0] == "Motor Toon Grand Prix 2"
+    assert row[3] == "NO SET"
+    assert str(row[6]) == "8746"
+    assert row[14] == "NO_SET"
+    assert report.action_rows([row], "Sony PlayStation") == []
