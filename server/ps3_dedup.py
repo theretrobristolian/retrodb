@@ -19,7 +19,7 @@ class UnsupportedISO(Exception):
 
 
 def iso_index(path):
-    """Map ISO9660 file paths to (extent byte offset, length). Fail closed."""
+    """ISO9660 file map: each value is a list of (byte offset, length) extents."""
     with path.open("rb") as handle:
         handle.seek(16 * BLOCK)
         pvd = handle.read(BLOCK)
@@ -28,22 +28,29 @@ def iso_index(path):
         total = path.stat().st_size
         seen = set()
         records = {}
+
+        def extent(record):
+            offset = int.from_bytes(record[2:6], "little") * BLOCK
+            length = int.from_bytes(record[10:14], "little")
+            if offset > total or length > total - offset:
+                raise UnsupportedISO("File extent exceeds ISO boundaries")
+            return offset, length
+
         def walk(entry, prefix="", depth=0):
             if depth > 40:
                 raise UnsupportedISO("Excessive ISO directory depth")
-            extent = int.from_bytes(entry[2:6], "little")
-            size = int.from_bytes(entry[10:14], "little")
-            offset = extent * BLOCK
-            if size > 256 * 1024 * 1024 or offset + size > total:
-                raise UnsupportedISO("Invalid ISO directory extent")
+            offset, size = extent(entry)
+            if size > 256 * 1024 * 1024:
+                raise UnsupportedISO("Oversized ISO directory")
             if (offset, size) in seen:
-                raise UnsupportedISO("Cyclic or duplicated ISO directory extent")
+                raise UnsupportedISO("Cyclic or repeated ISO directory extent")
             seen.add((offset, size))
             handle.seek(offset)
             data = handle.read(size)
             if len(data) != size:
                 raise UnsupportedISO("Short ISO directory read")
             position = 0
+            pending = None
             while position < len(data):
                 length = data[position]
                 if length == 0:
@@ -54,7 +61,9 @@ def iso_index(path):
                 record = data[position:position+length]
                 position += length
                 n = record[32]
-                if n in (0, 1) and record[33] in (0, 1):
+                if not n or 33 + n > length:
+                    raise UnsupportedISO("Malformed filename in ISO directory")
+                if n == 1 and record[33] in (0, 1):
                     continue
                 try:
                     filename = record[33:33+n].decode("ascii")
@@ -64,21 +73,45 @@ def iso_index(path):
                 if not filename or filename in (".", "..") or "/" in filename or "\\" in filename:
                     raise UnsupportedISO("Unsafe ISO9660 filename")
                 key = (prefix + filename).casefold()
-                if key in records:
-                    raise UnsupportedISO("Colliding ISO9660 filenames")
                 is_dir = bool(record[25] & 2)
+                segment = extent(record)
+                continuation = bool(record[25] & 0x80)
+                if pending is not None and pending != key:
+                    raise UnsupportedISO("Interrupted multi-extent file chain")
                 if is_dir:
+                    if pending is not None or continuation or key in records:
+                        raise UnsupportedISO("Invalid ISO directory or multi-extent chain")
                     walk(record, prefix + filename + "/", depth + 1)
                 else:
-                    file_offset = int.from_bytes(record[2:6], "little") * BLOCK
-                    file_size = int.from_bytes(record[10:14], "little")
-                    if file_offset + file_size > total or record[25] & 0x80:
-                        raise UnsupportedISO("File extent invalid or multi-extent unsupported")
-                    records[key] = (file_offset, file_size)
+                    if key in records and pending != key:
+                        raise UnsupportedISO("Colliding ISO9660 filenames")
+                    records.setdefault(key, []).append(segment)
+                    pending = key if continuation else None
+            if pending is not None:
+                raise UnsupportedISO("Unterminated multi-extent file chain")
+
         walk(pvd[156:190])
     if not records:
         raise UnsupportedISO("No ISO files indexed")
     return records
+
+
+def iso_size(extents):
+    return sum(length for _, length in extents)
+
+
+def iso_digest(handle, extents):
+    digest = hashlib.sha256()
+    for offset, length in extents:
+        handle.seek(offset)
+        remaining = length
+        while remaining:
+            data = handle.read(min(CHUNK, remaining))
+            if not data:
+                raise OSError("Unexpected end of ISO")
+            digest.update(data)
+            remaining -= len(data)
+    return digest.hexdigest()
 
 
 def extracted_index(folder):
@@ -119,40 +152,58 @@ def extent_digest(handle, offset, size):
     return digest.digest()
 
 
-def compare(folder, iso):
+def compare_details(folder, iso):
+    details = []
     try:
         sources = extracted_index(folder)
         targets = iso_index(iso)
-        missing_in_iso = sorted(sources.keys() - targets.keys())
-        missing_in_folder = sorted(targets.keys() - sources.keys())
-        shared = sorted(sources.keys() & targets.keys())
-        differing = []
         matching = 0
         with iso.open("rb") as handle:
-            for name in shared:
-                offset, size = targets[name]
-                if sources[name].stat().st_size != size:
-                    differing.append(name)
-                    continue
-                if file_digest(sources[name]) == extent_digest(handle, offset, size):
-                    matching += 1
+            for name in sorted(sources.keys() | targets.keys()):
+                source = sources.get(name)
+                extents = targets.get(name)
+                file_size = source.stat().st_size if source is not None else None
+                image_size = iso_size(extents) if extents is not None else None
+                record = dict(path=name, status="", extracted_size=file_size, iso_size=image_size,
+                              extracted_sha256="", iso_sha256="")
+                if source is None:
+                    record["status"] = "ISO_ONLY"
+                elif extents is None:
+                    record["status"] = "EXTRACTED_ONLY"
+                elif file_size != image_size:
+                    record["status"] = "SIZE_DIFFERENT"
                 else:
-                    differing.append(name)
-        if not differing and not missing_in_iso and not missing_in_folder:
-            return ("BYTE_IDENTICAL", len(targets), len(sources), matching, 0,
-                    "All paths, sizes and SHA-256 contents match; format compatibility still untested")
-        details = []
-        for label, values in (("different", differing), ("extracted-only", missing_in_iso),
-                              ("ISO-only", missing_in_folder)):
-            if values:
-                details.append(f"{label}={len(values)} (e.g. {values[0]})")
-        return ("DIFFERENT", len(targets), len(sources), matching,
-                len(differing) + len(missing_in_iso) + len(missing_in_folder), "; ".join(details))
+                    src_hash = file_digest(source).hex()
+                    img_hash = iso_digest(handle, extents)
+                    if src_hash == img_hash:
+                        matching += 1
+                        continue
+                    record.update(status="HASH_DIFFERENT", extracted_sha256=src_hash, iso_sha256=img_hash)
+                # Hash any smaller unshared or size-different files too; these are useful for diagnosis.
+                if source is not None and not record["extracted_sha256"]:
+                    record["extracted_sha256"] = file_digest(source).hex()
+                if extents is not None and not record["iso_sha256"]:
+                    record["iso_sha256"] = iso_digest(handle, extents)
+                details.append(record)
+        if not details:
+            summary = ("BYTE_IDENTICAL", len(targets), len(sources), matching, 0,
+                       "All paths, sizes and SHA-256 contents match; format compatibility still untested")
+        else:
+            counts = {kind: sum(r["status"] == kind for r in details) for kind in
+                      ("ISO_ONLY", "EXTRACTED_ONLY", "SIZE_DIFFERENT", "HASH_DIFFERENT")}
+            summary = ("DIFFERENT", len(targets), len(sources), matching, len(details),
+                       ", ".join(f"{key}={value}" for key, value in counts.items() if value))
+        return summary, details
     except (UnsupportedISO, OSError, ValueError) as exc:
-        return ("INCONCLUSIVE", 0, 0, 0, 0, str(exc))
+        return ("INCONCLUSIVE", 0, 0, 0, 0, str(exc)), details
 
 
-def audit(iso_root, games_root):
+def compare(folder, iso):
+    """Backward-compatible summary used by existing tests."""
+    return compare_details(folder, iso)[0]
+
+
+def audit(iso_root, games_root, details=None):
     if not iso_root.is_dir() or not games_root.is_dir():
         raise ValueError("PS3 ISO and extracted roots must exist")
     by_id = {}
@@ -175,7 +226,10 @@ def audit(iso_root, games_root):
             row.update(status="INCONCLUSIVE", reason="Multiple ISOs with this disc ID")
         else:
             iso = choices[0]
-            status, iso_n, extracted_n, matched, changed, reason = compare(folder, iso)
+            (status, iso_n, extracted_n, matched, changed, reason), differences = compare_details(folder, iso)
+            if details is not None:
+                for difference in differences:
+                    details.append({"disc_id": disc, "extracted": str(folder), "iso": str(iso), **difference})
             row.update(status=status, iso=str(iso), iso_files=iso_n,
                        extracted_files=extracted_n, matching_files=matched,
                        different_files=changed, reason=reason)
@@ -189,7 +243,8 @@ def main():
     parser.add_argument("--games-root", type=Path, required=True)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    rows = audit(args.iso_root, args.games_root)
+    differences = []
+    rows = audit(args.iso_root, args.games_root, differences)
     for row in rows:
         print(f'{row["status"]:15} {Path(row["extracted"]).name} | {Path(row["iso"]).name if row["iso"] else "(no exact ISO)"} | '
               f'{row["matching_files"]}/{row["extracted_files"]} matched | {row["reason"]}')
@@ -200,6 +255,13 @@ def main():
             writer.writeheader()
             writer.writerows(rows)
         print(f"CSV: {args.output}")
+        detail_path = args.output.with_name(args.output.stem + "-Files.csv")
+        with detail_path.open("w", newline="", encoding="utf-8") as stream:
+            columns = ("disc_id", "extracted", "iso", "path", "status", "extracted_size", "iso_size", "extracted_sha256", "iso_sha256")
+            writer = csv.DictWriter(stream, fieldnames=columns)
+            writer.writeheader()
+            writer.writerows(differences)
+        print(f"File differences: {detail_path} ({len(differences)} entries)")
     print(f"Checked {len(rows)} extracted folders (read-only); no deletion or rename performed.")
 
 
