@@ -106,3 +106,35 @@ def test_full_difference_details(tmp_path):
     assert {record["status"] for record in files} == {"HASH_DIFFERENT", "EXTRACTED_ONLY"}
     assert all(record["extracted_sha256"] for record in files)
     assert files[0]["path"] == "extra.dat"
+
+def test_cleanup_only_approved_ids_and_only_firmware_difference(tmp_path):
+    from ps3_dedup import removable_candidates
+    root = tmp_path / "iso"
+    games = tmp_path / "games"
+    root.mkdir()
+    games.mkdir()
+    # Synthetic minimal ISO with two files and a nested firmware directory.
+    for disc in ("BLES00680", "BLES12345"):
+        folder = games / f"Red Dead Redemption [{disc}] - extracted"
+        folder.mkdir()
+        (folder / "FILE.BIN").write_bytes(b"abc")
+        iso = root / f"Red Dead Redemption [{disc}].iso"
+        buf = bytearray(30 * 2048)
+        pvd = bytearray(2048)
+        pvd[0] = 1
+        pvd[1:6] = b"CD001"
+        rd = entry(bytes([0]), 20, 2048, True)
+        pvd[156:156+len(rd)] = rd
+        buf[16*2048:17*2048] = pvd
+        regular = entry("FILE.BIN;1", 21, 3)
+        firmware_dir = entry("PS3_UPDATE", 22, 2048, True)
+        buf[20*2048:20*2048+len(regular)] = regular
+        buf[20*2048+len(regular):20*2048+len(regular)+len(firmware_dir)] = firmware_dir
+        firmware = entry("PS3UPDAT.PUP;1", 23, 3)
+        buf[22*2048:22*2048+len(firmware)] = firmware
+        buf[21*2048:21*2048+3] = b"abc"
+        buf[23*2048:23*2048+3] = b"pup"
+        iso.write_bytes(buf)
+    choices = removable_candidates(root, games)
+    assert len(choices) == 1
+    assert "BLES00680" in choices[0][0].name
