@@ -82,7 +82,7 @@ input{min-width:240px;flex:1}.btn{padding:11px 16px;border:1px solid #466ca4;bac
 .switch-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:22px}
 .switch-actions button{flex:1;min-width:110px}
 .switch-actions button:disabled{opacity:.6;cursor:wait}
-.game-title-row{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:center;gap:16px;margin-bottom:18px;min-width:0;max-width:100%}.game-title-row:not(:has(.game-ra-icon)){grid-template-columns:minmax(0,1fr)}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.game-art-grid figcaption{margin-top:9px;text-align:center}
+.game-title-row{display:grid;grid-template-columns:82px minmax(0,1fr);align-items:center;gap:16px;margin-bottom:18px;min-width:0;max-width:100%}.game-title-row:not(:has(.game-ra-icon)){grid-template-columns:minmax(0,1fr)}.game-title-row h1{margin-bottom:4px}.game-ra-icon{width:82px;height:82px;object-fit:contain;border-radius:14px;background:#101a2c}.game-art-grid{display:flex;align-items:center;justify-content:center;min-height:140px;max-width:100%;overflow:hidden}.game-art-card{text-align:center;min-width:0;overflow:hidden}.game-art-card h2{text-align:center;margin:0 0 16px}.game-art-grid figure{margin:0;flex:1 1 145px;max-width:270px}.game-cover{display:block;width:auto;max-width:100%;height:auto;max-height:280px;margin:0 auto;object-fit:contain;border-radius:10px;background:#0b1020}.ps3-list-cover{float:left;width:38px;height:52px;object-fit:contain;margin:0 10px 3px 0;border-radius:4px}.game-art-grid figcaption{margin-top:9px;text-align:center}
 .detail{columns:2;column-gap:18px;min-width:0;max-width:100%}.detail>section{break-inside:avoid;display:inline-block;width:100%;vertical-align:top;margin-bottom:18px}.detail .card{min-height:0;min-width:0;max-width:100%}.detail .card p{overflow-wrap:anywhere;word-break:normal}.detail-field{min-width:0;max-width:100%;overflow-wrap:anywhere;white-space:normal}.game-title-row>div{min-width:0;max-width:100%;overflow-wrap:anywhere}.game-title-row .muted{margin:8px 0 0}.game-title-row h1,.crumb{overflow-wrap:anywhere}
 .feature-strip{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px}.feature-chip{display:inline-flex;align-items:center;gap:7px;background:#1c2c45;border:1px solid #395476;border-radius:9px;padding:9px 12px;font-size:13px;color:#d6e5ff}.feature-chip .feature-glyph{font-size:18px;color:#91c5ff}.info-pairs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 16px}.info-pairs .detail-field{margin:5px 0;padding:7px 0}.meta-source{font-size:12px;margin:8px 0 0}.technical-details summary{cursor:pointer;font-weight:600;color:#bfd2f1;padding:9px 0}.technical-details .detail-field{margin:9px 0}.detail .card{padding:20px}.detail .card h2{margin:0 0 14px}header nav form{margin:0}
 @media(max-width:760px){
@@ -239,13 +239,14 @@ REV_MARKER = re.compile(r"\\s*\\((?:Rev(?:ision)?\\s*\\d+(?:\\.\\d+)?|v\\d+(?:\\
 
 def name(item: LibraryItem, slug: str | None = None) -> str:
     filename = PurePosixPath(item.filename).stem
-    title = ((item.ra_game_title or "").strip()
-             or gamedb_title(item, slug)
-             or filename)
+    title = (filename if slug == "playstation-3" else
+             ((item.ra_game_title or "").strip() or gamedb_title(item, slug) or filename))
     if slug == "playstation" and disc_id(item) == "SLES-03120":
         title = "3, 2, 1, Smurf! My First Racing Game"
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
+    if slug == "playstation-3":
+        title = PS3_SERIAL_RE.sub("", title)
     title = re.sub(r"\\[\\s*\\]|\\{\\s*\\}|\\(\\s*\\)", " ", title)
     title = title.replace("_", " ")
     title = REV_MARKER.sub("", title)
@@ -291,7 +292,8 @@ def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
 def platform_counts(db: Session):
     stmt = (select(Platform, func.count(LibraryItem.id))
             .outerjoin(LibraryItem, (LibraryItem.platform_id == Platform.id) & (LibraryItem.is_missing.is_(False))
-                       & or_(Platform.slug != "playstation", func.lower(LibraryItem.extension) != "bin"))
+                       & or_(Platform.slug != "playstation",
+                             func.lower(LibraryItem.extension).in_(("cue", "chd", "pbp", "iso", "cso", "zso"))))
             .group_by(Platform.id).order_by(Platform.name))
     return db.execute(stmt).all()
 
@@ -406,7 +408,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     ps1_id = db.scalar(select(Platform.id).where(Platform.slug == "playstation"))
     if ps1_id is not None:
         stmt = stmt.where(or_(LibraryItem.platform_id != ps1_id,
-                              func.lower(LibraryItem.extension) != "bin"))
+                              func.lower(LibraryItem.extension).in_(("cue", "chd", "pbp", "iso", "cso", "zso"))))
     if platform:
         stmt = stmt.where(LibraryItem.platform_id == platform.id)
     elif console_filter:
@@ -416,8 +418,8 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         stmt = stmt.where(LibraryItem.platform_id.in_(
             select(Platform.id).where(Platform.generation == int(generation))))
     if region:
-        prefixes = {"usa": ("SLUS", "SCUS"), "europe": ("SLES", "SCES"),
-                    "japan": ("SLPS", "SLPM", "SCPS")}.get(region, ())
+        prefixes = {"usa": ("SLUS", "SCUS", "BLUS", "BCUS"), "europe": ("SLES", "SCES", "BLES", "BCES"),
+                    "japan": ("SLPS", "SLPM", "SCPS", "BLJS", "BLJM", "BCJS", "BCJM")}.get(region, ())
         if prefixes:
             stmt = stmt.where(or_(*(LibraryItem.filename.ilike(f"%{prefix}%")
                                     for prefix in prefixes)))
@@ -483,7 +485,9 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         supported = ra_supported(item, item_slug(item))
         region_flag, region_label = disc_region(disc, item_slug(item))
         badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
-        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{escape(name(item, item_slug(item)))}</a></td>
+        thumbnail = (f'<img class="ps3-list-cover" src="/art/ps3/{item.id}" alt="" '
+                     'loading="lazy" onerror="this.hidden=true">' if item_slug(item) == "playstation-3" else "")
+        rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
 <td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
 {'' if ps3_only else '<td data-column="ra"><span class="ra-icon '+('yes' if supported else 'no')+'" role="img" aria-label="'+escape(badge,quote=True)+'" title="'+escape(badge,quote=True)+'">🏆</span></td>'}
@@ -635,11 +639,16 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     icon_url = art_location(item.ra_game_id, "icon", meta.get("ImageIcon"))
     box_url = art_location(item.ra_game_id, "box", meta.get("ImageBoxArt"))
     psbbn_url = "/art/psbbn/" + serial if serial else None
+    ps3_cover_url = f"/art/ps3/{item.id}" if platform and platform.slug == "playstation-3" else None
     header_icon = (f'<img class="game-ra-icon" src="{escape(icon_url, quote=True)}" '
                    'alt="RetroAchievements game icon" loading="lazy">' if icon_url else '')
     # Choose only one cover, with RA preferred and PSBBN on load failure.
     # The fallback is never displayed alongside the preferred artwork.
-    if box_url:
+    if ps3_cover_url:
+        artwork = (f'<img class="game-cover" src="{ps3_cover_url}" alt="PS3 game artwork" loading="lazy" '
+                   'onerror="this.hidden=true;this.nextElementSibling.hidden=false">'
+                   '<p class="muted" hidden>No accompanying PNG artwork is available for this release.</p>')
+    elif box_url:
         fallback_attr = (f' data-fallback="{escape(psbbn_url, quote=True)}"'
                          if psbbn_url else "")
         artwork = (f'<img class="game-cover" src="{escape(box_url, quote=True)}"'
@@ -717,7 +726,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                   f'{extra_info}<p class="muted meta-source">Sources: RetroAchievements' + (' + GameDB/IGDB' if extra else '') + '</p></section>')
     collection_panel = (f'<section class="card"><h2>Your copy</h2>'
                         f'{detail("Console", platform.name if platform else None)}'
-                        f'{detail("Disc ID", serial)}'
+                        f'{detail("Disc ID", disc_id(item))}'
                         f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
     online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
     ra_link = (f'<a href="https://retroachievements.org/game/{int(item.ra_game_id)}"'
