@@ -238,6 +238,8 @@ def audit(iso_root, games_root, details=None):
 
 
 FIRMWARE_PATH = "ps3_update/ps3updat.pup"
+# Scope of this explicitly approved clean-up, not a general-purpose game deleter.
+APPROVED_DISC_IDS = {"BLES00680", "BLES01179"}
 
 
 def removable_candidates(iso_root, games_root):
@@ -245,7 +247,8 @@ def removable_candidates(iso_root, games_root):
     rows = audit(iso_root, games_root)
     candidates = []
     for row in rows:
-        if row["status"] != "DIFFERENT" or row["different_files"] != 1 or not row["iso"]:
+        if (row["disc_id"] not in APPROVED_DISC_IDS or row["status"] != "DIFFERENT"
+                or row["different_files"] != 1 or not row["iso"]):
             continue
         folder, iso = Path(row["extracted"]), Path(row["iso"])
         summary, details = compare_details(folder, iso)
