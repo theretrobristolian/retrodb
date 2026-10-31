@@ -247,6 +247,7 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     title = SERIAL_RE.sub("", title)
     if slug == "playstation-3":
         title = PS3_SERIAL_RE.sub("", title)
+        title = re.sub(r"\[\s*\]", "", title)
     title = re.sub(r"\\[\\s*\\]|\\{\\s*\\}|\\(\\s*\\)", " ", title)
     title = title.replace("_", " ")
     title = REV_MARKER.sub("", title)
@@ -485,8 +486,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         supported = ra_supported(item, item_slug(item))
         region_flag, region_label = disc_region(disc, item_slug(item))
         badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
-        thumbnail = (f'<img class="ps3-list-cover" src="/art/ps3/{item.id}" alt="" '
-                     'loading="lazy" onerror="this.hidden=true">' if item_slug(item) == "playstation-3" else "")
+        thumbnail = ""
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
 <td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
@@ -645,9 +645,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     # Choose only one cover, with RA preferred and PSBBN on load failure.
     # The fallback is never displayed alongside the preferred artwork.
     if ps3_cover_url:
-        artwork = (f'<img class="game-cover" src="{ps3_cover_url}" alt="PS3 game artwork" loading="lazy" '
-                   'onerror="this.hidden=true;this.nextElementSibling.hidden=false">'
-                   '<p class="muted" hidden>No accompanying PNG artwork is available for this release.</p>')
+        artwork = '<p class="muted">Cover art will be available once verified artwork is cached.</p>'
     elif box_url:
         fallback_attr = (f' data-fallback="{escape(psbbn_url, quote=True)}"'
                          if psbbn_url else "")
