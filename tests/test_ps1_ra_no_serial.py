@@ -12,7 +12,7 @@ def test_three_matched_calamity_pairs_are_proposed(tmp_path):
     for game_id,(source,target,digest) in RELEASES.items():
         (folder/(source+".bin")).write_bytes(b"test")
         (folder/(source+".cue")).write_text('FILE "'+source+'.bin" BINARY\n  TRACK 01 MODE2/2352\n',encoding="utf-8")
-        rows.append({"platform":"Sony PlayStation","status":"matched","ra_game_id":game_id,
+        rows.append({"platform":"Sony PlayStation","status":"no_set","ra_game_id":game_id,
                      "local_ra_hash":digest,"path":"iso/"+source+".cue"})
     with audit.open("w",newline="") as h:
         writer=csv.DictWriter(h,fieldnames=list(rows[0]))
