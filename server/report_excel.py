@@ -168,11 +168,12 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
             and r.get("local_serial") == "SCUS-94455"
             and r.get("status") == "unmatched"):
         title = "Gran Turismo 2 (Arcade Mode)"
-        if "simulation" in str(release).casefold():
-            release = "Gran Turismo 2 (Arcade Mode) — matching RA-supported revision required"
-            reason = ("Arcade Mode disc is not RA hash-verified; the listed "
-                      "Simulation Mode Rev 2 release is a different disc "
-                      "and cannot replace the Arcade Mode disc.")
+        release = "Gran Turismo 2 (USA) (Arcade Mode) (Rev 1)"
+        reason = ("Current Arcade Mode disc has not matched an accepted RA "
+                  "hash. Supported Arcade Rev 1 hash: "
+                  "fb87d46db9130276f28f804ec0dcd6a1. "
+                  "Simulation Rev 2 and patched Combined Disc are separate "
+                  "supported variants, not interchangeable replacements.")
     # Reviewed crosswalk fallback also supports previously exported raw audits.
     if r.get("platform") == "Sony PlayStation" and r.get("status") == "unmatched":
         if r.get("local_serial") == "SLES-00054":
