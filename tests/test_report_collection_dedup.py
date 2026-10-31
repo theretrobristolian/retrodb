@@ -562,3 +562,23 @@ def test_phat_air_extreme_snowboarding_is_reviewed_unlisted():
     assert row[14] == "NOT_LISTED"
     assert not row[6]
     assert report.action_rows([row], "Sony PlayStation") == []
+
+
+def test_monster_trucks_pal_is_thunder_truck_rally_no_set():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "roms/sony/playstation1/iso/Monster Trucks [SLES-00314].cue",
+        "local_serial": "SLES-00314", "local_region": "Europe",
+        "gamedb_title": "Monster Trucks", "local_friendly_title": "",
+        "ra_set_status": "UNRESOLVED", "ra_game_id": "",
+        "recommended_ra_game_id": "", "recommended_ra_title": "",
+        "no_set_ra_game_id": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "Monster Racer [RA 29303; 0.741]",
+    }
+    row = report.row_for(raw)
+    assert row[3] == "NO SET"
+    assert row[14] == "NO_SET"
+    assert str(row[6]) == "13442"
+    assert row[0] == "Monster Trucks / Thunder Truck Rally"
+    assert report.action_rows([row], "Sony PlayStation") == []
