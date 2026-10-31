@@ -73,7 +73,13 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
     patch_state = ('VERIFIED' if verified_output else 'READY' if patchable else
                    'AVAILABLE' if patch else 'NONE')
     patch_status = 'YES' if patchable else 'NO'
-    if (r.get('platform') == 'Sony PlayStation' and
+    if (r.get("platform") == "Sony PlayStation"
+            and r.get("status") == "unmatched"
+            and r.get("local_serial") in {"SCUS-94480", "SLUS-90021"}):
+        status, reason = ("OTHER SOFTWARE",
+                          "Promotional/demo software; do not infer retail-game "
+                          "achievement compatibility from the title.")
+    elif (r.get('platform') == 'Sony PlayStation' and
             '240ptest' in Path(r['path']).stem.casefold().replace(' ', '').replace('-', '').replace('_', '')):
         status, reason = 'OTHER SOFTWARE', 'Homebrew video calibration utility; achievements are not expected and no RA action is required'
     elif yes: status, reason = 'YES', 'Verified RA hash; ready to play'
