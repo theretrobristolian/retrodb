@@ -167,6 +167,16 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
                  "recommended_ra_title": "X-COM: UFO Defense",
                  "ra_set_status": "HAS_SET",
                  "identity_resolution": "reviewed-disc-id"}
+        elif r.get("local_serial") == "SLES-03962":
+            title = "Pro Racer (Rev 1)"
+            status = "NO"
+            reason = ("European Pro Racer is Racing (PS1), RA game 17187. "
+                      "This copy has not matched an accepted RetroAchievements "
+                      "hash. https://retroachievements.org/game/17187")
+            r = {**r, "recommended_ra_game_id": 17187,
+                 "recommended_ra_title": "Racing",
+                 "ra_set_status": "HAS_SET",
+                 "identity_resolution": "reviewed-regional-title"}
         elif r.get("local_serial") == "SLES-03388":
             title = "Power Diggerz"
             status = "NO"
