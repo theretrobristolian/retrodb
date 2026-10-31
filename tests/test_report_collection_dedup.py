@@ -543,3 +543,22 @@ def test_championship_motocross_sequel_does_not_inherit_predecessor_ra_id():
     assert row[14] == "UNRESOLVED"
     assert str(row[6]) != "17195"
     assert "distinct" in row[5]
+
+
+def test_phat_air_extreme_snowboarding_is_reviewed_unlisted():
+    raw = {
+        "platform": "Sony PlayStation", "status": "unmatched",
+        "path": "iso/Phat Air Extreme Snowboarding [SLES-01178].cue",
+        "local_serial": "SLES-01178", "local_region": "Europe",
+        "gamedb_title": "Phat Air: Extreme Snowboarding",
+        "local_friendly_title": "", "ra_set_status": "UNRESOLVED",
+        "ra_game_id": "", "recommended_ra_game_id": "",
+        "recommended_ra_title": "", "preferred_patch_url": "",
+        "preferred_release_name": "", "preferred_region": "",
+        "release_guidance": "", "alternative_candidates": "",
+    }
+    row = report.row_for(raw)
+    assert row[3] == "NO SET"
+    assert row[14] == "NOT_LISTED"
+    assert not row[6]
+    assert report.action_rows([row], "Sony PlayStation") == []
