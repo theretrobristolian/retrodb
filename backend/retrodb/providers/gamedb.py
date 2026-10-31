@@ -12,14 +12,20 @@ from urllib.request import Request, urlopen
 SOURCES = {
     "playstation-2": ("PS2", "https://github.com/niemasd/GameDB-PS2/releases/latest/download/PS2.titles.json"),
     "playstation": ("PSX", "https://github.com/niemasd/GameDB-PSX/releases/latest/download/PSX.titles.json"),
+    "playstation-3": ("PS3", "https://github.com/niemasd/GameDB-PS3/releases/latest/download/PS3.titles.json"),
 }
 CACHE_DAYS = 180
 MAX_BYTES = 5 * 1024 * 1024
 SERIAL = re.compile(r"^([A-Z]{4})[-_. ]?(\d{3})[-_. ]?(\d{2})$", re.I)
+PS3_SERIAL = re.compile(r"^((?:BL|BC)[A-Z]{2})[-_. ]?(\d{5})$", re.I)
 
 
 def normalise_serial(value: str) -> str:
-    match = SERIAL.fullmatch(str(value).strip())
+    value = str(value).strip()
+    ps3 = PS3_SERIAL.fullmatch(value)
+    if ps3:
+        return ps3[1].upper() + ps3[2]
+    match = SERIAL.fullmatch(value)
     return f"{match[1].upper()}-{match[2]}{match[3]}" if match else ""
 
 
