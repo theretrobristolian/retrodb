@@ -5,7 +5,8 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 # background updates: clean main, trusted origin and fast-forward only.
 auto_update_ps3_audit_rename() {
   local command="${1:-preview}"
-  local root="$MOUNT/roms/sony/playstation3"
+  local root="$MOUNT/roms/sony/playstation3/iso"
+  local games_root="$MOUNT/roms/sony/playstation3/games"
   local cache="/var/cache/retrodb/providers/gamedb/playstation-3.json"
   local report="$HOME/retrodb-exports/RetroDB-PS3-Audit.csv"
   mount_ready || return 1
@@ -18,9 +19,9 @@ auto_update_ps3_audit_rename() {
     read -rp 'Type RENAMEPS3 to apply all eligible PS3 ISO/sidecar renames: ' answer
     [[ "$answer" == RENAMEPS3 ]] || { echo 'Cancelled'; return 0; }
     journal="$HOME/retrodb-exports/ps3-rename-journals/ps3-rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
-    sudo python3 "$HERE/ps3_rename.py" apply --root "$root" --catalogue "$cache" --output "$report" --journal "$journal" --confirm RENAMEPS3 || return 1
+    sudo python3 "$HERE/ps3_rename.py" apply --root "$root" --catalogue "$cache" --games-root "$games_root" --output "$report" --journal "$journal" --confirm RENAMEPS3 || return 1
   else
-    sudo python3 "$HERE/ps3_rename.py" preview --root "$root" --catalogue "$cache" --output "$report" || return 1
+    sudo python3 "$HERE/ps3_rename.py" preview --root "$root" --catalogue "$cache" --games-root "$games_root" --output "$report" || return 1
   fi
   sudo chown "$(id -un):$(id -gn)" "$report" || return 1
   chmod 0600 "$report" || return 1
