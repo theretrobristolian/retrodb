@@ -718,6 +718,7 @@ def match_collection(
                 reviewed_ps1 = {"SCES-01000": 14865,  # Kula World (Europe) = Roll Away (USA)
                                  "SLES-00054": 13493,  # X-Com: Enemy Unknown = X-COM: UFO Defense
                                   "SLES-01694": 17911,  # Max Power Racing = C3 Racing (UK edition)
+                                  "SLES-03388": 18046,  # Power Diggerz (PAL) = Power Shovel
                                   "SLES-03889": 13918,  # Capcom vs. SNK Millennium Fight 2000 Pro (Europe)
                                   "SLPS-02430": 11243,  # Chrono Trigger Japan => Final Fantasy Chronicles USA
                                   "SCES-01706": 11305, "SCES-00242": 5332, "SLUS-00893": 11357,
@@ -819,7 +820,7 @@ def match_collection(
                         confidence += "-metadata-unavailable"
 
             manually_unlisted = (
-                (slug == "playstation" and serial in {"SLUS-01470", "SLUS-01084"} and item.ra_match_status == "unmatched" and not recommendation and not no_set_game)
+                (slug == "playstation" and serial in {"SLUS-01470", "SLUS-01084", "SLUS-01162"} and item.ra_match_status == "unmatched" and not recommendation and not no_set_game)
                 or (slug == "playstation-2"
                 and serial in reviewed_no_listing
                 and item.ra_match_status == "unmatched"
