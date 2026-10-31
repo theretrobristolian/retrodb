@@ -424,7 +424,9 @@ PYJ
   sudo python3 "$HERE/ps1_rename.py" preview --csv "$csv" --root "$MOUNT/roms/sony/playstation1" || return 1
   echo "[CHECK] RA-verified name conflicts (preview only):"
   sudo python3 "$HERE/ps1_ra_conflict.py" preview --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT" --ps1-audit "$csv" || return 1
-  local eligible conflict_count
+  echo "[CHECK] RA hash-verified PS1 titles without conventional disc serials:"
+  sudo python3 "$HERE/ps1_ra_no_serial.py" preview --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT" || return 1
+  local eligible conflict_count serialless_count
   eligible="$(sudo python3 - "$HERE" "$csv" "$MOUNT/roms/sony/playstation1" <<'PYCOUNT'
 import sys
 from pathlib import Path
@@ -435,11 +437,12 @@ print(len(parse(SimpleNamespace(csv=Path(sys.argv[2]), root=Path(sys.argv[3]), l
 PYCOUNT
 )" || return 1
   conflict_count="$(sudo python3 "$HERE/ps1_ra_conflict.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT" --ps1-audit "$csv")" || return 1
-  if [[ "$eligible" == 0 && "$conflict_count" == 0 ]]; then
+  serialless_count="$(sudo python3 "$HERE/ps1_ra_no_serial.py" count --root "$MOUNT/roms/sony/playstation1" --audit "$EXPORT")" || return 1
+  if [[ "$eligible" == 0 && "$conflict_count" == 0 && "$serialless_count" == 0 ]]; then
     echo '[OK] No eligible PS1 renames remain; nothing changed and no journal created.'
     return 0
   fi
-  echo '[BULK] Eligible PS1 renames and explicitly previewed RA-confirmed collision resolutions will be applied.'
+  echo '[BULK] Eligible PS1 renames, reviewed RA collisions and verified serial-less Calamity titles will be applied.'
   read -rp 'Type RENAME ALL to rename eligible pairs: ' answer
   [[ "$answer" == "RENAME ALL" ]] || { echo 'Cancelled'; return 0; }
   source="$(retronas_cifs_source)" || return 1
@@ -497,6 +500,14 @@ PYCONF
     python3 "$HERE/ps1_rename.py" apply --csv "$csv" --root "$PILOT_ROOT/roms/sony/playstation1" --journal "$journal" || result=$?
   fi
 
+  if [[ "$result" -eq 0 && "$serialless_count" != 0 ]]; then
+    local ra_journal="$journal_dir/ps1-rename-ra-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+    sudo python3 "$HERE/ps1_ra_no_serial.py" apply --root "$PILOT_ROOT/roms/sony/playstation1" --audit "$EXPORT" --journal "$ra_journal" || result=$?
+    if [[ -f "$ra_journal" ]]; then
+      sudo chown "$(id -un):$(id -gn)" "$ra_journal" || result=1
+      echo "RA-verified PS1 rename journal: $ra_journal"
+    fi
+  fi
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount remains active!'; return 1; }
   [[ -n "$journal" && -f "$journal" ]] && echo "PS1 rename journal: $journal"
   [[ "$result" -eq 0 ]] || echo '[WARNING] Incomplete operation: inspect journal before any rerun.'
