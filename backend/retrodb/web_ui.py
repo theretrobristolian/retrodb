@@ -722,11 +722,16 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
         extra_info += detail("Genres", ", ".join(extra["genres"][:4]))
     meta_panel = ('<div class="info-pairs">' + release + '</div>') if release else '<p class="muted">No release metadata available yet.</p>'
     online_panel = online_details(online) if online else ""
+    source_label = ("Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
+                    else "RetroAchievements")
+    if extra:
+        source_label += " + GameDB/IGDB"
     game_panel = (f'<section class="card"><h2>Game information</h2>{meta_panel}'
-                  f'{extra_info}<p class="muted meta-source">Sources: RetroAchievements' + (' + GameDB/IGDB' if extra else '') + '</p></section>')
+                  f'{extra_info}<p class="muted meta-source">Sources: {escape(source_label)}</p></section>')
     collection_panel = (f'<section class="card"><h2>Your copy</h2>'
                         f'{detail("Console", platform.name if platform else None)}'
                         f'{detail("Disc ID", disc_id(item))}'
+                        f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug == "playstation-3" else ""}'
                         f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
     online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
     ra_link = (f'<a href="https://retroachievements.org/game/{int(item.ra_game_id)}"'
