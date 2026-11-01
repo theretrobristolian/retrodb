@@ -12,10 +12,40 @@ from pathlib import Path
 from retrodb.cli import load_environment_file
 from retrodb.providers.retroachievements import RetroAchievementsClient, RetroAchievementsError
 
-# Importing the companion standalone script is intentional: both use one parser.
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "server"))
-from report_psp_audit import candidate_releases
+import json
+import re
+
+def release_region(description):
+    for region,pattern in (("USA",r"\\b(?:USA|US|North America)\\b"),
+                           ("Europe",r"\\b(?:Europe|EUR|PAL)\\b"),
+                           ("Japan",r"\\b(?:Japan|JPN)\\b")):
+        if re.search(pattern,str(description),re.I):
+            return region
+    return ""
+
+def registered_alternatives(game_id, local_serial, detail_dir):
+    path=detail_dir / f"{game_id}.json"
+    if not path.is_file():
+        return "", "Registered RA release descriptions unavailable"
+    try:
+        payload=json.loads(path.read_text(encoding="utf-8"))
+    except (OSError,ValueError):
+        return "", "Registered RA release descriptions unavailable"
+    regions=set()
+    for item in payload if isinstance(payload,list) else []:
+        if isinstance(item,dict):
+            description=item.get("Name") or item.get("Description") or item.get("Title") or ""
+            region=release_region(description)
+            if region:
+                regions.add(region)
+    prefix=local_serial[:4].upper()
+    local=("USA" if prefix in ("ULUS","UCUS","NPUH","NPUG")
+           else "Europe" if prefix in ("ULES","UCES","NPEH","NPEG")
+           else "Japan" if prefix in ("ULJS","ULJM","UCJS","UCJM","NPJH","NPJQ") else "")
+    alternatives=sorted(regions - {local})
+    if alternatives:
+        return "/".join(alternatives),"Registered RA hash describes this alternative region; verify exact revision and hash"
+    return "", "RA achievement set exists; no confirmed alternative region in registered hash descriptions"
 
 
 def enrich(csv_path, cache_dir, env_file):
@@ -46,10 +76,10 @@ def enrich(csv_path, cache_dir, env_file):
         game_id=row.get("suggested_ra_game_id","")
         if row.get("ra_status")!="UNMATCHED" or game_id not in candidates or game_id in failures:
             continue
-        ra_game={"ID":game_id,"Title":row.get("title",""),"NumAchievements":1}
-        updated=candidate_releases(row.get("title",""),row.get("disc_id",""),[ra_game],detail_dir)
-        row.update(suggested_ra_game_id=updated[0],suggested_release=updated[1],
-                   suggested_region=updated[2],suggestion_evidence=updated[3])
+        region,evidence=registered_alternatives(game_id,row.get("disc_id",""),detail_dir)
+        title=row.get("suggested_release","").split(", ",1)[0] or row.get("title","")
+        row.update(suggested_release=title + (", "+region if region else ""),
+                   suggested_region=region,suggestion_evidence=evidence)
     fd,name=tempfile.mkstemp(prefix=".psp-release-",suffix=".csv",dir=csv_path.parent)
     try:
         with os.fdopen(fd,"w",newline="",encoding="utf-8") as stream:
