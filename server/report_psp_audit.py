@@ -10,7 +10,8 @@ from pathlib import Path
 
 FIELDS = ["status","disc_id","title","filename","relative_path","size_bytes",
           "identity_source","ra_status","reason","filename_disc_id","internal_disc_id",
-          "internal_title","ra_hash","ra_game_id","ra_game_title"]
+          "internal_title","ra_hash","ra_game_id","ra_game_title",
+          "suggested_ra_game_id","suggested_release","suggested_region","suggestion_evidence"]
 ID = re.compile(r"(?<![A-Z0-9])([A-Z]{4})[-_. ]?(\d{5})(?![A-Z0-9])", re.I)
 HASH = re.compile(r"\b([0-9a-fA-F]{32})\b")
 
@@ -107,6 +108,63 @@ def load_ra(path):
                 lookup[value.casefold()]=(str(game.get("ID","")),str(game.get("Title","")),int(game.get("NumAchievements") or 0))
     return lookup
 
+def comparable_title(value):
+    """Conservative comparison: strip region/revision suffixes, not sequel numbers."""
+    import unicodedata
+    value = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode("ascii")
+    value = re.sub(r"\\s*\\((?:USA|Europe|Japan|World|Asia|Korea|Australia|Rev(?:ision)?[^)]*)\\)", " ", value, flags=re.I)
+    value = re.sub(r"[^a-z0-9]+", " ", value.casefold())
+    return " ".join(value.split())
+
+def release_region(text):
+    """Only report regions explicitly present in a registered hash's description."""
+    for region, pattern in (("USA", r"\\b(?:USA|US|North America)\\b"),
+                            ("Europe", r"\\b(?:Europe|EUR|PAL)\\b"),
+                            ("Japan", r"\\b(?:Japan|JPN)\\b")):
+        if re.search(pattern, str(text), re.I):
+            return region
+    return ""
+
+def candidate_releases(title, local_serial, ra_games, hashes_dir=None):
+    """Find unique RA titles; list regions only when registered hash metadata supports them."""
+    if not ra_games:
+        return "", "", "", ""
+    key=comparable_title(title)
+    matches=[g for g in ra_games if isinstance(g,dict) and comparable_title(g.get("Title",""))==key
+             and int(g.get("NumAchievements") or 0)>0]
+    if len(matches)!=1:
+        return "", "", "", "Ambiguous RA title" if len(matches)>1 else ""
+    game=matches[0]
+    game_id=str(game.get("ID",""))
+    if not game_id.isdecimal():
+        return "", "", "", ""
+    registered=[]
+    if hashes_dir:
+        detail=Path(hashes_dir)/f"{game_id}.json"
+        if detail.is_file():
+            try:
+                records=json.loads(detail.read_text(encoding="utf-8"))
+                if isinstance(records,list):
+                    for entry in records:
+                        if not isinstance(entry,dict):
+                            continue
+                        description=str(entry.get("Name") or entry.get("Description") or entry.get("Title") or "")
+                        region=release_region(description)
+                        if region:
+                            registered.append((region, description))
+            except (OSError,ValueError):
+                pass
+    regions=sorted(set(region for region,_ in registered))
+    local_prefix=str(local_serial)[:4]
+    local_region=("USA" if local_prefix in ("ULUS","UCUS","NPUH","NPUG")
+                  else "Europe" if local_prefix in ("ULES","UCES","NPEH","NPEG")
+                  else "Japan" if local_prefix in ("ULJS","ULJM","UCJS","UCJM","NPJH","NPJQ")
+                  else "")
+    alternatives=[region for region in regions if region!=local_region]
+    if alternatives:
+        return game_id,str(game.get("Title",""))+", "+"/".join(alternatives),"/".join(alternatives),"Registered RA hash descriptions identify alternative region; verify exact revision/hash before replacing"
+    return game_id,str(game.get("Title","")),"","RA set exists for this title; supported region/revision not confirmed from hash metadata"
+
 def verify_hash(hasher,iso,lookup):
     try:
         result=subprocess.run([str(hasher),"41",str(iso)],capture_output=True,text=True,timeout=180,check=False)
@@ -122,7 +180,7 @@ def verify_hash(hasher,iso,lookup):
     gameid,title,count=lookup[value]
     return ("SUPPORTED" if count>0 else "NO_SET"),value,gameid,title,""
 
-def inventory(root,titles,hasher=None,ra_lookup=None):
+def inventory(root,titles,hasher=None,ra_lookup=None,ra_games=None,hashes_dir=None):
     if not root.is_dir():
         raise FileNotFoundError(f"PSP collection unavailable: {root}")
     rows=[]
@@ -151,12 +209,15 @@ def inventory(root,titles,hasher=None,ra_lookup=None):
             ra_status,ra_hash,ra_id,ra_title,error=verify_hash(hasher,path,ra_lookup)
             if error:
                 issues.append(error)
+        suggestion=candidate_releases(title,chosen,ra_games,hashes_dir) if ra_status=="UNMATCHED" and status=="VERIFIED_INTERNAL" else ("","","","")
         rows.append(dict(status=status,disc_id=chosen or "UNKNOWN",title=title,
             filename=path.name,relative_path=path.relative_to(root).as_posix(),
             size_bytes=path.stat().st_size,identity_source="PARAM.SFO/GameDB" if internal else "filename (unverified)",
             ra_status=ra_status,reason="; ".join(issues),filename_disc_id=named,
             internal_disc_id=internal,internal_title=internal_title,
-            ra_hash=ra_hash,ra_game_id=ra_id,ra_game_title=ra_title))
+            ra_hash=ra_hash,ra_game_id=ra_id,ra_game_title=ra_title,
+            suggested_ra_game_id=suggestion[0],suggested_release=suggestion[1],
+            suggested_region=suggestion[2],suggestion_evidence=suggestion[3]))
     return rows
 
 def main():
@@ -166,13 +227,15 @@ def main():
     parser.add_argument("--output",type=Path,required=True)
     parser.add_argument("--ra-catalogue",type=Path)
     parser.add_argument("--hasher",type=Path)
+    parser.add_argument("--ra-hashes-dir",type=Path)
     args=parser.parse_args()
     if bool(args.ra_catalogue)!=bool(args.hasher):
         parser.error("--ra-catalogue and --hasher must be supplied together")
     catalogue=json.loads(args.catalogue.read_text(encoding="utf-8"))
     titles={normalise(k):v for k,v in catalogue.items() if normalise(k) and isinstance(v,str)}
     lookup=load_ra(args.ra_catalogue)
-    rows=inventory(args.root,titles,args.hasher,lookup)
+    games=json.loads(args.ra_catalogue.read_text(encoding="utf-8")) if args.ra_catalogue else None
+    rows=inventory(args.root,titles,args.hasher,lookup,games,args.ra_hashes_dir)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     with args.output.open("w",newline="",encoding="utf-8") as handle:
         writer=csv.DictWriter(handle,fieldnames=FIELDS)
