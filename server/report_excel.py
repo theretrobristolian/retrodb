@@ -625,13 +625,15 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                 r.get('status', ''), r.get('ra_hash', ''),
                 r.get('ra_game_title', ''), r.get('internal_title', ''),
                 r.get('filename_disc_id', ''), r.get('relative_path', ''),
-                suggested_id, suggested_region, suggestion_evidence
+                suggested_id, suggested_region, suggestion_evidence,
+                r.get('suggested_ra_hash', '')
             ]
             psp_rows.append(row)
         psp_rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold()))
         psp_extra = ['Identity verification', 'RA disc hash', 'RA game title',
                      'Internal PSP title', 'Filename disc ID', 'Relative path',
-                     'Suggested RA game ID', 'Suggested region', 'Suggestion evidence']
+                     'Suggested RA game ID', 'Suggested region', 'Suggestion evidence',
+                     'Suggested RA hash']
         sheets.append(('PlayStation Portable', [COLS + psp_extra] + psp_rows))
         effective=len(psp_records)
         compatible=psp_counts['SUPPORTED']
