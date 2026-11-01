@@ -581,13 +581,17 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
             psp_records = list(csv.DictReader(handle))
         psp_fields = ['Status', 'Disc ID', 'Game title', 'ISO filename',
                       'Relative path', 'Size (bytes)', 'Identity source',
-                      'RA compatibility', 'Notes']
+                      'RA compatibility', 'Notes', 'Filename Disc ID',
+                      'Internal Disc ID', 'Internal PSP title',
+                      'RA hash', 'RA game ID', 'RA game title']
         psp_keys = ['status', 'disc_id', 'title', 'filename',
                     'relative_path', 'size_bytes', 'identity_source',
-                    'ra_status', 'reason']
+                    'ra_status', 'reason', 'filename_disc_id',
+                    'internal_disc_id', 'internal_title',
+                    'ra_hash', 'ra_game_id', 'ra_game_title']
         sheets.append(('PlayStation Portable',
                        [psp_fields] + [[r.get(k, '') for k in psp_keys] for r in psp_records]))
-        print(f'[INFO] PSP ISO inventory: {len(psp_records)} files integrated (RA not checked).')
+        print(f'[INFO] PSP ISO inventory: {len(psp_records)} files integrated (PSP RA hash verification included).')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
