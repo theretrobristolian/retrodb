@@ -172,7 +172,16 @@ export_csv() {
     sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-portable || return 1
     sudo chown retrodb:retrodb "$psp_cache" || return 1
     ( umask 077; sudo python3 "$HERE/report_psp_audit.py" --root "$psp_root" --catalogue "$psp_cache" --ra-catalogue /var/cache/retrodb/providers/retroachievements/playstation-portable.json --hasher /opt/retrodb-tools/RAHasher --output "$psp_csv" ) || return 1
-    sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.psp_sync --audit "$psp_csv" || return 1
+    # PostgreSQL uses peer authentication: synchronize as the retrodb OS user.
+    # The export lives in david's private home directory, so stage a restricted
+    # copy in the app-owned reports directory for the service account.
+    local psp_sync_csv="/var/lib/retrodb/reports/psp-audit-portal-sync.csv"
+    sudo install -d -m 0750 -o retrodb -g retrodb /var/lib/retrodb/reports || return 1
+    sudo install -m 0600 -o retrodb -g retrodb "$psp_csv" "$psp_sync_csv" || return 1
+    local psp_sync_result=0
+    sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.psp_sync --audit "$psp_sync_csv" || psp_sync_result=$?
+    sudo rm -f "$psp_sync_csv"
+    [[ "$psp_sync_result" -eq 0 ]] || return "$psp_sync_result"
     sudo chown "$(id -un):$(id -gn)" "$psp_csv" || return 1
     chmod 0600 "$psp_csv" || return 1
   else
