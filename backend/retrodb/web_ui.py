@@ -215,7 +215,7 @@ def _gamedb_titles(slug: str, mtime_ns: int) -> dict[str, str]:
         return {}
 
 def gamedb_title(item: LibraryItem, slug: str | None) -> str:
-    if slug not in ("playstation", "playstation-2", "playstation-3"):
+    if slug not in ("playstation", "playstation-2", "playstation-3", "playstation-portable"):
         return ""
     serial = disc_id(item)
     if not serial:
