@@ -16,9 +16,9 @@ import json
 import re
 
 def release_region(description):
-    for region,pattern in (("USA",r"\\b(?:USA|US|North America)\\b"),
-                           ("Europe",r"\\b(?:Europe|EUR|PAL)\\b"),
-                           ("Japan",r"\\b(?:Japan|JPN)\\b")):
+    for region,pattern in (("USA",r"\b(?:USA|US|North America)\b"),
+                           ("Europe",r"\b(?:Europe|EUR|PAL)\b"),
+                           ("Japan",r"\b(?:Japan|JPN)\b")):
         if re.search(pattern,str(description),re.I):
             return region
     return ""
