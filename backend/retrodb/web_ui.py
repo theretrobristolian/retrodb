@@ -160,10 +160,14 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
 <a href="https://github.com/theretrobristolian/retrodb" target="_blank" rel="noopener">GitHub ↗</a><form method="post" action="/logout" style="display:inline"><input type="hidden" name="csrf_token" value="{signout_csrf}"><button type="submit" style="border:0;color:#afc0da;background:transparent;cursor:pointer">{logout_label}</button></form></nav></div></header>
 <main>{body}</main><div class="mobile-nav" aria-label="Mobile navigation">{mobile_nav}</div><script>(function(){{const p=location.pathname;document.querySelectorAll(".mobile-nav a").forEach(a=>{{const h=a.getAttribute("href");if((h==="/"&&p==="/")||(h==="/library"&&(p.startsWith("/library")||p.startsWith("/game/")))||(h!=="/"&&h!=="/library"&&p.startsWith(h)))a.setAttribute("aria-current","page");}})}})();</script></body></html>""")
 
+PSP_SERIAL_RE = re.compile(r"(?<![A-Z0-9])([A-Z]{4})[-_ .]?(\d{5})(?![A-Z0-9])", re.I)
 PS3_SERIAL_RE = re.compile(r"(?<![A-Z0-9])((?:BL|BC)[A-Z]{2})[-_ .]?(\d{5})(?![A-Z0-9])", re.I)
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
 def disc_id(item: LibraryItem) -> str:
+    if item.platform and item.platform.slug == "playstation-portable":
+        match_psp = PSP_SERIAL_RE.search(item.filename)
+        return (match_psp.group(1) + match_psp.group(2)).upper() if match_psp else ""
     match3 = PS3_SERIAL_RE.search(item.filename)
     if match3:
         return (match3.group(1) + match3.group(2)).upper()
@@ -179,6 +183,15 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
         if prefix in ("BLES", "BCES"):
             return ("🇪🇺", "Europe / PAL (disc prefix)")
         if prefix in ("BLJS", "BLJM", "BCJS", "BCJM"):
+            return ("🇯🇵", "Japan (disc prefix)")
+        return ("🌐", "Region unknown")
+    if platform_slug == "playstation-portable" and serial:
+        prefix = serial[:4].upper()
+        if prefix in ("ULUS", "UCUS", "NPUH", "NPUG"):
+            return ("🇺🇸", "North America (disc prefix)")
+        if prefix in ("ULES", "UCES", "NPEH", "NPEG"):
+            return ("🇪🇺", "Europe (disc prefix)")
+        if prefix in ("ULJS", "ULJM", "UCJS", "UCJM", "NPJH", "NPJQ"):
             return ("🇯🇵", "Japan (disc prefix)")
         return ("🌐", "Region unknown")
     if platform_slug not in ("playstation", "playstation-2") or not serial:
@@ -245,6 +258,9 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
         title = "3, 2, 1, Smurf! My First Racing Game"
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
+    if slug == "playstation-portable":
+        title = PSP_SERIAL_RE.sub("", title)
+        title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|\d{4,8})\s*\]", "", title, flags=re.I)
     if slug == "playstation-3":
         title = PS3_SERIAL_RE.sub("", title)
         title = re.sub(r"\[\s*\]", "", title)
@@ -281,7 +297,7 @@ def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
     """Gold means a matched disc AND a confirmed nonempty achievement set."""
     if not item.ra_game_id or (item.ra_match_status or "").lower() != "matched":
         return False
-    if slug not in ("playstation", "playstation-2"):
+    if slug not in ("playstation", "playstation-2", "playstation-portable"):
         return False
     path = RA_CACHE / f"{slug}.json"
     try:
