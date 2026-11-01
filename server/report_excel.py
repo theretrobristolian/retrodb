@@ -596,33 +596,42 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
             compatible = ('YES' if supported else 'NO SET' if status == 'NO_SET'
                           else 'ERROR' if status == 'HASH_ERROR' else 'UNKNOWN')
             game_id = r.get('ra_game_id', '')
+            suggested_id = r.get('suggested_ra_game_id', '')
+            suggested_release = r.get('suggested_release', '')
+            suggested_region = r.get('suggested_region', '')
+            suggestion_evidence = r.get('suggestion_evidence', '')
             game_name = r.get('title', '')
             filename = r.get('filename', '')
             disc = r.get('disc_id', '')
             row = [
                 game_name, filename, disc, compatible, 'NO',
-                r.get('reason', '') or ('Verified RetroAchievements hash' if supported
+                (suggestion_evidence if status == 'UNMATCHED' and suggested_id else
+                 r.get('reason', '') or ('Verified RetroAchievements hash' if supported
                     else 'RetroAchievements title has no achievement set' if status == 'NO_SET'
                     else 'Disc hash not registered on RetroAchievements' if status == 'UNMATCHED'
-                    else 'Not checked'),
-                game_id if supported else '', '', psp_region(disc), '',
+                    else 'Not checked')),
+                game_id if supported else '', suggested_release, psp_region(disc), '',
                 game_name if r.get('identity_source') == 'PARAM.SFO/GameDB' else '',
-                '', 'Game', 'KEEP', 'HAS_SET' if supported else
+                (suggested_release if status == 'UNMATCHED' else ''),
+                'standard', 'COUNT — verified' if supported else 'COUNT — no set' if status == 'NO_SET' else 'REVIEW — hash unregistered',
+                'HAS_SET' if supported else
                 'NO_SET' if status == 'NO_SET' else 'UNKNOWN',
                 game_id if status == 'NO_SET' else '',
-                r.get('identity_source', ''), r.get('reason', ''), 'N/A',
+                r.get('identity_source', ''), (suggestion_evidence or r.get('reason', '')), 'NONE',
                 '', '', r.get('internal_disc_id', ''),
                 'PARAM.SFO' if r.get('internal_disc_id') else 'Filename',
                 'YES' if r.get('filename_disc_id') and r.get('internal_disc_id')
                     and r['filename_disc_id'] != r['internal_disc_id'] else 'NO',
                 r.get('status', ''), r.get('ra_hash', ''),
                 r.get('ra_game_title', ''), r.get('internal_title', ''),
-                r.get('filename_disc_id', ''), r.get('relative_path', '')
+                r.get('filename_disc_id', ''), r.get('relative_path', ''),
+                suggested_id, suggested_region, suggestion_evidence
             ]
             psp_rows.append(row)
         psp_rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold()))
         psp_extra = ['Identity verification', 'RA disc hash', 'RA game title',
-                     'Internal PSP title', 'Filename disc ID', 'Relative path']
+                     'Internal PSP title', 'Filename disc ID', 'Relative path',
+                     'Suggested RA game ID', 'Suggested region', 'Suggestion evidence']
         sheets.append(('PlayStation Portable', [COLS + psp_extra] + psp_rows))
         effective=len(psp_records)
         compatible=psp_counts['SUPPORTED']
