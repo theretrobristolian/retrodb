@@ -77,7 +77,7 @@ def enrich(csv_path, cache_dir, env_file):
         if row.get("ra_status")!="UNMATCHED" or game_id not in candidates or game_id in failures:
             continue
         region,evidence=registered_alternatives(game_id,row.get("disc_id",""),detail_dir)
-        title=row.get("suggested_release","").split(", ",1)[0] or row.get("title","")
+        title=row.get("suggested_release","") or row.get("title","")
         row.update(suggested_release=title + (", "+region if region else ""),
                    suggested_region=region,suggestion_evidence=evidence)
     fd,name=tempfile.mkstemp(prefix=".psp-release-",suffix=".csv",dir=csv_path.parent)
