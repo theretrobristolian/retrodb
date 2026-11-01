@@ -164,6 +164,19 @@ export_csv() {
     echo '[WARNING] PS3 ISO directory unavailable; export will omit PS3 inventory.'
     rm -f "$ps3_csv"
   fi
+  local psp_csv="$HOME/retrodb-exports/RetroDB-PSP-Audit.csv"
+  local psp_root="$MOUNT/roms/sony/playstationportable/iso"
+  local psp_cache="/var/cache/retrodb/providers/gamedb/playstation-portable.json"
+  if sudo test -d "$psp_root"; then
+    sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
+    sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-portable || return 1
+    ( umask 077; sudo python3 "$HERE/report_psp_audit.py" --root "$psp_root" --catalogue "$psp_cache" --output "$psp_csv" ) || return 1
+    sudo chown "$(id -un):$(id -gn)" "$psp_csv" || return 1
+    chmod 0600 "$psp_csv" || return 1
+  else
+    echo '[WARNING] PSP ISO directory unavailable; export will omit PSP inventory.'
+    rm -f "$psp_csv"
+  fi
   local prep_arg="-"
   if sudo -n test -f "$prepare" 2>/dev/null || sudo test -f "$prepare"; then
     sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$prepare" "$prepared_copy" || return 1
@@ -174,7 +187,7 @@ export_csv() {
   local ps1_arg="-" ps3_arg="-"
   [[ -f "$ps1_csv" ]] && ps1_arg="$ps1_csv"
   [[ -f "$ps3_csv" ]] && ps3_arg="$ps3_csv"
-  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" ) || return 1
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
