@@ -165,7 +165,7 @@ PS3_SERIAL_RE = re.compile(r"(?<![A-Z0-9])((?:BL|BC)[A-Z]{2})[-_ .]?(\d{5})(?![A
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
 def disc_id(item: LibraryItem) -> str:
-    if item.platform and item.platform.slug == "playstation-portable":
+    if re.search(r"/playstationportable/", item.relative_path, re.I):
         match_psp = PSP_SERIAL_RE.search(item.filename)
         return (match_psp.group(1) + match_psp.group(2)).upper() if match_psp else ""
     match3 = PS3_SERIAL_RE.search(item.filename)
