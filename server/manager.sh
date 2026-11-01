@@ -172,6 +172,7 @@ export_csv() {
     sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-portable || return 1
     sudo chown retrodb:retrodb "$psp_cache" || return 1
     ( umask 077; sudo python3 "$HERE/report_psp_audit.py" --root "$psp_root" --catalogue "$psp_cache" --ra-catalogue /var/cache/retrodb/providers/retroachievements/playstation-portable.json --hasher /opt/retrodb-tools/RAHasher --output "$psp_csv" ) || return 1
+    sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.psp_sync --audit "$psp_csv" || return 1
     sudo chown "$(id -un):$(id -gn)" "$psp_csv" || return 1
     chmod 0600 "$psp_csv" || return 1
   else
