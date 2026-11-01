@@ -213,6 +213,7 @@ def main() -> int:
         for slug, system_id, system_name in (
             ("playstation", 12, "PlayStation"),
             ("playstation-2", 21, "PlayStation 2"),
+            ("playstation-portable", 41, "PlayStation Portable"),
         ):
             result = client.sync_system(
                 system_id, system_name, slug, force=args.force
