@@ -169,7 +169,8 @@ export_csv() {
   local psp_cache="/var/cache/retrodb/providers/gamedb/playstation-portable.json"
   if sudo test -d "$psp_root"; then
     sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
-    sudo -u retrodb env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-portable || return 1
+    sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-portable || return 1
+    sudo chown retrodb:retrodb "$psp_cache" || return 1
     ( umask 077; sudo python3 "$HERE/report_psp_audit.py" --root "$psp_root" --catalogue "$psp_cache" --output "$psp_csv" ) || return 1
     sudo chown "$(id -un):$(id -gn)" "$psp_csv" || return 1
     chmod 0600 "$psp_csv" || return 1
