@@ -260,7 +260,7 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     title = SERIAL_RE.sub("", title)
     if slug == "playstation-portable":
         title = PSP_SERIAL_RE.sub("", title)
-        title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|\d{4,8})\s*\]", "", title, flags=re.I)
+        title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|(?:RA[-_. ]?)?\d{4,8})\s*\]", "", title, flags=re.I)
     if slug == "playstation-3":
         title = PS3_SERIAL_RE.sub("", title)
         title = re.sub(r"\[\s*\]", "", title)
