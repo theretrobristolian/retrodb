@@ -10,8 +10,8 @@ def test_psp_serial():
 
 def test_sfo_identity():
     # Minimal valid SFO containing a DISC_ID string.
-    key = b"DISC_ID\\0".replace(b"\\0", b"\\x00")
-    value = b"ULUS10160\\x00".replace(b"\\x00", b"\x00")
+    key = b"DISC_ID" + bytes([0])
+    value = b"ULUS10160" + bytes([0])
     header = b"\x00PSF" + struct.pack("<IIII", 0x101, 36, 36+len(key), 1)
     index = struct.pack("<HHIII", 0, 0x0204, len(value), len(value), 0)
     result = parse_sfo(header + index + key + value)
