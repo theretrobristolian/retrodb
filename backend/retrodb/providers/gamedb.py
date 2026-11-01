@@ -13,6 +13,7 @@ SOURCES = {
     "playstation-2": ("PS2", "https://github.com/niemasd/GameDB-PS2/releases/latest/download/PS2.titles.json"),
     "playstation": ("PSX", "https://github.com/niemasd/GameDB-PSX/releases/latest/download/PSX.titles.json"),
     "playstation-3": ("PS3", "https://github.com/niemasd/GameDB-PS3/releases/latest/download/PS3.titles.json"),
+    "playstation-portable": ("PSP", "https://github.com/niemasd/GameDB-PSP/releases/latest/download/PSP.titles.json"),
 }
 CACHE_DAYS = 180
 MAX_BYTES = 5 * 1024 * 1024
