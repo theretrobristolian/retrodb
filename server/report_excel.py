@@ -579,18 +579,65 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
     if psp_audit and Path(psp_audit).is_file():
         with open(psp_audit, newline='', encoding='utf-8-sig') as handle:
             psp_records = list(csv.DictReader(handle))
-        psp_fields = ['Status', 'Disc ID', 'Game title', 'ISO filename',
-                      'Relative path', 'Size (bytes)', 'Identity source',
-                      'RA compatibility', 'Notes', 'Filename Disc ID',
-                      'Internal Disc ID', 'Internal PSP title',
-                      'RA hash', 'RA game ID', 'RA game title']
-        psp_keys = ['status', 'disc_id', 'title', 'filename',
-                    'relative_path', 'size_bytes', 'identity_source',
-                    'ra_status', 'reason', 'filename_disc_id',
-                    'internal_disc_id', 'internal_title',
-                    'ra_hash', 'ra_game_id', 'ra_game_title']
-        sheets.append(('PlayStation Portable',
-                       [psp_fields] + [[r.get(k, '') for k in psp_keys] for r in psp_records]))
+        # Keep the same first 24 headings/order as PS1 and PS2.
+        # Unavailable patch fields are blank or N/A, never implied to be supported.
+        def psp_region(disc):
+            prefix = str(disc).upper()[:4]
+            if prefix in ('ULUS', 'UCUS', 'NPUH', 'NPUG'): return 'USA'
+            if prefix in ('ULES', 'UCES', 'NPEH', 'NPEG'): return 'Europe'
+            if prefix in ('ULJS', 'ULJM', 'UCJS', 'UCJM', 'NPJH', 'NPJQ'): return 'Japan'
+            return 'Unknown'
+        psp_rows = []
+        psp_counts = Counter()
+        for r in psp_records:
+            status = r.get('ra_status', 'NOT_CHECKED')
+            psp_counts[status] += 1
+            supported = status == 'SUPPORTED'
+            compatible = ('YES' if supported else 'NO SET' if status == 'NO_SET'
+                          else 'ERROR' if status == 'HASH_ERROR' else 'UNKNOWN')
+            game_id = r.get('ra_game_id', '')
+            game_name = r.get('title', '')
+            filename = r.get('filename', '')
+            disc = r.get('disc_id', '')
+            row = [
+                game_name, filename, disc, compatible, 'NO',
+                r.get('reason', '') or ('Verified RetroAchievements hash' if supported
+                    else 'RetroAchievements title has no achievement set' if status == 'NO_SET'
+                    else 'Disc hash not registered on RetroAchievements' if status == 'UNMATCHED'
+                    else 'Not checked'),
+                game_id if supported else '', '', psp_region(disc), '',
+                game_name if r.get('identity_source') == 'PARAM.SFO/GameDB' else '',
+                '', 'Game', 'KEEP', 'HAS_SET' if supported else
+                'NO_SET' if status == 'NO_SET' else 'UNKNOWN',
+                game_id if status == 'NO_SET' else '',
+                r.get('identity_source', ''), r.get('reason', ''), 'N/A',
+                '', '', r.get('internal_disc_id', ''),
+                'PARAM.SFO' if r.get('internal_disc_id') else 'Filename',
+                'YES' if r.get('filename_disc_id') and r.get('internal_disc_id')
+                    and r['filename_disc_id'] != r['internal_disc_id'] else 'NO',
+                r.get('status', ''), r.get('ra_hash', ''),
+                r.get('ra_game_title', ''), r.get('internal_title', ''),
+                r.get('filename_disc_id', ''), r.get('relative_path', '')
+            ]
+            psp_rows.append(row)
+        psp_rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold()))
+        psp_extra = ['Identity verification', 'RA disc hash', 'RA game title',
+                     'Internal PSP title', 'Filename disc ID', 'Relative path']
+        sheets.append(('PlayStation Portable', [COLS + psp_extra] + psp_rows))
+        effective=len(psp_records)
+        compatible=psp_counts['SUPPORTED']
+        no_set=psp_counts['NO_SET']
+        unresolved=psp_counts['UNMATCHED'] + psp_counts['NOT_CHECKED']
+        hash_errors=psp_counts['HASH_ERROR']
+        eligible=effective-no_set
+        summary.append(['PlayStation Portable',effective,effective,0,
+                        f'{100*compatible/effective:.2f}%' if effective else '0.00%',
+                        f'{100*compatible/eligible:.2f}%' if eligible else 'N/A',
+                        eligible,compatible,0,0,no_set,unresolved,0,0,hash_errors,
+                        '0.00%',
+                        f'{100*no_set/effective:.2f}%' if effective else '0.00%',
+                        f'{100*unresolved/effective:.2f}%' if effective else '0.00%',
+                        f'{100*(compatible+no_set)/effective:.2f}%' if effective else '0.00%'])
         print(f'[INFO] PSP ISO inventory: {len(psp_records)} files integrated (PSP RA hash verification included).')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
