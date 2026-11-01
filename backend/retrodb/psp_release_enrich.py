@@ -24,29 +24,31 @@ def release_region(description):
     return ""
 
 def registered_alternatives(game_id, local_serial, detail_dir):
+    """Prefer exact USA RA hash release names, without pretending they are Redump-verified."""
     path=detail_dir / f"{game_id}.json"
     if not path.is_file():
-        return "", "Registered RA release descriptions unavailable"
+        return "", "", "", "Registered RA release descriptions unavailable"
     try:
         payload=json.loads(path.read_text(encoding="utf-8"))
     except (OSError,ValueError):
-        return "", "Registered RA release descriptions unavailable"
-    regions=set()
-    for item in payload if isinstance(payload,list) else []:
-        if isinstance(item,dict):
-            description=item.get("Name") or item.get("Description") or item.get("Title") or ""
-            region=release_region(description)
-            if region:
-                regions.add(region)
-    prefix=local_serial[:4].upper()
-    local=("USA" if prefix in ("ULUS","UCUS","NPUH","NPUG")
-           else "Europe" if prefix in ("ULES","UCES","NPEH","NPEG")
-           else "Japan" if prefix in ("ULJS","ULJM","UCJS","UCJM","NPJH","NPJQ") else "")
-    alternatives=sorted(regions - {local})
-    if alternatives:
-        return "/".join(alternatives),"Registered RA hash describes this alternative region; verify exact revision and hash"
-    return "", "RA achievement set exists; no confirmed alternative region in registered hash descriptions"
-
+        return "", "", "", "Registered RA release descriptions unavailable"
+    releases=[]
+    for entry in payload if isinstance(payload,list) else []:
+        if not isinstance(entry,dict):
+            continue
+        description=str(entry.get("Name") or entry.get("Description") or entry.get("Title") or "").strip()
+        digest=str(entry.get("MD5") or entry.get("Hash") or "").strip().lower()
+        region=release_region(description)
+        if region and description and re.fullmatch(r"[0-9a-f]{32}",digest):
+            releases.append((region,description,digest))
+    if not releases:
+        return "", "", "", "RA set exists, but no region-labelled registered hash descriptions available"
+    preference={"USA":0,"Europe":1,"Japan":2}
+    releases.sort(key=lambda x:(preference.get(x[0],99),x[1].casefold()))
+    region,description,digest=releases[0]
+    note=("Exact release description associated with an RA-registered hash; "
+          "verify Redump provenance separately. RA hash: "+digest)
+    return description,region,digest,note
 
 def enrich(csv_path, cache_dir, env_file):
     load_environment_file(env_file)
@@ -57,7 +59,7 @@ def enrich(csv_path, cache_dir, env_file):
         reader=csv.DictReader(stream)
         fields=list(reader.fieldnames or [])
         records=list(reader)
-    for key in ("suggested_ra_game_id","suggested_release","suggested_region","suggestion_evidence"):
+    for key in ("suggested_ra_game_id","suggested_release","suggested_region","suggestion_evidence","suggested_ra_hash"):
         if key not in fields:
             raise ValueError("PSP audit lacks suggestion field "+key)
     candidates=sorted({r["suggested_ra_game_id"] for r in records
@@ -76,10 +78,10 @@ def enrich(csv_path, cache_dir, env_file):
         game_id=row.get("suggested_ra_game_id","")
         if row.get("ra_status")!="UNMATCHED" or game_id not in candidates or game_id in failures:
             continue
-        region,evidence=registered_alternatives(game_id,row.get("disc_id",""),detail_dir)
-        title=row.get("suggested_release","") or row.get("title","")
-        row.update(suggested_release=title + (", "+region if region else ""),
-                   suggested_region=region,suggestion_evidence=evidence)
+        release,region,digest,evidence=registered_alternatives(game_id,row.get("disc_id",""),detail_dir)
+        row.update(suggested_release=release or row.get("suggested_release",""),
+                   suggested_region=region,suggestion_evidence=evidence,
+                   suggested_ra_hash=digest)
     fd,name=tempfile.mkstemp(prefix=".psp-release-",suffix=".csv",dir=csv_path.parent)
     try:
         with os.fdopen(fd,"w",newline="",encoding="utf-8") as stream:
