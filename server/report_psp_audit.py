@@ -11,7 +11,7 @@ from pathlib import Path
 FIELDS = ["status","disc_id","title","filename","relative_path","size_bytes",
           "identity_source","ra_status","reason","filename_disc_id","internal_disc_id",
           "internal_title","ra_hash","ra_game_id","ra_game_title",
-          "suggested_ra_game_id","suggested_release","suggested_region","suggestion_evidence"]
+          "suggested_ra_game_id","suggested_release","suggested_region","suggestion_evidence","suggested_ra_hash"]
 ID = re.compile(r"(?<![A-Z0-9])([A-Z]{4})[-_. ]?(\d{5})(?![A-Z0-9])", re.I)
 HASH = re.compile(r"\b([0-9a-fA-F]{32})\b")
 
@@ -217,7 +217,7 @@ def inventory(root,titles,hasher=None,ra_lookup=None,ra_games=None,hashes_dir=No
             internal_disc_id=internal,internal_title=internal_title,
             ra_hash=ra_hash,ra_game_id=ra_id,ra_game_title=ra_title,
             suggested_ra_game_id=suggestion[0],suggested_release=suggestion[1],
-            suggested_region=suggestion[2],suggestion_evidence=suggestion[3]))
+            suggested_region=suggestion[2],suggestion_evidence=suggestion[3],suggested_ra_hash=""))
     return rows
 
 def main():
