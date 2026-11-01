@@ -264,11 +264,12 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     if slug == "playstation-3":
         title = PS3_SERIAL_RE.sub("", title)
         title = re.sub(r"\[\s*\]", "", title)
-    title = re.sub(r"\\[\\s*\\]|\\{\\s*\\}|\\(\\s*\\)", " ", title)
+    # A removed disc serial can leave an empty [] in a display title.
+    title = re.sub(r"\[\s*\]|\{\s*\}|\(\s*\)", " ", title)
     title = title.replace("_", " ")
     title = REV_MARKER.sub("", title)
     title = re.sub(r"\\s*\\((?:USA|Europe|Japan|World|En|Fr|De)\\)\\s*$", "", title, flags=re.I)
-    title = re.sub(r"\\s{2,}", " ", title).strip(" -._")
+    title = re.sub(r"\s{2,}", " ", title).strip(" -._")
     if slug == "playstation":
         serial = disc_id(item)
         # A visible filename disc number remains useful even when RA/GameDB
