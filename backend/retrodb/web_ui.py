@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from retrodb.database import get_session
 from retrodb.models import LibraryItem, Platform
+from retrodb.console_profiles import PROFILES
 from retrodb.providers.gamedb import load as load_gamedb
 
 router = APIRouter(include_in_schema=False)
@@ -396,7 +397,7 @@ def consoles(request: Request, db: Session = Depends(get_session),
         subtitle = " · ".join(v for v in (
             p.manufacturer or "", f"Generation {p.generation}" if p.generation else "",
             str(p.release_date.year) if p.release_date else "") if v)
-        cards.append(f'<a class="card" href="/library/{quote(p.slug)}">'
+        cards.append(f'<a class="card" href="/consoles/{quote(p.slug)}">'
                      f'<div class="eyebrow">{escape(subtitle or "Console")}</div>'
                      f'<h2>{escape(p.name)}</h2><div class="metric">{count:,}</div>'
                      '<span class="muted">games · Explore →</span></a>')
@@ -562,6 +563,65 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
  show();
 }})();
 </script>""", guest=is_guest(request))
+
+@router.get("/consoles/{slug}", response_class=HTMLResponse)
+def console_profile(slug: str, request: Request, db: Session = Depends(get_session),
+                    tab: str = Query("overview", pattern="^(overview|games|guides)$"),
+                    region: str = Query("uk", pattern="^(uk|us|jp)$")):
+    """Console landing page; games remain accessible through the existing library."""
+    platform=db.scalar(select(Platform).where(Platform.slug==slug))
+    if platform is None:
+        raise HTTPException(404,"Unknown console")
+    profile=PROFILES.get(slug,{})
+    count=db.scalar(select(func.count(LibraryItem.id)).where(
+        LibraryItem.platform_id==platform.id, LibraryItem.is_missing.is_(False))) or 0
+    release=profile.get(region) or (str(platform.release_date) if platform.release_date else "Not documented")
+    def field(label,value):
+        return f'<div class="card"><div class="eyebrow">{escape(label)}</div><p>{escape(str(value or "Not yet documented"))}</p></div>'
+    def console_link(other):
+        if not other:
+            return '<span class="muted">Not applicable / not documented</span>'
+        target=db.scalar(select(Platform).where(Platform.slug==other))
+        if not target:
+            return '<span class="muted">Not catalogued</span>'
+        return f'<a href="/consoles/{quote(target.slug)}">{escape(target.name)} →</a>'
+    tabs=''.join(f'<a class="pill" style="margin-right:9px;'+
+                 ('background:#426da5;color:white;' if tab==key else '')+
+                 f'" href="/consoles/{quote(slug)}?tab={key}&region={region}">{label}</a>'
+                 for key,label in (("overview","Overview"),("games","Games"),("guides","Guides")))
+    region_nav=' '.join(
+        f'<a class="pill" style="{("background:#426da5;color:white;" if key==region else "")}" href="/consoles/{quote(slug)}?tab={tab}&region={key}">{label}</a>'
+        for key,label in (("uk","UK / Europe"),("us","North America"),("jp","Japan")))
+    heading=f"""<div class="eyebrow"><a href="/consoles">Consoles</a> / {escape(platform.manufacturer or "Console")}</div>
+<h1>{escape(platform.name)}</h1><p class="muted">{escape(profile.get("overview") or "Console hardware profile — curated information coming soon.")}</p>
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:20px 0">{tabs}</div>"""
+    if tab=="games":
+        body=f'<div class="card"><h2>Your game collection</h2><p>{count:,} files currently catalogued for this system.</p><a class="btn" href="/library/{quote(slug)}">Browse {escape(platform.name)} games →</a></div>'
+    elif tab=="guides":
+        guides=profile.get("guides",[])
+        body='<h2>Console guides</h2><div class="grid">'+''.join(
+            field("Planned guide",guide) for guide in guides
+        )+'</div><p class="muted">Guide pages are planned; these headings are not yet full instructions.</p>'
+    else:
+        specs=(("Processor",profile.get("cpu")),("Memory",profile.get("memory")),
+               ("Media",profile.get("media")),("Video outputs",profile.get("video")),
+               ("Audio outputs",profile.get("audio")),("Controllers & ports",profile.get("ports")),
+               ("Storage",profile.get("storage")))
+        body=f"""<div class="grid">
+{field("Release · "+region.upper(),release)}
+{field("Generation",profile.get("generation") or platform.generation)}
+{field("Your collection",f"{count:,} catalogued files")}
+</div><h2>Release dates</h2><p>{region_nav}</p>
+<div class="grid">{field("UK / Europe",profile.get("uk"))}{field("North America",profile.get("us"))}{field("Japan",profile.get("jp"))}</div>
+<h2>Hardware specifications</h2><div class="grid">{''.join(field(k,v) for k,v in specs)}</div>
+<h2>Hardware family</h2><div class="grid">
+<div class="card"><div class="eyebrow">Predecessor</div><p>{console_link(profile.get("predecessor"))}</p></div>
+<div class="card"><div class="eyebrow">Successor</div><p>{console_link(profile.get("successor"))}</p></div></div>
+<h2>History and revisions</h2><p>{escape(profile.get("revisions","Research in progress."))}</p>
+<h2>Common accessories</h2><p>{escape(profile.get("accessories","Research in progress."))}</p>
+<p class="muted">Curated starting data; exact launch prices, sales, discontinued dates, verified model specifications and imagery will be added with source attribution.</p>"""
+    return page(platform.name,heading+body,request)
+
 
 @router.get("/library", response_class=HTMLResponse)
 def all_games(request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
