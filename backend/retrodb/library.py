@@ -14,8 +14,9 @@ PLATFORM_PATHS = {
     "playstation": Path("roms/sony/playstation1"),
     "playstation-2": Path("roms/sony/playstation2"),
     "playstation-3": Path("roms/sony/playstation3/iso"),
+    "playstation-portable": Path("roms/sony/playstationportable/iso"),
 }
-PLATFORM_LABELS = {"playstation": "PlayStation", "playstation-2": "PlayStation 2", "playstation-3": "PlayStation 3"}
+PLATFORM_LABELS = {"playstation": "PlayStation", "playstation-2": "PlayStation 2", "playstation-3": "PlayStation 3", "playstation-portable": "PlayStation Portable"}
 GAME_EXTENSIONS = {".bin", ".ccd", ".chd", ".cso", ".cue", ".img", ".iso", ".mdf", ".mds", ".pbp", ".zso"}
 
 class LibraryScanError(RuntimeError):
@@ -93,14 +94,14 @@ def scan_retronas(session: Session, root: Path) -> ScanSummary:
         summaries.append(summary)
         platform = session.scalar(select(Platform).where(Platform.slug == platform_slug))
         if platform is None:
-            if platform_slug != "playstation-3":
+            if platform_slug not in ("playstation-3", "playstation-portable"):
                 raise LibraryScanError(f"Platform is missing from the database: {platform_slug}")
             # Initial schema seeded PS1 and PS2 with explicit IDs. Assign the
             # next free ID, without relying on the database sequence position.
             next_id = (session.scalar(select(func.max(Platform.id))) or 0) + 1
-            platform = Platform(id=next_id, slug="playstation-3",
-                                name="PlayStation 3", manufacturer="Sony",
-                                generation=7, release_date=date(2006, 11, 11))
+            platform = Platform(id=next_id, slug=platform_slug,
+                                name=PLATFORM_LABELS[platform_slug], manufacturer="Sony",
+                                generation=7, release_date=(date(2006, 11, 11) if platform_slug == "playstation-3" else date(2004, 12, 12)))
             session.add(platform)
             session.flush()
         if not summary.exists:
@@ -114,7 +115,7 @@ def scan_retronas(session: Session, root: Path) -> ScanSummary:
                     continue
                 path = directory_path / filename
                 extension = path.suffix.casefold() or "(none)"
-                if extension not in GAME_EXTENSIONS or (platform_slug == "playstation-3" and extension != ".iso"):
+                if extension not in GAME_EXTENSIONS or (platform_slug in ("playstation-3", "playstation-portable") and extension != ".iso"):
                     summary.skipped_extensions[extension.lstrip(".")] += 1
                     continue
                 try:
