@@ -620,7 +620,9 @@ def console_profile(slug: str, request: Request, db: Session = Depends(get_sessi
 <h2>History and revisions</h2><p>{escape(profile.get("revisions","Research in progress."))}</p>
 <h2>Common accessories</h2><p>{escape(profile.get("accessories","Research in progress."))}</p>
 <p class="muted">Curated starting data; exact launch prices, sales, discontinued dates, verified model specifications and imagery will be added with source attribution.</p>"""
-    return page(platform.name,heading+body,request)
+    from retrodb.session_auth import user_from_cookie, COOKIE
+    guest = user_from_cookie(request.cookies.get(COOKIE, "")) == "__retrodb_guest__"
+    return page(platform.name,heading+body,guest=guest)
 
 
 @router.get("/library", response_class=HTMLResponse)
