@@ -72,7 +72,7 @@ def write_json_atomic(path, data):
             os.unlink(temporary)
 
 
-def enrich(kind, csv_path, root, cache, cache_path):
+def enrich(kind, csv_path, root, cache, cache_path, cached_only=False):
     with csv_path.open(newline="", encoding="utf-8-sig") as stream:
         reader = csv.DictReader(stream)
         fields = list(reader.fieldnames or [])
@@ -105,6 +105,10 @@ def enrich(kind, csv_path, root, cache, cache_path):
                 digest = entry["sha256"]
                 hits += 1
                 state = "CACHED"
+            elif cached_only:
+                row["sha256_status"] = "NOT_CALCULATED — run optional integrity audit"
+                skipped += 1
+                continue
             else:
                 print(f"[SHA-256] {kind} {number}/{len(rows)}: hashing {target.name} ({stat.st_size / 1073741824:.2f} GiB)", flush=True)
                 digest = sha256_file(target)
@@ -144,6 +148,7 @@ def main():
     parser.add_argument("--ra", type=Path, required=True)
     parser.add_argument("--ps3", type=Path)
     parser.add_argument("--psp", type=Path)
+    parser.add_argument("--cached-only", action="store_true", help="Only use existing SHA-256 cache; do not read image contents")
     args = parser.parse_args()
     try:
         cache = json.loads(args.cache.read_text(encoding="utf-8"))
@@ -154,8 +159,9 @@ def main():
     errors = 0
     for kind, path in (("ra", args.ra), ("ps3", args.ps3), ("psp", args.psp)):
         if path and path.is_file():
-            errors += enrich(kind, path, args.root, cache, args.cache)
-    print("[SHA-256] Note: cached hashes are revalidated using file size and mtime; use a fresh cache for a forced full rehash.")
+            errors += enrich(kind, path, args.root, cache, args.cache, cached_only=args.cached_only)
+    print("[SHA-256] Cache-only export; no image contents read." if args.cached_only else
+          "[SHA-256] Full integrity scan completed; subsequent exports reuse unchanged cached hashes.")
     if errors:
         print(f"[WARNING] {errors} image checksums unavailable; individual rows marked ERROR.")
 
