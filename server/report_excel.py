@@ -680,13 +680,21 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                 suggested_id, suggested_region, suggestion_evidence,
                 r.get('suggested_ra_hash', '')
             ]
+            try:
+                psp_size = int(r.get('size_bytes') or 0)
+            except (TypeError, ValueError):
+                psp_size = 0
+            alt = 'YES' if suggested_region and suggested_region.casefold() != psp_region(disc).casefold() else 'NO'
+            row.extend([psp_size if psp_size > 0 else '',
+                        round(psp_size / GIB, 6) if psp_size > 0 else '',
+                        alt, 'NO' if alt == 'YES' else 'YES'])
             psp_rows.append(row)
         psp_rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold()))
         psp_extra = ['Identity verification', 'RA disc hash', 'RA game title',
                      'Internal PSP title', 'Filename disc ID', 'Relative path',
                      'Suggested RA game ID', 'Suggested region', 'Suggestion evidence',
                      'Suggested RA hash']
-        sheets.append(('PlayStation Portable', [COLS + psp_extra] + psp_rows))
+        sheets.append(('PlayStation Portable', [COLS + psp_extra + SIZE_COLUMNS] + psp_rows))
         effective=len(psp_records)
         compatible=psp_counts['SUPPORTED']
         no_set=psp_counts['NO_SET']
