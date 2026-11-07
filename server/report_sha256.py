@@ -83,7 +83,7 @@ def enrich(kind, csv_path, root, cache, cache_path):
         if col not in fields:
             fields.append(col)
     processed = hits = errors = skipped = 0
-    for row in rows:
+    for number, row in enumerate(rows, 1):
         row.update({key: "" for key in FIELDS})
         try:
             target = source_path(kind, row, root)
@@ -106,6 +106,7 @@ def enrich(kind, csv_path, root, cache, cache_path):
                 hits += 1
                 state = "CACHED"
             else:
+                print(f"[SHA-256] {kind} {number}/{len(rows)}: hashing {target.name} ({stat.st_size / 1073741824:.2f} GiB)", flush=True)
                 digest = sha256_file(target)
                 # Do not cache a digest when a file changed during hashing.
                 after = target.stat()
