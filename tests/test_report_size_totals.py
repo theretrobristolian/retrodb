@@ -56,5 +56,5 @@ def test_sheet_footer_uses_filter_aware_numeric_subtotals():
     assert cells[f"{byte_ref}2"].find("x:v", ns).text == str(GIB)
     assert cells[f"{gib_ref}3"].find("x:v", ns).text == "2.0"
     assert cells[f"{byte_ref}4"].find("x:f", ns).text == f"SUBTOTAL(109,{byte_ref}2:{byte_ref}3)"
-    assert cells[f"{gib_ref}4"].find("x:f", ns).text == f"SUBTOTAL(109,{gib_ref}2:{gib_ref}3)"
+    assert cells[f"{gib_ref}4"].find("x:f", ns).text == f"SUBTOTAL(109,{byte_ref}2:{byte_ref}3)/1073741824"
     assert cells["B4"].find("x:f", ns).text == "SUBTOTAL(103,A2:A3)"
