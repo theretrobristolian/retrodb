@@ -13,6 +13,11 @@ from online_catalogue import ONLINE_COLUMNS, load as load_online, load_xlink, re
 
 COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning','Internal disc ID','Disc ID source','ID conflict']
 SIZE_COLUMNS = ['File size (bytes)', 'File size (GiB)', 'Alternative region', 'Best-case keep']
+SHA_COLUMNS = ['SHA-256 (image)', 'SHA-256 file', 'SHA-256 status']
+
+def sha_fields(record):
+    return [record.get('sha256', ''), record.get('sha256_target', ''), record.get('sha256_status', 'NOT_CHECKED')]
+
 GIB = 1024 ** 3
 
 def get_disc_size(row, root=Path('/mnt/retrodb-retronas')):
@@ -600,9 +605,9 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                         f'{100*(counts["YES"]+counts["NO"]+counts["NO SET"])/effective:.2f}%' if effective else '0.00%'])
         # Pair each row to its original exact library path, including duplicate filenames.
         # Append only after de-duplication; existing report logic uses fixed indices.
-        entries_console = [append_size_and_selection(row, row_sources[id(row)])
-                           for row in entries_console]
-        sheets.append((name,[COLS + SIZE_COLUMNS]+entries_console))
+        entries_console = [append_size_and_selection(row, row_sources[id(row)]) +
+                           sha_fields(row_sources[id(row)]) for row in entries_console]
+        sheets.append((name,[COLS + SIZE_COLUMNS + SHA_COLUMNS]+entries_console))
         all_actions.extend(action_rows_from_audit(entries, platform, active))
     ps1_rows = load_ps1_audit(ps1_audit)
     if ps1_rows:
@@ -665,8 +670,8 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                 record.get('catalogue_title', ''),
                 location, record.get('proposed_iso', ''),
                 record.get('sidecars', ''), record.get('reason', ''),
-                'NOT CHECKED — naming inventory only'])
-        sheets.append(('PlayStation 3', [columns] + ps3_rows))
+                'NOT CHECKED — naming inventory only'] + sha_fields(record))
+        sheets.append(('PlayStation 3', [columns + SHA_COLUMNS] + ps3_rows))
         print(f'[INFO] PS3 inventory: {len(ps3_rows)} ISO/folder records integrated.')
     if psp_audit and Path(psp_audit).is_file():
         with open(psp_audit, newline='', encoding='utf-8-sig') as handle:
@@ -728,13 +733,13 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
             row.extend([psp_size if psp_size > 0 else '',
                         round(psp_size / GIB, 6) if psp_size > 0 else '',
                         alt, 'NO' if alt == 'YES' else 'YES'])
-            psp_rows.append(row)
+            psp_rows.append(row + sha_fields(r))
         psp_rows.sort(key=lambda r: (r[0].casefold(), r[1].casefold()))
         psp_extra = ['Identity verification', 'RA disc hash', 'RA game title',
                      'Internal PSP title', 'Filename disc ID', 'Relative path',
                      'Suggested RA game ID', 'Suggested region', 'Suggestion evidence',
                      'Suggested RA hash']
-        sheets.append(('PlayStation Portable', [COLS + psp_extra + SIZE_COLUMNS] + psp_rows))
+        sheets.append(('PlayStation Portable', [COLS + psp_extra + SIZE_COLUMNS + SHA_COLUMNS] + psp_rows))
         effective=len(psp_records)
         compatible=psp_counts['SUPPORTED']
         no_set=psp_counts['NO_SET']
