@@ -856,6 +856,7 @@ def match_collection(
                 "platform": platform.name,
                 "status": item.ra_match_status,
                 "path": item.relative_path,
+                "size_bytes": item.size_bytes,
                 "local_serial": serial,
                 "internal_disc_serial": internal_serial,
                 "disc_id_source": identity_source,
@@ -923,7 +924,7 @@ def match_collection(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = report_path.with_suffix(".tmp")
     fields = [
-        "platform", "status", "path", "local_serial", "internal_disc_serial", "disc_id_source", "disc_id_conflict", "local_region",
+        "platform", "status", "path", "size_bytes", "local_serial", "internal_disc_serial", "disc_id_source", "disc_id_conflict", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
         "identity_resolution", "identity_review_reason",
         "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
