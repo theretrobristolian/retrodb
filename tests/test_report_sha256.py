@@ -82,3 +82,44 @@ def test_cue_rejects_path_traversal(tmp_path):
         assert "Unsafe" in str(exc)
     else:
         raise AssertionError("Relative traversal in CUE must be rejected")
+
+
+
+def test_fast_export_does_not_read_image_contents(tmp_path, monkeypatch):
+    import report_sha256
+    image = tmp_path / "ps2.iso"
+    image.write_bytes(b"large-game-data")
+    audit = tmp_path / "audit.csv"
+    _csv(audit, [{"platform": "Sony PlayStation 2", "path": "ps2.iso"}])
+
+    def must_not_hash(_path):
+        raise AssertionError("Fast default audit must not SHA-256 image contents")
+
+    monkeypatch.setattr(report_sha256, "sha256_file", must_not_hash)
+    assert enrich("ra", audit, tmp_path, {}, tmp_path / "cache.json",
+                  cached_only=True) == 0
+    row = _read(audit)[0]
+    assert not row["sha256"]
+    assert row["sha256_status"].startswith("NOT_CALCULATED")
+
+
+def test_fast_export_reuses_existing_sha256_cache(tmp_path, monkeypatch):
+    import report_sha256
+    image = tmp_path / "ps2.iso"
+    image.write_bytes(b"verified-image")
+    st = image.stat()
+    digest = hashlib.sha256(image.read_bytes()).hexdigest()
+    cache = {str(image): {"size": st.st_size, "mtime_ns": st.st_mtime_ns,
+                          "sha256": digest}}
+    audit = tmp_path / "audit.csv"
+    _csv(audit, [{"platform": "Sony PlayStation 2", "path": "ps2.iso"}])
+
+    def must_not_hash(_path):
+        raise AssertionError("Cached audit should never read whole image")
+
+    monkeypatch.setattr(report_sha256, "sha256_file", must_not_hash)
+    assert enrich("ra", audit, tmp_path, cache, tmp_path / "cache.json",
+                  cached_only=True) == 0
+    row = _read(audit)[0]
+    assert row["sha256"] == digest
+    assert row["sha256_status"] == "CACHED"
