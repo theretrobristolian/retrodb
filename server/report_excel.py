@@ -23,6 +23,14 @@ def get_disc_size(row, root=Path('/mnt/retrodb-retronas')):
         known = 0
     if row.get('platform') != 'Sony PlayStation':
         return known if known > 0 else None
+    # The backend audits as the retrodb service user and can read BIN metadata
+    # even when the interactive exporter cannot access the mounted CUE files.
+    try:
+        payload = int(row.get('payload_size_bytes') or 0)
+    except (TypeError, ValueError):
+        payload = 0
+    if payload > 0:
+        return payload
     cue = root / str(row.get('path') or '')
     if cue.suffix.lower() != '.cue' or not cue.is_file() or cue.is_symlink():
         return None
