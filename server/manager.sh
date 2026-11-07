@@ -449,9 +449,16 @@ try:
         incomplete = record.get('state') != 'applied'
     elif isinstance(record, dict) and isinstance(record.get('operations'), list):
         operations = record['operations']
-        incomplete = not operations or any(
-            not isinstance(op, dict) or op.get('state') != 'applied'
-            for op in operations)
+        # ps1_rename.py writes a valid journal even for an empty rename plan.
+        # Zero operations mean no files were touched; do not block subsequent runs.
+        # Require the script's timestamp to distinguish a legitimate empty
+        # batch from an arbitrary or malformed journal.
+        if not operations:
+            incomplete = not isinstance(record.get('created_utc'), str) or not record['created_utc']
+        else:
+            incomplete = any(
+                not isinstance(op, dict) or op.get('state') != 'applied'
+                for op in operations)
     else:
         incomplete = True
 except (OSError, ValueError, TypeError, KeyError):
