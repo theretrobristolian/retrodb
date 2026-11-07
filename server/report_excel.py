@@ -555,7 +555,15 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                         f'{100*counts["NO SET"]/effective:.2f}%' if effective else '0.00%',
                         f'{100*counts["UNKNOWN"]/effective:.2f}%' if effective else '0.00%',
                         f'{100*(counts["YES"]+counts["NO"]+counts["NO SET"])/effective:.2f}%' if effective else '0.00%'])
-        sheets.append((name,[COLS]+entries_console))
+        source_map = {row['path']: row for row in entries if row['platform'] == platform}
+        # Append only after de-duplication; existing logic uses fixed PS1/PS2 indices.
+        entries_console = [
+            append_size_and_selection(row, source_map.get(next(
+                (source_path for source_path, source_row in source_map.items()
+                 if Path(source_path).name == row[1]), ''), {}))
+            for row in entries_console
+        ]
+        sheets.append((name,[COLS + SIZE_COLUMNS]+entries_console))
         all_actions.extend(action_rows_from_audit(entries, platform, active))
     ps1_rows = load_ps1_audit(ps1_audit)
     if ps1_rows:
