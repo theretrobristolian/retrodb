@@ -442,9 +442,19 @@ ps1_rename_all() {
     if python3 - "$prior" <<'PYJ'
 import json, sys
 try:
-    operations = json.load(open(sys.argv[1], encoding='utf-8'))['operations']
-    incomplete = any(op.get('state') != 'applied' for op in operations)
-except (OSError, ValueError, KeyError):
+    with open(sys.argv[1], encoding='utf-8') as stream:
+        record = json.load(stream)
+    if isinstance(record, dict) and record.get('operation') == 'lost-world-reviewed-archive':
+        # One-off archival cleanup uses a single top-level state, not operations[].
+        incomplete = record.get('state') != 'applied'
+    elif isinstance(record, dict) and isinstance(record.get('operations'), list):
+        operations = record['operations']
+        incomplete = not operations or any(
+            not isinstance(op, dict) or op.get('state') != 'applied'
+            for op in operations)
+    else:
+        incomplete = True
+except (OSError, ValueError, TypeError, KeyError):
     incomplete = True
 sys.exit(0 if incomplete else 1)
 PYJ
