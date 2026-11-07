@@ -201,6 +201,18 @@ export_csv() {
   local ps1_arg="-" ps3_arg="-"
   [[ -f "$ps1_csv" ]] && ps1_arg="$ps1_csv"
   [[ -f "$ps3_csv" ]] && ps3_arg="$ps3_csv"
+  # Full-file SHA-256 is distinct from RetroAchievements' platform hashes.
+  # First run reads the entire ISO/BIN collection; later runs reuse the
+  # persistent cache for files with unchanged size and modification time.
+  local sha_cache="/var/cache/retrodb/integrity-sha256.json"
+  local sha_args=(--root "$MOUNT" --cache "$sha_cache" --ra "$EXPORT")
+  [[ -f "$ps3_csv" ]] && sha_args+=(--ps3 "$ps3_csv")
+  [[ -f "$psp_csv" ]] && sha_args+=(--psp "$psp_csv")
+  echo '[INFO] Verifying full-file SHA-256 for PS1/PS2/PS3/PSP (cached on subsequent audits).'
+  sudo python3 "$HERE/report_sha256.py" "${sha_args[@]}" || return 1
+  sudo chown "$(id -un):$(id -gn)" "$EXPORT" || return 1
+  [[ -f "$ps3_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$ps3_csv"
+  [[ -f "$psp_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$psp_csv"
   ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
