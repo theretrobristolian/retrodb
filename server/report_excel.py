@@ -534,8 +534,11 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
     all_actions=[]
     summary=[['Console','Disc images','Effective images','Excluded duplicates','RA-ready %','Eligible RA-ready %','RA eligible images','RA compatible','Patchable','Alternative ISO','No achievement set','Unresolved','GameDB identified unresolved','RA candidates to review','Hash errors','Patchable %','No-set %','Unresolved %','RA identified %']]
     for platform,name in [('Sony PlayStation','PlayStation 1'),('Sony PlayStation 2','PlayStation 2')]:
-        entries_console=sorted((row_for(r, sources, verified_outputs=outputs) for r in entries if r['platform']==platform),
-                               key=lambda r:(r[0].casefold(),r[1].casefold()))
+        paired_rows=sorted(((row_for(r, sources, verified_outputs=outputs), r)
+                            for r in entries if r['platform']==platform),
+                           key=lambda pair:(pair[0][0].casefold(),pair[0][1].casefold()))
+        entries_console=[row for row, _ in paired_rows]
+        row_sources={id(row): source for row, source in paired_rows}
         apply_collection_dedup(entries_console)
         for r in entries_console:
             if r[3] == 'OTHER SOFTWARE':
@@ -555,14 +558,10 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                         f'{100*counts["NO SET"]/effective:.2f}%' if effective else '0.00%',
                         f'{100*counts["UNKNOWN"]/effective:.2f}%' if effective else '0.00%',
                         f'{100*(counts["YES"]+counts["NO"]+counts["NO SET"])/effective:.2f}%' if effective else '0.00%'])
-        source_map = {row['path']: row for row in entries if row['platform'] == platform}
-        # Append only after de-duplication; existing logic uses fixed PS1/PS2 indices.
-        entries_console = [
-            append_size_and_selection(row, source_map.get(next(
-                (source_path for source_path, source_row in source_map.items()
-                 if Path(source_path).name == row[1]), ''), {}))
-            for row in entries_console
-        ]
+        # Pair each row to its original exact library path, including duplicate filenames.
+        # Append only after de-duplication; existing report logic uses fixed indices.
+        entries_console = [append_size_and_selection(row, row_sources[id(row)])
+                           for row in entries_console]
         sheets.append((name,[COLS + SIZE_COLUMNS]+entries_console))
         all_actions.extend(action_rows_from_audit(entries, platform, active))
     ps1_rows = load_ps1_audit(ps1_audit)
