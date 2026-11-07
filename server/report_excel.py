@@ -12,6 +12,51 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from online_catalogue import ONLINE_COLUMNS, load as load_online, load_xlink, report_row as online_report_row, enrich_with_xlink
 
 COLS = ['Game name','File name','Disc ID','RA compatible','Patchable','Reason / next action','RA game ID','Recommended release','Region','Patch URL','GameDB identity','RA candidates to review','Disc classification','Collection decision','RA set status','RA no-set game ID','Identity evidence','Resolution detail','Patch status','Patch type','Patch warning','Internal disc ID','Disc ID source','ID conflict']
+SIZE_COLUMNS = ['File size (bytes)', 'File size (GiB)', 'Alternative region', 'Best-case keep']
+GIB = 1024 ** 3
+
+def get_disc_size(row, root=Path('/mnt/retrodb-retronas')):
+    """Use the indexed size for PS2; resolve PS1 CUE payloads to avoid a tiny CUE-only size."""
+    try:
+        known = int(row.get('size_bytes') or 0)
+    except (TypeError, ValueError):
+        known = 0
+    if row.get('platform') != 'Sony PlayStation':
+        return known if known > 0 else None
+    cue = root / str(row.get('path') or '')
+    if cue.suffix.lower() != '.cue' or not cue.is_file() or cue.is_symlink():
+        return None
+    try:
+        contents = cue.read_text(encoding='utf-8-sig', errors='replace')
+        names = re.findall(r'^\\s*FILE\\s+(?:"([^"]+)"|(\\S+))\\s+\\w+', contents, re.I | re.M)
+        candidates = set()
+        for quoted, unquoted in names:
+            name = quoted or unquoted
+            if not name or '/' in name or '\\\\' in name or name in ('.','..'):
+                return None
+            image = cue.parent / name
+            if image.is_symlink() or not image.is_file():
+                return None
+            candidates.add(image)
+        return sum(f.stat().st_size for f in candidates) if candidates else None
+    except OSError:
+        return None
+
+def alternative_region(row):
+    """Only label a genuine region change; an alternative revision is distinct."""
+    current = str(row.get('local_region') or '').casefold().strip()
+    proposed = str(row.get('preferred_region') or '').casefold().strip()
+    return 'YES' if current and proposed and current != proposed and row.get('recommended_ra_title') else 'NO'
+
+def best_case_keep(result_row, alt_region):
+    """Keep current RA-compatible images and those without a known region alternative."""
+    return 'NO' if str(result_row[13]).startswith('EXCLUDE') or alt_region == 'YES' else 'YES'
+
+def append_size_and_selection(result, source, root=Path('/mnt/retrodb-retronas')):
+    size = get_disc_size(source, root)
+    alt = alternative_region(source)
+    return result + ([size, round(size / GIB, 6)] if size is not None else ['', '']) + [alt, best_case_keep(result, alt)]
+
 VERIFIED = 'clean-base-verified-ready-to-patch'
 def patch_sources(path):
     """Index precisely checksum-verified patchable collection sources by RA ID."""
