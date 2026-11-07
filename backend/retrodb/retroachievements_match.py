@@ -499,6 +499,14 @@ def ps1_hash_target(cue: Path) -> Path:
     return target
 
 
+def ps1_media_size(cue: Path) -> int | None:
+    """Return BIN payload bytes for a verified single-BIN CUE; never the tiny CUE size."""
+    try:
+        return ps1_hash_target(cue).stat().st_size
+    except (MatchError, OSError):
+        return None
+
+
 def hash_file(hasher: Path, console_id: int, path: Path) -> str:
     try:
         result = subprocess.run(
@@ -857,6 +865,7 @@ def match_collection(
                 "status": item.ra_match_status,
                 "path": item.relative_path,
                 "size_bytes": item.size_bytes,
+                "payload_size_bytes": ps1_media_size(path) if slug == "playstation" else item.size_bytes,
                 "local_serial": serial,
                 "internal_disc_serial": internal_serial,
                 "disc_id_source": identity_source,
@@ -924,7 +933,7 @@ def match_collection(
     report_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = report_path.with_suffix(".tmp")
     fields = [
-        "platform", "status", "path", "size_bytes", "local_serial", "internal_disc_serial", "disc_id_source", "disc_id_conflict", "local_region",
+        "platform", "status", "path", "size_bytes", "payload_size_bytes", "local_serial", "internal_disc_serial", "disc_id_source", "disc_id_conflict", "local_region",
         "local_friendly_title", "gamedb_title", "gamedb_identified",
         "identity_resolution", "identity_review_reason",
         "ra_set_status", "no_set_ra_game_id", "no_set_ra_title",
