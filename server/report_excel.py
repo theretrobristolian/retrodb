@@ -477,26 +477,58 @@ def excel_column(index):
     return result
 
 def xml_sheet(rows):
-    xml=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
-         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
-         '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
-         '<cols>']
-    widths = ([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18] if len(rows[0]) == 19 else [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28,64,18,32,65])
-    for i,width in enumerate((widths + [20] * max(0, len(rows[0]) - len(widths)))[:len(rows[0])],1):
+    """Write an Excel filterable table, real numeric sizes, and a filter-aware footer."""
+    headers = rows[0]
+    has_sizes = 'File size (bytes)' in headers and 'File size (GiB)' in headers
+    bytes_col = headers.index('File size (bytes)') if has_sizes else -1
+    gib_col = headers.index('File size (GiB)') if has_sizes else -1
+    last_data = len(rows)
+    xml = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+           '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+           '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
+           '<cols>']
+    widths = ([28,16,18,18,18,20,18,18,18,18,20,22,24,19,24,20,18,18,18]
+              if len(headers) == 19 else
+              [38,54,18,17,16,75,17,44,16,55,44,70,24,38,20,20,28,64,18,32,65])
+    widths = (widths + [20] * max(0, len(headers) - len(widths)))[:len(headers)]
+    if has_sizes:
+        widths[bytes_col] = 21
+        widths[gib_col] = 21
+    for i, width in enumerate(widths, 1):
         xml.append('<col min="%d" max="%d" width="%d" customWidth="1"/>' % (i,i,width))
     xml.append('</cols><sheetData>')
-    for n,row in enumerate(rows,1):
+    for n, row in enumerate(rows, 1):
         xml.append('<row r="%d">' % n)
-        for i,val in enumerate(row):
+        for i, val in enumerate(row):
             style = 1 if n == 1 else (2 if n%2 == 0 else 0)
-            if n > 1 and len(row) in (18, 21, 24) and i == 3:
+            if n > 1 and has_sizes and i == gib_col:
+                style = 7
+            if n > 1 and i == 3 and headers[:4] == COLS[:4]:
                 style = {'YES':3,'NO':4,'UNKNOWN':5,'ERROR':6,'NO SET':5}.get(val,style)
-            if n > 1 and len(row) == 16 and i == 4 and val == 'YES': style = 3
-            xml.append('<c r="%s%d" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
-                       (excel_column(i+1),n,style,escape(str(val or ''))))
+            if n > 1 and len(row) == 16 and i == 4 and val == 'YES':
+                style = 3
+            cell = '%s%d' % (excel_column(i+1),n)
+            if n > 1 and has_sizes and i in (bytes_col,gib_col) and type(val) in (int,float):
+                xml.append('<c r="%s" s="%d"><v>%s</v></c>' % (cell,style,val))
+            else:
+                xml.append('<c r="%s" s="%d" t="inlineStr"><is><t>%s</t></is></c>' %
+                           (cell,style,escape(str(val if val is not None else ''))))
         xml.append('</row>')
-    xml.append('</sheetData><autoFilter ref="A1:%s%d"/></worksheet>' % (excel_column(len(rows[0])),len(rows)))
+    if has_sizes:
+        footer = last_data + 1
+        bcol, gcol = excel_column(bytes_col+1), excel_column(gib_col+1)
+        xml.append('<row r="%d">' % footer)
+        xml.append('<c r="A%d" s="1" t="inlineStr"><is><t>Visible total (filtered)</t></is></c>' % footer)
+        xml.append('<c r="B%d"><f>SUBTOTAL(103,A2:A%d)</f><v>0</v></c>' % (footer,last_data))
+        xml.append('<c r="%s%d"><f>SUBTOTAL(109,%s2:%s%d)</f><v>0</v></c>' %
+                   (bcol,footer,bcol,bcol,last_data))
+        xml.append('<c r="%s%d" s="7"><f>SUBTOTAL(109,%s2:%s%d)</f><v>0</v></c>' %
+                   (gcol,footer,gcol,gcol,last_data))
+        xml.append('</row>')
+    xml.append('</sheetData><autoFilter ref="A1:%s%d"/></worksheet>' %
+               (excel_column(len(headers)),last_data))
     return ''.join(xml)
+
 def load_ps1_audit(path):
     if not path or not Path(path).is_file():
         return []
