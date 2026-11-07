@@ -208,7 +208,12 @@ export_csv() {
   local sha_args=(--root "$MOUNT" --cache "$sha_cache" --ra "$EXPORT")
   [[ -f "$ps3_csv" ]] && sha_args+=(--ps3 "$ps3_csv")
   [[ -f "$psp_csv" ]] && sha_args+=(--psp "$psp_csv")
-  echo '[INFO] Verifying full-file SHA-256 for PS1/PS2/PS3/PSP (cached on subsequent audits).'
+  if [[ "${RETRODB_FULL_SHA256:-0}" == "1" ]]; then
+    echo '[INFO] Optional full SHA-256 integrity audit enabled: all uncached image contents will be read.'
+  else
+    echo '[INFO] Fast export: reuse existing SHA-256 checksums only; do not hash image contents.'
+    sha_args+=(--cached-only)
+  fi
   sudo python3 "$HERE/report_sha256.py" "${sha_args[@]}" || return 1
   sudo chown "$(id -un):$(id -gn)" "$EXPORT" || return 1
   [[ -f "$ps3_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$ps3_csv"
