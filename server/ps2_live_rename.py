@@ -36,7 +36,7 @@ def inventory(root, titles):
             # recover BOOT2's disc ID; never hash the whole ISO here.
             evidence = inspect_iso(root, relative)
             found = re.fullmatch(
-                r"SYSTEM\\.CNF BOOT ID: ([A-Z]{4})[_\\.-](\\d{3})[_\\.-](\\d{2})",
+                r"SYSTEM\.CNF BOOT ID: ([A-Z]{4})[_\.-](\d{3})[_\.-](\d{2})",
                 evidence,
             )
             if found:
