@@ -38,6 +38,7 @@ For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENA
 | Conservative GameDB metadata enrichment | `server/enrich-gamedb.py` |
 | Cached artwork prefetch | `server/prefetch-artwork.py` |
 | xeRAbora service/profile management | [Integration guide](../integrations/xerabora/README.md) |
+| PS2 MemCard PRO2 FTP / offline `.mc2` builder | xeRAbora menu option 8; [Memory-card guide](../integrations/xerabora/README.md#memcard-pro2-and-offline-memory-card-image-manager-menu-8) |
 
 Patching is **one RA game ID at a time**, never a bulk patch operation. Review the selected game's source, expected RA hash and the separate NAS-write confirmation. For renames, review the preview before the explicit apply confirmation. Imported metadata and uncertain identity matches require manual review. GameDB matching deliberately leaves ambiguous releases unresolved for manual inspection.
 
