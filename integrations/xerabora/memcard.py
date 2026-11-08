@@ -276,7 +276,6 @@ def download_release():
 
 
 def choose_elfs():
-    local = SOURCE_ELF / "OPL-RA.ELF"
     print("  1) Fetch verified normal + debug ELF from latest upstream release")
     print("  2) Use locally installed /opt/xerabora binaries")
     choice = ask("Choose", "1")
@@ -387,10 +386,12 @@ def update_ftp():
     binaries = choose_elfs()
     directory = Path(d.get("output_dir", str(CACHE / "output"))).expanduser()
     directory.mkdir(parents=True, exist_ok=True)
+    private_backups = CACHE / "backups"
+    secure_dir(private_backups)
     ftp = None
     try:
         ftp = ftp_connect(d)
-        original = directory / f"MemCardPRO2-original-{timestamp()}.mc2"
+        original = private_backups / f"MemCardPRO2-original-{timestamp()}.mc2"
         backup_remote(ftp, d, original)
         updated = directory / f"MemCardPRO2-patched-{timestamp()}.mc2"
         build_image(original, binaries, updated)
@@ -405,13 +406,13 @@ def update_ftp():
         if input("Type UPLOAD to replace the selected remote card: ").strip() != "UPLOAD":
             return print("[CANCELLED] No upload.")
         # Detect remote changes between initial backup and write.
-        second = directory / f"MemCardPRO2-before-write-{timestamp()}.mc2"
+        second = private_backups / f"MemCardPRO2-before-write-{timestamp()}.mc2"
         backup_remote(ftp, d, second)
         if digest(second) != digest(original):
             raise RuntimeError("Remote card changed during preparation; refusing overwrite.")
         print("[UPLOAD] Transferring modified image (recovery backups preserved)")
         transfer(ftp, d["remote"], updated, upload=True)
-        verification = directory / f"MemCardPRO2-readback-{timestamp()}.mc2"
+        verification = private_backups / f"MemCardPRO2-readback-{timestamp()}.mc2"
         backup_remote(ftp, d, verification)
         if digest(verification) != digest(updated):
             raise RuntimeError("REMOTE READBACK HASH MISMATCH. Restore original from backup.")
