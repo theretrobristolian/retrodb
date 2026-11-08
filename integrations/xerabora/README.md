@@ -41,6 +41,7 @@ After installation, launch the menu with `xerabora` if its launcher was register
 | **5 Binary check/install** | Check the latest release; install only after confirmation |
 | **6 Update manager scripts** | Refresh community scripts separately from the xeRAbora binary |
 | **7 Advanced options** | Network/API diagnostics, startup settings, ELF guidance, rollback and uninstall |
+| **8 Manage PS2 memory cards** | FTP setup and diagnostics, upstream normal/debug ELF downloads, update MemCard PRO2, create offline Free McBoot images |
 
 Useful direct commands, from the checkout:
 
@@ -143,3 +144,104 @@ For the creator to add a browser favicon and an iOS home-screen icon:
 The artwork and icon assets must be added upstream for a shared release.
 The RetroDB integration does not attempt to rewrite the xeRAbora executable.
 
+
+
+## MemCard PRO2 and offline memory-card image manager (menu 8)
+
+Run \`xerabora\` → **8 Manage PS2 memory cards / OPL-RA updates**, or
+\`python3 integrations/xerabora/memcard.py menu\`. This helper is independent
+of the RetroDB server/database. It uses Python standard library plus
+\`mymcplusplus\` (installed into \`~/mymc-env\` from PyPI on request).
+
+### Setup (once)
+
+1. Choose **1 Setup** to cache the MemCard PRO2 hostname/IP (e.g. an address
+   on your LAN), FTP username, remote image path and output directory.
+   Configuration is stored at \`~/.config/xerabora-memcard/config.json\`
+   with permissions 0600. **Passwords are not written to this config**.
+2. You can optionally store your password in your desktop Secret Service
+   keyring if \`secret-tool\` is installed and usable. Otherwise the tool
+   asks for the password on each FTP connection. FTP itself is **unencrypted**:
+   use only on a trusted, isolated home LAN, never over the public internet.
+3. Choose **2 Dependencies** to install \`mymcplusplus\` in an isolated
+   \`~/mymc-env\` venv. Debian may need \`python3-venv\` installed first.
+4. Choose **3 Test FTP** to confirm port 21, login and passive directory
+   listing. MemCard PRO2 FTP supports limited concurrent connections.
+   If port 21 refuses connections, verify the IP, toggle FTP off/on in the
+   device WebUI, re-enter username/password, click **Save Credentials**,
+   then retry. In testing, this restored FTP without rebooting the PS2.
+
+### Updating a Wi-Fi MemCard PRO2 directly
+
+Use **4** to download/check SHA256SUMS and normal/debug \`OPL-RA.ELF\`
+binaries from the latest upstream release; the debug ELF is optional and
+only included if the release publishes a verified copy. The standalone
+xeRAbora installer now also installs the debug ELF (when provided) during
+an explicit upstream binary upgrade.
+
+Use **5 Update over FTP**. The tool:
+
+- Downloads the selected remote \`.mc2\` to a timestamped, immutable-by-name
+  local backup (does not overwrite an existing backup).
+- Creates a separate working copy; replaces \`/APPS/OPL-RA.ELF\` and,
+  optionally, adds \`/APPS/OPL-RA-debug.ELF\` using mymc++.
+- Verifies each embedded ELF's SHA-256 against the source and runs the
+  mymc++ filesystem check without changing the original backup.
+- Prints the target and requires entering the exact confirmation \`UPLOAD\`.
+- Downloads the remote card again to detect changes before the upload.
+- Uploads using passive FTP, reports progress, downloads the remote image
+  again and verifies its SHA-256 against the patched image.
+- Preserves original, pre-write and readback images locally.
+
+**Important:** The upload replaces the entire \`.mc2\` file and is not
+atomic. Do not deploy while the PS2 is saving or accessing the card.
+The PS2 dashboard alone does not prove the card is unmounted. Prefer
+switching to another card before upload; keep an independently bootable
+Free McBoot fallback. In the case of a partial FTP write, restore from
+the timestamped backup manually. After success, remount/reselect the
+card or power-cycle the PS2. The helper does not automatically send
+PS2 reset/remount commands or modify the FMCB menu configuration. The
+debug ELF will need a separate FMCB launch entry to be selected.
+
+### Offline images for MemCard PRO2, Bitfunx and other SD-card devices
+
+Choose **6 Patch local image** when the target has no Wi-Fi/FTP, or for
+preparing an image for a second machine. Download a suitable Free McBoot
+memory-card template from its original distributor, then supply the
+local \`.mc2\` file **or a downloaded ZIP containing one**. The menu
+lets you choose a card within a ZIP and outputs a timestamped patched
+\`.mc2\` without overwriting the source. A useful starting point is
+the [MemCard PRO2 FMCB image collection supplied by the user](https://www.dropbox.com/scl/fo/4ns7r30phoe0cpu3m53lt/h?rlkey=set4hi9uqjtnlgdexdz3m57rj&dl=0);
+the helper does **not** download or validate that Dropbox folder
+automatically, because its archive names, contents and licensing have
+not been verified. Select the correct card format and capacity for your
+hardware, firmware and boot exploit before writing it to SD.
+
+The configured output folder can be an **already mounted RetroNAS/NFS
+share** if the Linux user has write permission; SMB clients can then
+retrieve the files without needing FTP access. Suggested **placeholder**
+layout, not an enforced convention:
+
+\`\`\`text
+roms/
+  memory-cards/
+    memcardpro2/
+      templates/
+      patched/
+    bitfunx/
+      templates/
+      patched/
+\`\`\`
+
+Only set \`output_dir\` to the desired \`patched\` directory: this
+helper deliberately does not modify RetroNAS share configuration or
+the core ROM library. It does not change the source image's permissions.
+Actual SD card folder/filename conventions vary by device, and require
+device-specific verification; the tool doesn't claim all Bitfunx
+models accept MemCard PRO2 \`.mc2\` images unchanged.
+
+For an existing Free McBoot card we verified this procedure on a
+MemCard PRO2: edit \`/APPS/OPL-RA.ELF\` in an 8 MiB \`.mc2\`, validate the
+embedded SHA-256 and image filesystem, upload and read back the whole
+image, and restart PS2. Free McBoot remained present. Testing of other
+formats and automatic remounts is still outstanding.
