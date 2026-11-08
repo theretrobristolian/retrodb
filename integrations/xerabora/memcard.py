@@ -119,7 +119,7 @@ def trouble(exc):
 def ftp_connect(d):
     ftp = FTP()
     try:
-        ftp.connect(d["host"], 21, timeout=25)
+        ftp.connect(d["host"], 21, timeout=120)
         print(f"[OK] FTP: {ftp.getwelcome()}")
         ftp.login(d["username"], credentials())
         ftp.set_pasv(True)
@@ -190,6 +190,7 @@ def backup_remote(ftp, d, dest):
     try:
         transfer(ftp, remote, dest)
         validate_image(dest)
+        os.chmod(dest, 0o600)
     except BaseException:
         dest.unlink(missing_ok=True)
         raise
@@ -213,7 +214,15 @@ def install_deps():
         return
     if not yes("Create ~/mymc-env and install mymcplusplus from PyPI?"):
         return
-    venv.EnvBuilder(with_pip=True).create(env)
+    try:
+        venv.EnvBuilder(with_pip=True).create(env)
+    except Exception as exc:
+        if not shutil.which("apt-get") or not yes(
+                f"Virtualenv creation failed ({exc}). Install python3-venv with apt?"):
+            raise
+        subprocess.run(["sudo", "apt-get", "update"], check=True)
+        subprocess.run(["sudo", "apt-get", "install", "-y", "python3-venv"], check=True)
+        venv.EnvBuilder(with_pip=True).create(env)
     subprocess.run([str(env / "bin" / "python"), "-m", "pip",
                     "install", "mymcplusplus"], check=True)
     print(f"[OK] Installed {binary}")
@@ -375,6 +384,8 @@ def make_offline():
     directory = Path(d.get("output_dir", str(CACHE / "output"))).expanduser()
     output = directory / f"{source.stem}-OPL-RA-{timestamp()}.mc2"
     build_image(source, binaries, output)
+    if yes("Allow other local/SMB users to read this patched image (chmod 0644)?"):
+        output.chmod(0o644)
     print("[NEXT] Copy the patched .mc2 to your SD card using its device's documented")
     print("layout, or retrieve it from the configured share via SMB. No device was changed.")
 
