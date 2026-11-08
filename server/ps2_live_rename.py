@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from retrodb.providers.gamedb import load
-from report_opl_rename import propose
+from report_opl_rename import propose, inspect_iso
 
 SERIAL = re.compile(r"(?<![A-Z0-9])([A-Z]{4})[-_. ]?(\d{3})[-_. ]?(\d{2})(?!\d)", re.I)
 CACHE = Path("/var/cache/retrodb/providers/gamedb")
@@ -29,7 +29,19 @@ def inventory(root, titles):
     for file in files:
         match = SERIAL.search(file.name)
         serial = (f"{match[1].upper()}-{match[2]}{match[3]}" if match else "")
-        rows.append(dict(path=file.relative_to(root).as_posix(),
+        relative = file.relative_to(root).as_posix()
+        if not serial:
+            # A perfectly valid game image need not have its disc ID in its
+            # filename. Read only the ISO9660 descriptor and SYSTEM.CNF to
+            # recover BOOT2's disc ID; never hash the whole ISO here.
+            evidence = inspect_iso(root, relative)
+            found = re.fullmatch(
+                r"SYSTEM\\.CNF BOOT ID: ([A-Z]{4})[_\\.-](\\d{3})[_\\.-](\\d{2})",
+                evidence,
+            )
+            if found:
+                serial = f"{found[1]}-{found[2]}{found[3]}"
+        rows.append(dict(path=relative,
                          platform="Sony PlayStation 2", local_serial=serial,
                          gamedb_title=titles.get(serial, "")))
     return rows
