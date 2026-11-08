@@ -206,7 +206,7 @@ rollback_failed_upgrade() {
   local old_unit="$1" name
   echo "[WARN] Restoring previous working xeRAbora install." >&2
   sudo systemctl stop xerabora.service || true
-  for name in xerabora-linux-x86_64 OPL-RA.ELF VERSION; do
+  for name in xerabora-linux-x86_64 OPL-RA.ELF OPL-RA-debug.ELF VERSION; do
     if sudo test -f "/opt/xerabora/$name.previous"; then
       sudo cp -a "/opt/xerabora/$name.previous" "/opt/xerabora/$name"
     fi
