@@ -191,7 +191,8 @@ Use **5 Update over FTP**. The tool:
 - Downloads the remote card again to detect changes before the upload.
 - Uploads using passive FTP, reports progress, downloads the remote image
   again and verifies its SHA-256 against the patched image.
-- Preserves original, pre-write and readback images locally.
+- Preserves original, pre-write and readback images privately in
+  `~/.cache/xerabora-memcard/backups/` (not in the configurable SMB output folder).
 
 **Important:** The upload replaces the entire `.mc2` file and is not
 atomic. Do not deploy while the PS2 is saving or accessing the card.
@@ -236,6 +237,9 @@ roms/
 Only set `output_dir` to the desired `patched` directory: this
 helper deliberately does not modify RetroNAS share configuration or
 the core ROM library. It does not change the source image's permissions.
+For offline images it optionally offers to make a patched image world-readable
+(`chmod 0644`) for retrieval over SMB; avoid that on a share containing
+private memory-card saves unless you intend others to read them.
 Actual SD card folder/filename conventions vary by device, and require
 device-specific verification; the tool doesn't claim all Bitfunx
 models accept MemCard PRO2 `.mc2` images unchanged.
