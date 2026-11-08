@@ -49,7 +49,7 @@ PS1 multi-disc titles display `(Disc N)` when supported by an explicitly reviewe
 - [Current project status and known limitations](docs/CURRENT-STATUS.md)
 - [Architecture](docs/architecture.md) · [Data model](docs/data-model.md)
 - [RetroNAS scanning](docs/retronas-scanning.md) · [RetroAchievements setup](docs/retroachievements-setup.md)
-- [xeRAbora integration](integrations/xerabora/README.md)
+- [xeRAbora integration](integrations/xerabora/README.md) — standalone installer plus optional MemCard PRO2 FTP updater and offline PS2 `.mc2` image builder (including normal/debug OPL-RA ELFs)
 - [Development notes and historical decisions](docs/development-notes/ROOT-README-HISTORY.md)
 - [Historical server development notes](docs/development-notes/SERVER-README-HISTORY.md)
 
