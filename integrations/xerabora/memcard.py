@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 import urllib.error
 import urllib.request
 
@@ -295,7 +296,8 @@ def choose_elfs():
 
 def build_image(source, binaries, output):
     validate_image(source)
-    secure_dir(output.parent)
+    # Shared/NFS destinations need their existing group/SMB permissions preserved.
+    output.parent.mkdir(parents=True, exist_ok=True)
     if output.exists():
         raise FileExistsError(f"Output already exists; not overwriting: {output}")
     shutil.copy2(source, output)
@@ -332,12 +334,44 @@ def build_image(source, binaries, output):
         raise
 
 
+def offline_source(path):
+    """Accept a local .mc2 or one valid card image from a user-downloaded ZIP."""
+    source = Path(path).expanduser().resolve()
+    if not source.is_file():
+        raise FileNotFoundError(source)
+    if source.suffix.lower() == ".mc2":
+        validate_image(source)
+        return source
+    if source.suffix.lower() != ".zip":
+        raise ValueError("Supply a .mc2 file or a locally downloaded .zip containing one")
+    secure_dir(CACHE)
+    with zipfile.ZipFile(source) as archive:
+        candidates = [entry for entry in archive.infolist()
+                      if not entry.is_dir() and entry.filename.lower().endswith(".mc2")
+                      and 8 * 1024 * 1024 <= entry.file_size <= MAX_IMAGE
+                      and entry.file_size % (1024 * 1024) == 0]
+        if not candidates:
+            raise RuntimeError("ZIP contains no .mc2 files of supported sizes")
+        for n, entry in enumerate(candidates, 1):
+            print(f"  {n}) {entry.filename} ({entry.file_size // (1024 * 1024)} MiB)")
+        selected = int(ask("Choose source card", "1"))
+        if selected not in range(1, len(candidates) + 1):
+            raise ValueError("Invalid source card selection")
+        entry = candidates[selected - 1]
+        target = CACHE / f"offline-source-{timestamp()}.mc2"
+        with archive.open(entry) as inp, target.open("xb") as out:
+            shutil.copyfileobj(inp, out)
+        validate_image(target)
+        print(f"[OK] Extracted working source: {target}")
+        return target
+
+
 def make_offline():
     d = config()
-    supplied = ask("Path to original .mc2 image (e.g. extracted Free McBoot 8 MiB image)")
-    source = Path(supplied).expanduser().resolve()
-    if not source.is_file() or source.suffix.lower() != ".mc2":
-        raise ValueError("Supply an existing .mc2 image, not a ZIP archive")
+    print("Download a Free McBoot template ZIP from your trusted source first.")
+    print("The supplied Dropbox folder is not bundled or automatically downloaded.")
+    supplied = ask("Path to local .mc2 or .zip template")
+    source = offline_source(supplied)
     binaries = choose_elfs()
     directory = Path(d.get("output_dir", str(CACHE / "output"))).expanduser()
     output = directory / f"{source.stem}-OPL-RA-{timestamp()}.mc2"
@@ -352,7 +386,7 @@ def update_ftp():
         return print("[STOP] Run Setup first.")
     binaries = choose_elfs()
     directory = Path(d.get("output_dir", str(CACHE / "output"))).expanduser()
-    secure_dir(directory)
+    directory.mkdir(parents=True, exist_ok=True)
     ftp = None
     try:
         ftp = ftp_connect(d)
