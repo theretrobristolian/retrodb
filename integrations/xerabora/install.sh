@@ -684,6 +684,7 @@ menu() {
     echo "  5) Check / install xeRAbora binary (may restart service)"
     echo "  6) Update RetroDB manager scripts (no service restart)"
     echo "  7) Advanced options"
+    echo "  8) Manage PS2 memory cards / OPL-RA updates"
     echo "  0) Exit"
     echo
     xr_draw_footer
@@ -696,6 +697,7 @@ menu() {
       5) check_version || true; install_client; xr_pause; release_note="$(release_status_line)" ;;
       6) safe_source_update; xr_pause ;;
       7) advanced_menu ;;
+      8) python3 "$SCRIPT_DIR/memcard.py" menu; xr_pause ;;
       0|q|Q) break ;; *) echo "Invalid choice"; xr_pause ;;
     esac
   done
@@ -718,6 +720,8 @@ case "${1:-menu}" in
   startup) configure_service_startup ;;
   elf|download-elf) show_elf_download ;;
   rollback) bash "$SCRIPT_DIR/rollback.sh" ;;
+  memcard) python3 "$SCRIPT_DIR/memcard.py" menu ;;
+  memcard-setup) python3 "$SCRIPT_DIR/memcard.py" setup ;;
   start|stop|restart) sudo systemctl "$1" xerabora.service ;;
   *) echo "Usage: bash install.sh [menu|prerequisites|install|check|update|api-key|test-api|login|doctor|status|logs|follow-log|uninstall|web-ui|startup|elf|download-elf|start|stop|restart]"; exit 2 ;;
 esac
