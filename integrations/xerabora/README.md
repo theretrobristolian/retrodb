@@ -171,6 +171,36 @@ of the RetroDB server/database. It uses Python standard library plus
    device WebUI, re-enter username/password, click **Save Credentials**,
    then retry. In testing, this restored FTP without rebooting the PS2.
 
+### Verified ELF identity and safe cache cleanup
+
+The MemCard manager now checks the latest upstream release and verifies the
+release's SHA256SUMS before offering to patch. For source selection, **1** uses
+the latest verified upstream binaries and **2** uses the files installed in
+`/opt/xerabora`, which could be older. Both source file paths and SHA-256
+hashes are displayed; installing source binaries that do not match the
+verified upstream release requires typing `USE OLD BINARIES` explicitly.
+
+Before a live FTP patch, the downloaded original card image is inspected
+(read-only extraction of the existing ELFs) and compared with the chosen
+executables. When every selected executable is identical to the card's
+existing copy, the upload is skipped. Files selected for patching are
+still checksum verified inside the modified card as before.
+
+New memory-card submenu commands:
+
+- **7 — Inspect installed/cached ELFs:** checks server's /opt/xerabora files
+  against latest verified release and lists old cached release folders.
+- **8 — Clean old release downloads:** fetches/verifies the latest release,
+  shows the specific older cached release folders containing only verified
+  standard/debug ELF files and SHA256SUMS, and deletes those **only after**
+  typing `CLEAN OLD RELEASES`. The current release, private FTP card backups,
+  offline images, patched images, server installation and unknown/user
+  folders are untouched.
+
+Automatic deletion from `/opt/xerabora` is deliberately excluded: its
+`.previous` files may be needed to roll back a failed Linux client upgrade.
+Older downloaded releases are distinct from old memory-card backups.
+
 ### Updating a Wi-Fi MemCard PRO2 directly
 
 Use **4** to download/check SHA256SUMS and normal/debug `OPL-RA.ELF`
@@ -249,3 +279,38 @@ MemCard PRO2: edit `/APPS/OPL-RA.ELF` in an 8 MiB `.mc2`, validate the
 embedded SHA-256 and image filesystem, upload and read back the whole
 image, and restart PS2. Free McBoot remained present. Testing of other
 formats and automatic remounts is still outstanding.
+
+### v2.0.0: game check and boot diagnosis
+
+Upstream v2.0.0 (published 13 November 2026) changes the console/server
+memory-watch protocol and explicitly requires **both** server and console
+binaries to be updated, followed by **RA: check game support** again for each
+game. A successful console connection does not prove that a particular ISO
+will launch or that its gameplay telemetry will work.
+
+For **The Simpsons: Hit & Run**, reports of success on another user's setup
+do not independently establish compatibility on a different PS2, game
+revision, OPL source (SMB vs USB), or game-specific OPL configuration.
+To isolate the failure:
+
+1. Cold-boot the PS2, launch the verified normal v2.0.0 OPL-RA build,
+   and perform **RA: check game support** again immediately before launch.
+2. Record the exact symptom: instant black screen, stuck on loading,
+   freezes after a time, or returns to OPL. Try the same ISO using an
+   independent standard OPL build, with matching loader/source settings.
+3. Compare SMB and a locally attached USB/SD copy, where supported.
+   Only one variable should change at a time. A successful USB boot but
+   failing SMB boot points toward the loader/share path, not the
+   xeRAbora server identity.
+4. For a reproducible failure, use `OPL-RA-debug.ELF` as a separate launcher
+   entry. The debug build logs launcher/module information to `RA/launch.txt`
+   on the share when that log destination is available. Capture that log,
+   the game's disc serial, and the ISO's source/mode. Never delete the
+   working normal ELF to investigate.
+5. A boot failure is distinct from a missed achievement. For missed
+   achievements on a game that boots, v2.0.0 has **SETTINGS → Diagnostics →
+   Save the last minute** to capture the watch conditions and values.
+
+This tool only patches files inside `.mc2`; it does not modify PS2
+game-specific compatibility settings, SMB/NFS server settings, ISO contents
+or the upstream OPL-RA loader.
