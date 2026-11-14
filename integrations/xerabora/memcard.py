@@ -284,12 +284,141 @@ def download_release():
     return destination
 
 
+def release_identity(folder):
+    """Identify a verified cached release; never infer ELF versions from names."""
+    manifest = folder / "SHA256SUMS"
+    if not manifest.is_file():
+        return None
+    expected = {}
+    for line in manifest.read_text().splitlines():
+        fields = line.split()
+        if len(fields) == 2 and len(fields[0]) == 64:
+            expected[fields[1].lstrip("*")] = fields[0].lower()
+    names = ("OPL-RA.ELF", "OPL-RA-debug.ELF")
+    if not any((folder / name).is_file() for name in names):
+        return None
+    for name in names:
+        file = folder / name
+        if file.is_file() and (name not in expected or digest(file) != expected[name]):
+            return None
+    return {name: digest(folder / name) for name in names if (folder / name).is_file()}
+
+
+def describe_elfs(binaries, reference):
+    """Always show exact hashes before deciding to modify any memory-card image."""
+    print("\n===== SELECTED ELF SOURCE =====")
+    for name, file in binaries.items():
+        sha = digest(file)
+        official = reference.get(name)
+        state = "MATCHES VERIFIED UPSTREAM" if official == sha else (
+            "DIFFERS FROM LATEST UPSTREAM" if official else "NO UPSTREAM REFERENCE")
+        print(f"{name}: {file}\n  SHA-256: {sha}\n  {state}")
+
+
+def image_elf_hashes(image):
+    """Read-only extraction from a card image, without changing the image."""
+    found = {}
+    with tempfile.TemporaryDirectory(prefix="xerabora-card-inspect-") as tmp:
+        for name in ("OPL-RA.ELF", "OPL-RA-debug.ELF"):
+            dest = Path(tmp) / name
+            result = subprocess.run(
+                [mymc(), str(image), "extract", "-o", str(dest), "/APPS/" + name],
+                capture_output=True, text=True, check=False,
+            )
+            if result.returncode == 0 and dest.is_file():
+                found[name] = digest(dest)
+            else:
+                found[name] = None
+    return found
+
+
+def display_image_comparison(image, selected, reference):
+    print(f"\n===== MEMORY CARD: {image} =====")
+    found = image_elf_hashes(image)
+    for name in ("OPL-RA.ELF", "OPL-RA-debug.ELF"):
+        existing = found[name]
+        expected = digest(selected[name]) if name in selected else None
+        upstream = reference.get(name)
+        label = ("MISSING" if existing is None else
+                 "MATCHES SELECTED" if expected and existing == expected else
+                 "MATCHES VERIFIED UPSTREAM" if upstream and existing == upstream else
+                 "DIFFERENT / UNKNOWN VERSION")
+        print(f"{name}: {label} ({existing or 'absent'})")
+    return found
+
+
+def current_release():
+    """Fetch and verify the latest available release's ELF assets."""
+    folder = download_release()
+    ref = release_identity(folder)
+    if not ref:
+        raise RuntimeError(f"Could not validate release identity at {folder}")
+    return folder, ref
+
+
+def inspect_local():
+    """Read-only status for installed and cached ELFs. Never touches the PS2."""
+    folder, reference = current_release()
+    print(f"\nLatest verified upstream: {folder.name}")
+    installed_version = SOURCE_ELF / "VERSION"
+    print(f"Installed server version marker: {installed_version.read_text().strip() if installed_version.is_file() else 'unknown'}")
+    for name in ("OPL-RA.ELF", "OPL-RA-debug.ELF"):
+        local = SOURCE_ELF / name
+        if local.is_file():
+            sha = digest(local)
+            verdict = "CURRENT" if reference.get(name) == sha else "OUTDATED / UNRECOGNISED"
+            print(f"{name} local: {verdict} ({sha})")
+        else:
+            print(f"{name} local: MISSING")
+    print("\nCached release folders:")
+    for directory in sorted(CACHE.iterdir()):
+        if directory.is_dir() and directory.name.startswith("v") and directory != folder:
+            verified = release_identity(directory)
+            print(f"  {directory}: {'verified cached files' if verified else 'unverified cache'}")
+    print("\nNo memory-card or server files have been modified.")
+
+
+def cleanup_old_releases():
+    """Remove only old verified release asset directories; never backups or images."""
+    latest, _ = current_release()
+    candidates = []
+    for folder in CACHE.iterdir():
+        if (not folder.is_dir() or folder.is_symlink() or folder == latest
+                or not folder.name.startswith("v")):
+            continue
+        if not release_identity(folder):
+            print(f"[KEEP] {folder}: cannot verify cached binaries")
+            continue
+        contents = list(folder.iterdir())
+        allowed = {"SHA256SUMS", "OPL-RA.ELF", "OPL-RA-debug.ELF"}
+        if not contents or any(item.is_symlink() or not item.is_file()
+                               or item.name not in allowed for item in contents):
+            print(f"[KEEP] {folder}: contains unexpected content")
+            continue
+        candidates.append(folder)
+    print(f"\nLatest verified release retained: {latest.name}")
+    print("Backup images, patched images, /opt/xerabora and custom files are NEVER deleted.")
+    if not candidates:
+        return print("[OK] No safe old release downloads to remove.")
+    for folder in candidates:
+        print(f"[CANDIDATE] {folder}")
+    if input("Type CLEAN OLD RELEASES to delete ONLY these cached ELF folders: ").strip() != "CLEAN OLD RELEASES":
+        return print("[CANCELLED] No changes.")
+    for folder in candidates:
+        for file in folder.iterdir():
+            file.unlink()
+        folder.rmdir()
+        print(f"[REMOVED] {folder}")
+
+
 def choose_elfs():
-    print("  1) Fetch verified normal + debug ELF from latest upstream release")
-    print("  2) Use locally installed /opt/xerabora binaries")
+    upstream, reference = current_release()
+    print(f"\nLatest verified upstream release: {upstream.name}")
+    print("  1) Verified latest upstream ELFs (recommended)")
+    print("  2) Locally installed /opt/xerabora binaries (may be older)")
     choice = ask("Choose", "1")
     if choice == "1":
-        folder = download_release()
+        folder = upstream
     elif choice == "2":
         folder = SOURCE_ELF
     else:
@@ -299,7 +428,14 @@ def choose_elfs():
         raise FileNotFoundError(f"No ELF binaries found in {folder}")
     if "OPL-RA-debug.ELF" in names and not yes("Include debug ELF alongside regular OPL-RA?"):
         names.remove("OPL-RA-debug.ELF")
-    return {name: folder / name for name in names}
+    binaries = {name: folder / name for name in names}
+    describe_elfs(binaries, reference)
+    stale = [name for name in names if digest(binaries[name]) != reference.get(name)]
+    if stale:
+        print("[WARNING] These files DO NOT MATCH latest upstream:", ", ".join(stale))
+        if input("Type USE OLD BINARIES to proceed anyway: ").strip() != "USE OLD BINARIES":
+            raise RuntimeError("Stopped to avoid accidentally installing older OPL-RA executables")
+    return binaries, reference
 
 
 def build_image(source, binaries, output):
@@ -380,9 +516,10 @@ def make_offline():
     print("The supplied Dropbox folder is not bundled or automatically downloaded.")
     supplied = ask("Path to local .mc2 or .zip template")
     source = offline_source(supplied)
-    binaries = choose_elfs()
+    binaries, reference = choose_elfs()
     directory = Path(d.get("output_dir", str(CACHE / "output"))).expanduser()
     output = directory / f"{source.stem}-OPL-RA-{timestamp()}.mc2"
+    display_image_comparison(source, binaries, reference)
     build_image(source, binaries, output)
     if yes("Allow other local/SMB users to read this patched image (chmod 0644)?"):
         output.chmod(0o644)
@@ -404,6 +541,9 @@ def update_ftp():
         ftp = ftp_connect(d)
         original = private_backups / f"MemCardPRO2-original-{timestamp()}.mc2"
         backup_remote(ftp, d, original)
+        found = display_image_comparison(original, binaries, reference)
+        if all(found.get(name) == digest(binary) for name, binary in binaries.items()):
+            return print("[OK] Selected ELFs are already on the card. No new image or FTP upload needed.")
         updated = directory / f"MemCardPRO2-patched-{timestamp()}.mc2"
         build_image(original, binaries, updated)
         if digest(original) == digest(updated):
@@ -444,6 +584,8 @@ def menu():
         print("  4) Download & verify latest normal/debug OPL-RA ELFs")
         print("  5) Update MemCard PRO2 default card over FTP (backup and confirmation)")
         print("  6) Patch a local .mc2 image for SD card / SMB distribution")
+        print("  7) Inspect installed and cached ELF versions (read only)")
+        print("  8) Clean verified old release ELF downloads (confirmation)")
         print("  0) Back")
         choice = input("Choose: ").strip()
         try:
@@ -453,6 +595,8 @@ def menu():
             elif choice == "4": print("[READY]", download_release())
             elif choice == "5": update_ftp()
             elif choice == "6": make_offline()
+            elif choice == "7": inspect_local()
+            elif choice == "8": cleanup_old_releases()
             elif choice == "0": return
             else: print("Invalid choice.")
         except (Exception, KeyboardInterrupt) as exc:
@@ -462,11 +606,12 @@ def menu():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", nargs="?", default="menu",
-                        choices=["menu", "setup", "deps", "test", "download", "ftp", "offline"])
+                        choices=["menu", "setup", "deps", "test", "download", "ftp", "offline", "inspect", "cleanup"])
     args = parser.parse_args()
     try:
         {"menu": menu, "setup": setup, "deps": install_deps, "test": test_connection,
-         "download": download_release, "ftp": update_ftp, "offline": make_offline}[args.command]()
+         "download": download_release, "ftp": update_ftp, "offline": make_offline,
+         "inspect": inspect_local, "cleanup": cleanup_old_releases}[args.command]()
     except (Exception, KeyboardInterrupt) as exc:
         print(f"[STOP] {exc}", file=sys.stderr)
         sys.exit(1)
