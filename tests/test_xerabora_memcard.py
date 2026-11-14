@@ -76,7 +76,7 @@ def test_release_identity_rejects_mismatched_elf(tmp_path):
     elf = folder / "OPL-RA.ELF"
     elf.write_bytes(b"older")
     digest = hashlib.sha256(b"expected").hexdigest()
-    (folder / "SHA256SUMS").write_text(f"{digest}  OPL-RA.ELF\\n")
+    (folder / "SHA256SUMS").write_text(f"{digest}  OPL-RA.ELF\n")
     assert memcard.release_identity(folder) is None
 
 
@@ -116,12 +116,12 @@ def test_old_cache_cleanup_preserves_private_backups(tmp_path, monkeypatch):
     older = b"older"
     (old / "OPL-RA.ELF").write_bytes(older)
     (old / "SHA256SUMS").write_text(
-        hashlib.sha256(older).hexdigest() + "  OPL-RA.ELF\\n")
+        hashlib.sha256(older).hexdigest() + "  OPL-RA.ELF\n")
     latest = cache / "v2.0.0"
     latest.mkdir()
     (latest / "OPL-RA.ELF").write_bytes(b"latest")
     (latest / "SHA256SUMS").write_text(
-        hashlib.sha256(b"latest").hexdigest() + "  OPL-RA.ELF\\n")
+        hashlib.sha256(b"latest").hexdigest() + "  OPL-RA.ELF\n")
     backup = cache / "backups"
     backup.mkdir()
     (backup / "keep.mc2").write_bytes(b"private")
