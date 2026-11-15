@@ -189,3 +189,16 @@ def test_disc_region_flags_are_conservative():
     assert disc_region("SLPM-12345", "playstation-2")[0] == "🇯🇵"
     assert disc_region("SCKA-12345", "playstation-2")[0] == "🌐"
     assert disc_region("SLUS-12345", "gamecube")[0] == "🌐"
+
+
+
+def test_sega32x_filename_title_and_region():
+    from types import SimpleNamespace
+    from retrodb.web_ui import disc_region, name
+    item = SimpleNamespace(filename="[32X] Virtua Racing Deluxe (J).zip",
+                           ra_game_title="Virtua Racing Deluxe")
+    assert name(item, "sega-32x") == "Virtua Racing Deluxe"
+    assert disc_region(item.filename, "sega-32x")[0] == "🇯🇵"
+    item.ra_game_title = None
+    assert name(item, "sega-32x").startswith("Virtua Racing Deluxe")
+    assert disc_region("[32X] Doom (Europe) [Patch].zip", "sega-32x")[0] == "🇪🇺"
