@@ -41,7 +41,7 @@ def get_disc_size(row, root=Path('/mnt/retrodb-retronas')):
         return None
     try:
         contents = cue.read_text(encoding='utf-8-sig', errors='replace')
-        names = re.findall(r'^\\s*FILE\\s+(?:"([^"]+)"|(\\S+))\\s+\\w+', contents, re.I | re.M)
+        names = re.findall(r'^\s*FILE\s+(?:"([^"]+)"|(\S+))\s+\w+', contents, re.I | re.M)
         candidates = set()
         for quoted, unquoted in names:
             name = quoted or unquoted
