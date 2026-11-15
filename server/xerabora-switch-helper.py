@@ -17,6 +17,7 @@ import tempfile
 from pathlib import Path
 
 LINKS = Path("/etc/retrodb/profile-links.json")
+SERVER_ADMINS = Path("/etc/retrodb/server-admins.json")
 ACTIVE_SERVICE = "xerabora.service"
 VALID = re.compile(r"^[A-Za-z0-9_-]{1,48}$")
 DROP_DIR = Path("/etc/systemd/system/xerabora.service.d")
@@ -111,6 +112,34 @@ def execute_request(payload):
             os.unlink(tmp_path)
     return "Activated " + target + "; restart your PS2 / OPL-RA session"
 
+def execute_admin_request(payload):
+    """Only two fixed systemd operations; never accept units or commands."""
+    if (not isinstance(payload, dict)
+            or set(payload) != {"admin", "operation"}):
+        raise ValueError("Invalid admin request")
+    admin = payload["admin"]
+    operation = payload["operation"]
+    if not isinstance(admin, str) or not VALID.fullmatch(admin):
+        raise ValueError("Invalid administrator")
+    allowed = json.loads(SERVER_ADMINS.read_text(encoding="utf-8"))
+    if (not isinstance(allowed, dict)
+            or not isinstance(allowed.get("admins"), list)
+            or admin not in allowed["admins"]):
+        raise PermissionError("Administrator not approved")
+    if operation == "restart-xerabora":
+        command("/usr/bin/systemctl", "restart", ACTIVE_SERVICE)
+        command("/usr/bin/systemctl", "is-active", "--quiet", ACTIVE_SERVICE)
+        print("Approved xeRAbora restart:", admin, flush=True)
+        return "xeRAbora restarted"
+    if operation == "reboot-server":
+        # Schedule outside the request so the browser can receive its response.
+        command("/usr/bin/systemd-run", "--unit=retrodb-web-reboot",
+                "--on-active=10s", "/usr/bin/systemctl", "reboot")
+        print("Approved host reboot scheduled:", admin, flush=True)
+        return "Server reboot scheduled"
+    raise ValueError("Unsupported administrator operation")
+
+
 def main():
     expected = pwd.getpwnam("retrodb").pw_uid
     server = socket.socket(fileno=SOCKET_FD)
@@ -126,7 +155,10 @@ def main():
                 data = conn.recv(1024)
                 if len(data) >= 1024:
                     raise ValueError("Request too large")
-                outcome = execute_request(json.loads(data.decode("utf-8")))
+                payload = json.loads(data.decode("utf-8"))
+                outcome = (execute_admin_request(payload)
+                           if isinstance(payload, dict) and "operation" in payload
+                           else execute_request(payload))
                 response = {"ok": True, "message": outcome}
             except (OSError, ValueError, KeyError, PermissionError, subprocess.CalledProcessError,
                     subprocess.TimeoutExpired, RuntimeError) as exc:
