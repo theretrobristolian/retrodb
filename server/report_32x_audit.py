@@ -46,7 +46,7 @@ def filename_region(name):
                "world": "World", "asia": "Asia", "brazil": "Brazil",
                "australia": "Australia"}
     regions = []
-    for group in re.findall(r"\\(([^()]*)\\)", name):
+    for group in re.findall(r"\(([^()]*)\)", name):
         for token in re.split(r"[,/]", group):
             token = token.strip().lower()
             names = {"ju": ("Japan", "USA"), "jue": ("Japan", "USA", "Europe")}.get(token)
