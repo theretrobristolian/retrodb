@@ -893,7 +893,13 @@ sega32x_audit() {
   # Cache as service user, same as the existing RA sync. Does not sync PS1/PS2.
   sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
     -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-32x || return 1
-  [[ -f "$catalogue" ]] || { echo '[ERROR] No 32X RA catalogue available.' >&2; return 1; }
+  # The service-owned cache may be 0750 and invisible to the invoking user.
+  # Use privileged existence/read checks as with the other RA catalogue audits.
+  if ! sudo test -r "$catalogue"; then
+    echo "[ERROR] Sega 32X RA catalogue unavailable to the audit: $catalogue" >&2
+    echo '[NEXT] Inspect its location with: sudo ls -l /var/cache/retrodb/providers/retroachievements/sega-32x.json' >&2
+    return 1
+  fi
   mkdir -p "$HOME/retrodb-exports" || return 1
   ( umask 077; sudo python3 "$HERE/report_32x_audit.py" \
       --root "$root" --ra-catalogue "$catalogue" \
