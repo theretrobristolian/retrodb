@@ -27,9 +27,9 @@ def test_guest_mode_is_catalogue_only(monkeypatch):
         assert "Secure" in response.headers["set-cookie"]
         home = client.get("/")
         assert home.status_code == 200
-        assert "All games" in home.text
-        assert 'href="/management"' not in home.text
-        assert 'href="/online-services"' not in home.text
+        assert "Welcome to RetroDB" in home.text
+        assert '<a class="card" href="/management"' not in home.text
+        assert '<a href="/online-services" data-nav="/online-services"' not in home.text
         assert client.get("/library").status_code == 200
         assert client.get("/management").status_code == 403
         assert client.get("/online-services").status_code == 403
@@ -43,4 +43,4 @@ def test_guest_mode_is_catalogue_only(monkeypatch):
 def test_guest_rejects_missing_csrf(monkeypatch):
     monkeypatch.setattr(auth, "secret", lambda: b"test-only-signing-secret")
     client = TestClient(app, base_url="https://retrodb.it.gattaca.house")
-    assert client.post("/guest", data={}).status_code == 403
+    assert client.post("/guest", data={"csrf_token": ""}).status_code == 403
