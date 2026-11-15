@@ -48,17 +48,46 @@ Run `retrodb` as your normal user:
 
 | Menu | Operation |
 |---|---|
-| 1 | Full PS1/PS2 read-only audit and Excel/CSV export |
+| 1 | Full PS1/PS2/PS3 and Sega 32X audit; exports compatibility data and refreshes 32X web listings |
 | 2 | Patch one verified RA game ID locally; for PS1, offer confirmed deployment to RetroNAS with verified `OLD_` BIN/CUE backups |
-| 3 | PS1 BIN/CUE, PS2 OPL ISO and PS3 ISO/extracted-folder rename workflows, each with preview and explicit confirmation; optional PS3 read-only dedup audit |
-| 4 | More options: exports, diagnostics, maintenance and connection settings (including option 11 for the read-only Sega 32X audit) |
+| 3 | PS1 BIN/CUE, PS2 OPL ISO, PS3 ISO/extracted, and Sega 32X ZIP-only naming; all use preview and confirmation |
+| 4 | More options: exports, diagnostics, maintenance, connection settings and standalone read-only 32X audit |
 
 The normal collection mount stays read-only. The confirmed PS1 deployment temporarily mounts the same share writable, validates the supplied patched CUE/BIN pair, copies and checksum-verifies `OLD_` backups, then publishes the verified patch. The PS2 legacy network deployment code still exists but is **not** part of the current menu-2 completion path. Check journals before retrying an interrupted write. Detailed instructions: [RetroNAS scanning](../docs/retronas-scanning.md).
 
+### Sega 32X concise ZIP rename
+
+Open `retrodb → 3 Rename games → 4 Sega 32X`. After a read-only preview,
+eligible ZIPs can be renamed using an explicit `RENAME 32X` confirmation,
+using a temporary writable RetroNAS mount that is unmounted afterward.
+
+Names follow a **No-Intro-inspired display convention**, not an assertion of
+No-Intro ROM verification: `Knuckles' Chaotix (Japan, USA).zip` instead of
+`[32X] Knuckles' Chaotix (Japan, USA) (En).zip`. Language and platform tags
+are removed; title and explicit region are retained. An exact registered RA
+MD5 may supply the region from the matching registered hash description if
+the original ZIP has no region. Unmatched titles rely on their original
+filename, not an unverified catalogue suggestion.
+
+**Only the outside ZIP filename is renamed**. The ROM filename *inside* the
+ZIP is left unchanged, preserving archive contents and hash compatibility.
+Auditing already validates the ZIP contains a single ROM member; it does
+not require rewriting that member to rename the outer archive.
+
+ZIPs with absent/uncertain region, malformed contents, special build markers
+(prototypes, revisions, hacks and patches), or destination collisions are
+reported for manual review rather than changed. The script checks
+case-insensitive target collisions, re-audits immediately before the
+confirmed writable operation and writes a per-file journal under
+`~/retrodb-exports/32x-rename-journals/`. Never retry an interrupted
+rename without inspecting its journal.
+
+After successful renaming, the manager automatically runs the read-only
+32X audit again to refresh the web library's indexed paths.
+
 ### Sega 32X RetroAchievements audit (read-only)
 
-Open `retrodb → 4 More options → 11 Audit Sega 32X ZIPs`. This
-independent audit scans `/mnt/retrodb-retronas/roms/sega/32x` and writes
+A normal `retrodb → 1 Audit games` run now includes Sega 32X as stage 9/9 whenever its collection folder exists. To run only the 32X audit, use `retrodb → 4 More options → 11`. It scans `/mnt/retrodb-retronas/roms/sega/32x` and writes
 `~/retrodb-exports/RetroDB-Sega-32X-Audit.csv`.
 
 - Ignores .txt files, Mac resource forks and ZIPs containing `bios` in
@@ -91,7 +120,7 @@ independent audit scans `/mnt/retrodb-retronas/roms/sega/32x` and writes
   prototype (16800), Soul Star X (15989), and Virtua Racing Deluxe
   (11823), without asserting their modified ROM hashes are supported.
 
-This action is deliberately **audit only**. It never renames or edits ZIPs,
+The **audit** remains deliberately read-only. It never renames or edits ZIPs,
 patches ROM data, deletes duplicates, or writes to the RetroNAS collection.
 The audit requires configured RA Web API credentials and the existing
 RetroNAS read-only mount. After pulling changes, run
