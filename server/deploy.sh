@@ -179,7 +179,7 @@ run_step 'Verifying app password file access' ensure_web_user_access
 ensure_server_admins() {
     local file=/etc/retrodb/server-admins.json
     if [[ ! -e "$file" ]]; then
-        printf '{"admins":[]}\\n' > "$file"
+        echo '{"admins":[]}' > "$file"
     fi
     python3 - "$file" <<'PYADMINS'
 import json, sys
@@ -189,7 +189,7 @@ if (not isinstance(data, dict) or not isinstance(data.get("admins"), list)
         or any(not isinstance(name, str) or not name or len(name) > 48
                or not name.replace("-", "").replace("_", "").isalnum()
                for name in data["admins"])):
-    raise SystemExit("Invalid server-admins.json; expected {\\\"admins\\\":[\\\"username\\\"]}")
+    raise SystemExit("Invalid server-admins.json: expected an admins list of usernames")
 PYADMINS
     chown root:"$APP_GROUP" "$file"
     chmod 0640 "$file"
