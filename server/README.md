@@ -51,9 +51,52 @@ Run `retrodb` as your normal user:
 | 1 | Full PS1/PS2 read-only audit and Excel/CSV export |
 | 2 | Patch one verified RA game ID locally; for PS1, offer confirmed deployment to RetroNAS with verified `OLD_` BIN/CUE backups |
 | 3 | PS1 BIN/CUE, PS2 OPL ISO and PS3 ISO/extracted-folder rename workflows, each with preview and explicit confirmation; optional PS3 read-only dedup audit |
-| 4 | More options: exports, diagnostics, maintenance and connection settings |
+| 4 | More options: exports, diagnostics, maintenance and connection settings (including option 11 for the read-only Sega 32X audit) |
 
 The normal collection mount stays read-only. The confirmed PS1 deployment temporarily mounts the same share writable, validates the supplied patched CUE/BIN pair, copies and checksum-verifies `OLD_` backups, then publishes the verified patch. The PS2 legacy network deployment code still exists but is **not** part of the current menu-2 completion path. Check journals before retrying an interrupted write. Detailed instructions: [RetroNAS scanning](../docs/retronas-scanning.md).
+
+### Sega 32X RetroAchievements audit (read-only)
+
+Open `retrodb → 4 More options → 11 Audit Sega 32X ZIPs`. This
+independent audit scans `/mnt/retrodb-retronas/roms/sega/32x` and writes
+`~/retrodb-exports/RetroDB-Sega-32X-Audit.csv`.
+
+- Ignores .txt files, Mac resource forks and ZIPs containing `bios` in
+  their filenames (including `[32X] 32xbios.zip`).
+- Identifies the **single 32X ROM member inside each ZIP**, streaming the
+  uncompressed ROM content through MD5. This follows RetroAchievements'
+  official Sega 32X content-hashing method, not an MD5 of the ZIP itself.
+  Ambiguous ZIPs (multiple ROMs), invalid archives and oversized members
+  are flagged for review and never silently assumed compatible.
+- Synchronises the official **RetroAchievements Sega 32X system ID 10**
+  catalogue to its own cache, without changing the PS1/PS2 caches.
+- Uses the **verified RA title** as the authoritative display name for
+  exact hash matches. An unmatched ZIP can receive an RA catalogue title
+  candidate through conservative filename matching, explicitly labelled
+  *unverified* rather than presented as an approved hash match. This
+  standalone CSV does not yet rewrite the main web UI's game titles.
+- Reports `EXACT_RA`, `EXACT_NO_SET`, `ALTERNATIVE_REVIEW`,
+  `SOFT_PASS_VARIANT`, `NO_SET_CANDIDATE`, `UNMATCHED`,
+  `AMBIGUOUS_TITLE`, or `REVIEW`. A soft pass means another local ZIP
+  hashes exactly to the same RA game; the unmatched regional ZIP **does
+  not inherit** that compatible hash. The CSV names the local usable
+  alternative, rather than falsely claiming the mismatched ZIP works.
+- When per-game RA hash descriptions are already cached, reports the
+  supported release names/regions for manual review. Otherwise provides
+  the official registered MD5s as evidence, never fabricated download
+  URLs or alternate ZIP filenames.
+
+This action is deliberately **audit only**. It never renames or edits ZIPs,
+patches ROM data, deletes duplicates, or writes to the RetroNAS collection.
+The audit requires configured RA Web API credentials and the existing
+RetroNAS read-only mount. Raw export can also run directly:
+
+```bash
+python3 server/report_32x_audit.py \
+  --root /mnt/retrodb-retronas/roms/sega/32x \
+  --ra-catalogue /var/cache/retrodb/providers/retroachievements/sega-32x.json \
+  --output ~/retrodb-exports/RetroDB-Sega-32X-Audit.csv
+```
 
 ### PS3 rename and extracted-folder deduplication
 
