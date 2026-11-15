@@ -127,10 +127,10 @@ def execute_admin_request(payload):
             or admin not in allowed["admins"]):
         raise PermissionError("Administrator not approved")
     if operation == "restart-xerabora":
-        command("/usr/bin/systemctl", "restart", ACTIVE_SERVICE)
-        command("/usr/bin/systemctl", "is-active", "--quiet", ACTIVE_SERVICE)
+        # Queue immediately so even a hung daemon cannot block the web request.
+        command("/usr/bin/systemctl", "--no-block", "restart", ACTIVE_SERVICE)
         print("Approved xeRAbora restart:", admin, flush=True)
-        return "xeRAbora restarted"
+        return "xeRAbora restart queued"
     if operation == "reboot-server":
         # Schedule outside the request so the browser can receive its response.
         command("/usr/bin/systemd-run", "--unit=retrodb-web-reboot",
