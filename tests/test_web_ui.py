@@ -29,7 +29,7 @@ def test_pages_exist_without_mutation(monkeypatch):
     app.dependency_overrides[get_session] = stub
     try:
         client = TestClient(app)
-        for route, phrase in [("/", "Choose a console"),("/library", "All games"),
+        for route, phrase in [("/", "Welcome to RetroDB"),("/library", "All games"),
                               ("/management", "Library management"),("/online-services", "XLink Kai")]:
             result = client.get(route)
             assert result.status_code == 200
@@ -165,10 +165,11 @@ def test_mobile_catalogue_css_and_trophy_only_status():
     assert ".ra-icon.no::after" in CSS
 
 def test_mobile_navigation_wraps_without_horizontal_overflow():
-    from retrodb.web_ui import page
+    from retrodb.web_ui import page, CSS
     html = page("Navigation", "<p>Test</p>").body.decode("utf-8")
     assert "class=\"mobile-nav\"" in html
-    assert "header nav form button" in html
+    assert "header nav a,header nav button" in CSS
+    assert 'action="/logout"' in html
     assert 'href="/profile"' in html
     assert 'href="/management"' in html
     assert 'href="/online-services"' in html
@@ -189,7 +190,7 @@ def test_mobile_bottom_navigation_and_compact_header():
     assert 'data-nav="/profile"' in html
     assert 'data-nav="/management"' in html
     assert "position:fixed;z-index:40;bottom:0" in CSS
-    assert "env(safe-area-inset-bottom)" in CSS
+    assert "env(safe-area-inset-bottom, 0px)" in CSS
     guest_html = page("Guest", "<p>Body</p>", guest=True).body.decode("utf-8")
     assert 'data-nav="/profile"' not in guest_html
     assert 'data-nav="/management"' not in guest_html
