@@ -131,7 +131,7 @@ def is_guest(request: Request) -> bool:
 def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
     from retrodb.session_auth import csrf_token
     signout_csrf = csrf_token()
-    private_nav = '' if guest else '<a href="/profile">My profile</a><a href="/management">Management</a><a href="/online-services">Online services</a>'
+    private_nav = '' if guest else '<a href="/profile">My profile</a><a href="/settings">Settings</a><a href="/online-services">Online services</a>'
     logout_label = "Leave guest view" if guest else "Sign out"
     heading = escape(title)
     mobile_links = [
@@ -139,10 +139,10 @@ def page(title: str, body: str, guest: bool = False) -> HTMLResponse:
         ("/library", "▤", "Library"),
         ("/profile", "♙", "Profile"),
         ("/online-services", "◉", "Online"),
-        ("/management", "⚙", "Manage"),
+        ("/settings", "⚙", "Settings"),
     ]
     if guest:
-        mobile_links = [item for item in mobile_links if item[0] not in ("/profile", "/online-services", "/management")]
+        mobile_links = [item for item in mobile_links if item[0] not in ("/profile", "/online-services", "/settings")]
     mobile_nav = ''.join(
         f'<a href="{path}" data-nav="{path}"><span class="nav-icon" aria-hidden="true">{icon}</span><span>{label}</span></a>'
         for path, icon, label in mobile_links
@@ -440,8 +440,8 @@ def homepage(request: Request, db: Session = Depends(get_session)):
     nas_status = "CIFS mounted" if nas_mounted else "Mount not confirmed"
     nas_details = "Collection availability detected" if nas_mounted else "Check RetroNAS mount status"
     private = "" if is_guest(request) else (
-        '<a class="card" href="/management"><div class="eyebrow">Administration</div>'
-        '<h2>Management →</h2><p class="muted">Inventory, audit information and maintenance</p></a>')
+        '<a class="card" href="/settings"><div class="eyebrow">Administration</div>'
+        '<h2>Settings →</h2><p class="muted">Library and server management</p></a>')
     return page("Home", f"""<div class="eyebrow">The Retro Bristolian · Collection & services</div>
 <h1>Welcome to RetroDB</h1>
 <p class="muted">A home for your retro gaming collection: explore classic systems,
@@ -970,12 +970,35 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
 {online_section}</div>"""
     return page(name(item, platform.slug if platform else None), body, guest=is_guest(request))
 
+@router.get("/settings", response_class=HTMLResponse)
+def settings_home(request: Request):
+    if is_guest(request):
+        raise HTTPException(403, "Settings are not available to guests")
+    return page("Settings", """<div class="crumb"><a href="/">Dashboard</a> / Settings</div>
+<h1>Settings</h1><p class="muted">Manage your RetroDB library and server.</p>
+<div class="grid">
+<a class="card" href="/settings/library"><h2>Library management</h2>
+<p class="muted">Collection inventory, audit information and upcoming maintenance tools.</p></a>
+<a class="card" href="/settings/server"><h2>Server management</h2>
+<p class="muted">Restart xeRAbora or reboot the Debian server (approved administrators only).</p></a>
+</div>""")
+
+
 @router.get("/management", response_class=HTMLResponse)
-def management(db: Session = Depends(get_session)):
+def management_legacy():
+    """Keep bookmarks working, but restore the Settings navigation structure."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/settings/library", status_code=307)
+
+
+@router.get("/settings/library", response_class=HTMLResponse)
+def management(request: Request, db: Session = Depends(get_session)):
+    if is_guest(request):
+        raise HTTPException(403, "Settings are not available to guests")
     indexed = db.scalar(select(func.count(LibraryItem.id)).where(LibraryItem.is_missing.is_(False))) or 0
     missing = db.scalar(select(func.count(LibraryItem.id)).where(LibraryItem.is_missing.is_(True))) or 0
     rows = "".join(f"<tr><td>{escape(p.name)}</td><td>{c:,}</td></tr>" for p,c in platform_counts(db))
-    return page("Management", f"""<div class="eyebrow">Administration · Read-only preview</div>
+    return page("Library management", f"""<div class="crumb"><a href="/settings">Settings</a> / Library management</div>\n<div class="eyebrow">Administration · Read-only preview</div>
 <h1>Library management</h1><p class="muted">v1 exposes status without executing shell commands or modifying RetroNAS files.
 Web-triggered jobs will require authenticated, permission-scoped background workers.</p>
 <div class="grid"><div class="card"><div class="label">Indexed files</div><div class="metric">{indexed:,}</div></div>
