@@ -85,3 +85,51 @@ def test_title_candidates_are_not_claimed_as_hash_matches(tmp_path):
     assert row["ra_game_id"] == ""
     assert row["suggested_ra_game_id"] == 102
     assert row["ra_supported_md5"] == ""
+
+
+def test_reviewed_hack_and_prototype_identity_does_not_grant_hash_match(tmp_path):
+    root = tmp_path / "32x"
+    root.mkdir()
+    cases = [
+        ("[32X] Doom (Europe) [Patch Ressurrection v3.1].zip", 18179),
+        ("[32X] Pinocchio 32X Working (patched).zip", 16800),
+        ("[32X] Soulstar X (USA) (Proto).zip", 15989),
+    ]
+    for index, (filename, _) in enumerate(cases):
+        write_zip(root, filename, {"game.32x": ("unregistered%d" % index).encode()})
+    catalogue_path = tmp_path / "ra.json"
+    games = [
+        {"ID": 12777, "ConsoleID": 10, "Title": "Doom",
+         "NumAchievements": 59, "Hashes": ["a" * 32]},
+        {"ID": 18179, "ConsoleID": 10, "Title": "~Hack~ Doom 32X: Resurrection",
+         "NumAchievements": 117, "Hashes": ["b" * 32]},
+        {"ID": 16800, "ConsoleID": 10, "Title": "~Prototype~ Pinocchio",
+         "NumAchievements": 27, "Hashes": ["c" * 32]},
+        {"ID": 15989, "ConsoleID": 10, "Title": "~Prototype~ Soul Star X | Soulstar X",
+         "NumAchievements": 6, "Hashes": ["d" * 32]},
+    ]
+    catalogue_path.write_text(json.dumps(games))
+    rows = {row["filename"]: row for row in audit32.audit(root, catalogue_path)}
+    for filename, game_id in cases:
+        assert rows[filename]["status"] == "ALTERNATIVE_REVIEW"
+        assert rows[filename]["suggested_ra_game_id"] == game_id
+        assert rows[filename]["ra_game_id"] == ""
+        assert rows[filename]["ra_supported_md5"]
+    assert rows[cases[0][0]]["suggested_ra_game_id"] != 12777
+
+
+def test_reviewed_identity_soft_passes_only_with_real_verified_zip(tmp_path):
+    root = tmp_path / "32x"
+    root.mkdir()
+    supported = b"verified"
+    write_zip(root, "[32X] Soul Star X (Proto) (supported).zip", {"game.32x": supported})
+    write_zip(root, "[32X] Soulstar X (USA) (Proto).zip", {"game.32x": b"other"})
+    source = tmp_path / "ra.json"
+    source.write_text(json.dumps([{
+        "ID": 15989, "ConsoleID": 10, "Title": "~Prototype~ Soul Star X | Soulstar X",
+        "NumAchievements": 6, "Hashes": [hashlib.md5(supported).hexdigest()]
+    }]))
+    rows = audit32.audit(root, source)
+    assert sorted(row["status"] for row in rows) == ["EXACT_RA", "SOFT_PASS_VARIANT"]
+    other = next(row for row in rows if row["status"] == "SOFT_PASS_VARIANT")
+    assert "supported" in other["local_verified_variant"]
