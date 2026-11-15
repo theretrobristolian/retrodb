@@ -198,7 +198,7 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
     if platform_slug == "sega-32x":
         # 32X carts have no Sony-style disc serial. Use only the explicit
         # filename region, not a guess from the registered RA hash.
-        match = re.search(r"\\((USA|U|Europe|E|Japan|J|World)\\)", serial, re.I)
+        match = re.search(r"\((USA|U|Europe|E|Japan|J|World)\)", serial, re.I)
         if match:
             region = match.group(1).lower()
             return {"usa": ("🇺🇸", "USA (filename)"), "u": ("🇺🇸", "USA (filename)"),
@@ -271,7 +271,7 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
     if slug == "sega-32x":
-        title = re.sub(r"^\\s*\\[32X\\]\\s*", "", title, flags=re.I)
+        title = re.sub(r"^\s*\[32X\]\s*", "", title, flags=re.I)
     if slug == "playstation-portable":
         title = PSP_SERIAL_RE.sub("", title)
         title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|(?:RA[-_. ]?)?\d{4,8})\s*\]", "", title, flags=re.I)
