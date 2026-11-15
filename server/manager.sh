@@ -1100,17 +1100,21 @@ PYPS3DELETE
 
 permissions_menu() {
   local script=/opt/retrodb/server/server_permissions.py
-  if [[ ! -f "$script" ]]; then
-    echo '[STOP] Permissions menu is not deployed yet.'
-    echo 'Run: sudo bash server/deploy.sh'
-    return 1
-  fi
   if [[ ! -t 0 || ! -t 1 ]]; then
     echo '[STOP] This menu needs an interactive terminal.'
     return 1
   fi
+  # /opt/retrodb is root:retrodb mode 0750. The normal shell user
+  # cannot traverse it, so [[ -f "$script" ]] incorrectly reports missing.
+  # Check under sudo instead; do not loosen application directory access.
   echo '[INFO] Server permissions require administrator approval through sudo.'
-  sudo /usr/bin/python3 "$script"
+  sudo -v || return 1
+  if ! sudo -n test -f "$script"; then
+    echo '[STOP] Permissions editor is missing from the deployed application.'
+    echo 'Run: sudo bash server/deploy.sh'
+    return 1
+  fi
+  sudo -n /usr/bin/python3 "$script"
 }
 
 menu() {
