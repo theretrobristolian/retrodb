@@ -40,6 +40,10 @@ def test_safari_null_origin_and_guest_form(monkeypatch):
     assert response.headers["location"] == "/"
 
 def test_safari_guest_logout_with_null_origin(monkeypatch):
+    from retrodb.database import get_session
+    import retrodb.web_ui as web_ui
+    monkeypatch.setattr(web_ui, "platform_counts", lambda db: [])
+    app.dependency_overrides[get_session] = lambda: object()
     monkeypatch.setattr(auth, "secret", lambda: b"test-secret-only-not-for-production")
     client = TestClient(app, base_url="https://retrodb.it.gattaca.house", follow_redirects=False)
     token = re.search(r'name="csrf_token" value="([^"]+)"', client.get("/login").text).group(1)
@@ -56,6 +60,7 @@ def test_safari_guest_logout_with_null_origin(monkeypatch):
     assert 'retrodb_session=' in logged_out.headers["set-cookie"]
     assert 'Max-Age=0' in logged_out.headers["set-cookie"]
     assert client.get("/").status_code == 303
+    app.dependency_overrides.pop(get_session, None)
 
 def test_logout_rejects_unsigned_post_even_with_guest_cookie(monkeypatch):
     monkeypatch.setattr(auth, "secret", lambda: b"test-secret-only-not-for-production")
