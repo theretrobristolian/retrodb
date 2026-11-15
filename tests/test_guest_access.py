@@ -34,7 +34,12 @@ def test_guest_mode_is_catalogue_only(monkeypatch):
         assert client.get("/management").status_code == 403
         assert client.get("/online-services").status_code == 403
         assert client.get("/api/v1/platforms").status_code == 403
-        out = client.post("/logout")
+        signout = re.search(
+            r'<form method="post" action="/logout"[^>]*><input type="hidden" name="csrf_token" value="([^"]+)"',
+            home.text,
+        )
+        assert signout is not None
+        out = client.post("/logout", data={"csrf_token": signout.group(1)})
         assert out.status_code == 303
         assert out.headers["location"] == "/login"
     finally:
