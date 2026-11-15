@@ -40,8 +40,12 @@ def filename_title(name):
     return value or Path(name).stem
 
 def filename_region(name):
-    for region in ("USA", "Europe", "Japan", "World", "Asia", "Brazil", "Australia"):
-        if re.search(r"\(" + region + r"(?:,|\))", name, re.I):
+    aliases = {"USA": "USA", "U": "USA", "Europe": "Europe",
+               "E": "Europe", "Japan": "Japan", "J": "Japan",
+               "World": "World", "Asia": "Asia", "Brazil": "Brazil",
+               "Australia": "Australia"}
+    for token, region in aliases.items():
+        if re.search(r"\(" + re.escape(token) + r"(?:,|\))", name, re.I):
             return region
     return ""
 
