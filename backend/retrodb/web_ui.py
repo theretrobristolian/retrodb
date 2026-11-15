@@ -195,6 +195,17 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
         if prefix in ("ULJS", "ULJM", "UCJS", "UCJM", "NPJH", "NPJQ"):
             return ("🇯🇵", "Japan (disc prefix)")
         return ("🌐", "Region unknown")
+    if platform_slug == "sega-32x":
+        # 32X carts have no Sony-style disc serial. Use only the explicit
+        # filename region, not a guess from the registered RA hash.
+        match = re.search(r"\\((USA|U|Europe|E|Japan|J|World)\\)", serial, re.I)
+        if match:
+            region = match.group(1).lower()
+            return {"usa": ("🇺🇸", "USA (filename)"), "u": ("🇺🇸", "USA (filename)"),
+                    "europe": ("🇪🇺", "Europe (filename)"), "e": ("🇪🇺", "Europe (filename)"),
+                    "japan": ("🇯🇵", "Japan (filename)"), "j": ("🇯🇵", "Japan (filename)"),
+                    "world": ("🌐", "World (filename)")}[region]
+        return ("🌐", "Region unknown")
     if platform_slug not in ("playstation", "playstation-2") or not serial:
         return ("🌐", "Region unknown")
     prefix = serial.split("-", 1)[0].upper()
@@ -259,6 +270,8 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
         title = "3, 2, 1, Smurf! My First Racing Game"
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
+    if slug == "sega-32x":
+        title = re.sub(r"^\\s*\\[32X\\]\\s*", "", title, flags=re.I)
     if slug == "playstation-portable":
         title = PSP_SERIAL_RE.sub("", title)
         title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|(?:RA[-_. ]?)?\d{4,8})\s*\]", "", title, flags=re.I)
@@ -299,7 +312,7 @@ def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
     """Gold means a matched disc AND a confirmed nonempty achievement set."""
     if not item.ra_game_id or (item.ra_match_status or "").lower() != "matched":
         return False
-    if slug not in ("playstation", "playstation-2", "playstation-portable"):
+    if slug not in ("playstation", "playstation-2", "playstation-portable", "sega-32x"):
         return False
     path = RA_CACHE / f"{slug}.json"
     try:
@@ -502,7 +515,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item, item_slug(item))
-        region_flag, region_label = disc_region(disc, item_slug(item))
+        region_flag, region_label = disc_region(item.filename if item_slug(item) == "sega-32x" else disc, item_slug(item))
         badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
         thumbnail = ""
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
