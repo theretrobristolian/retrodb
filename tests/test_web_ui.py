@@ -1,5 +1,12 @@
 """Read-only RetroDB v1 web routes smoke tests."""
 from fastapi.testclient import TestClient
+import pytest
+
+@pytest.fixture(autouse=True)
+def test_session_secret(monkeypatch):
+    """Use a nonproduction signing key for isolated page-rendering tests."""
+    monkeypatch.setenv("RETRODB_SESSION_SECRET", "retrodb-test-only-" + "x" * 60)
+
 from retrodb.main import app
 from retrodb.database import get_session
 
@@ -85,9 +92,16 @@ def test_https_session_login_persists_without_basic_auth(tmp_path, monkeypatch):
     finally:
         app.dependency_overrides.clear()
 
-def test_catalogue_title_serial_and_achievement_status():
+def test_catalogue_title_serial_and_achievement_status(tmp_path, monkeypatch):
+    import json
     from types import SimpleNamespace
+    from retrodb import web_ui
     from retrodb.web_ui import name, disc_id, ra_supported
+    monkeypatch.setattr(web_ui, "RA_CACHE", tmp_path)
+    web_ui._ra_achievement_counts.cache_clear()
+    (tmp_path / "playstation-2.json").write_text(json.dumps([
+        {"ID": 12345, "NumAchievements": 12}
+    ]), encoding="utf-8")
     raw = SimpleNamespace(filename="Ratchet_&_Clank_(Europe)_SLES_509.16.iso",
                           relative_path="PS2/Ratchet_&_Clank_(Europe)_SLES_509.16.iso",
                           ra_game_title=None, ra_game_id=None, ra_match_status="unknown")
@@ -99,7 +113,13 @@ def test_catalogue_title_serial_and_achievement_status():
     raw.ra_game_id = 12345
     raw.ra_match_status = "matched"
     assert name(raw) == "Ratchet & Clank"
-    assert ra_supported(raw)
+    assert not ra_supported(raw)  # No platform or verified set supplied.
+    assert ra_supported(raw, "playstation-2")
+    (tmp_path / "playstation-2.json").write_text(json.dumps([
+        {"ID": 12345, "NumAchievements": 0}
+    ]), encoding="utf-8")
+    web_ui._ra_achievement_counts.cache_clear()
+    assert not ra_supported(raw, "playstation-2")  # Hash match alone is insufficient.
 
 def test_catalogue_controls_render(monkeypatch):
     import retrodb.session_auth as auth
