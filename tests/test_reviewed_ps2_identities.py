@@ -17,7 +17,7 @@ def test_different_editions_stay_manual():
     reviewed = load_reviewed_ps2_identities()
     assert "SLES-50383" not in reviewed  # Sons of Liberty vs Substance
     assert "SLES-53557" not in reviewed  # Normal vs Black Edition
-    assert "SLES-53138" not in reviewed  # Remixed vs original
+    assert reviewed["SLES-53138"] == 19930  # Later independently reviewed remixed edition.
     assert "SCES-50612" not in reviewed  # Superseded identity
 
 
