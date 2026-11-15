@@ -881,8 +881,17 @@ sega32x_audit() {
     echo '[ERROR] Missing RetroDB RetroAchievements credentials config.' >&2
     return 1
   fi
+  # The service account may not traverse the invoking user's home checkout.
+  # Always load the deployed backend from /opt/retrodb, as other RA actions do.
+  if ! sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+      -c 'from retrodb.cli import main; import retrodb.cli as cli; assert "ra-sync-32x" in __import__("inspect").getsource(cli.main)'; then
+    echo '[ERROR] Deployed backend does not yet contain the Sega 32X audit command.' >&2
+    echo '[NEXT] From your checkout run: sudo bash server/deploy.sh' >&2
+    echo '[INFO] Deployment restarts the RetroDB service; plan accordingly.' >&2
+    return 1
+  fi
   # Cache as service user, same as the existing RA sync. Does not sync PS1/PS2.
-  sudo -u retrodb env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python \
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
     -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-32x || return 1
   [[ -f "$catalogue" ]] || { echo '[ERROR] No 32X RA catalogue available.' >&2; return 1; }
   mkdir -p "$HOME/retrodb-exports" || return 1
