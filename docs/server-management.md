@@ -7,6 +7,35 @@ RetroDB's authenticated **Settings** area has two sections:
 The second area is privileged. Being signed into RetroDB does **not** make an
 account a server administrator. Guests cannot visit Settings.
 
+## Manage permissions from the RetroDB terminal menu
+
+Run `retrodb` on your Debian machine and choose **5) Permissions**. The
+menu reads website usernames from `/etc/retrodb/web-users-app.htpasswd`:
+
+```text
+RetroDB | Permissions
+Server management: restart xeRAbora / reboot Debian
+
+  (x) alice
+  ( ) bob
+  ( ) charlie
+
+  Confirm / Update
+  Cancel
+```
+
+Use the arrow keys to highlight a username, **Space** (or Enter) to toggle
+`(x)` on/off, then move to **Confirm / Update** and press Enter. The menu
+displays which accounts will gain/lose server permissions and requires **Y**
+before saving. Cancel/Escape/Q leaves the JSON file untouched.
+
+The menu requires sudo authentication for permission changes, and uses the
+root-owned installed script under `/opt/retrodb/server/server_permissions.py`
+rather than executing a checkout file with elevated privileges. The
+allowlist is written atomically to `/etc/retrodb/server-admins.json`.
+There is no need to restart RetroDB after a permissions change. Accounts
+that no longer exist in the web-login file are not newly granted access.
+
 ## Authorise an administrator
 
 After deploying the updated code, create or edit the root-owned
