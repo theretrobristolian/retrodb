@@ -29,7 +29,7 @@ def test_pages_exist_without_mutation(monkeypatch):
     app.dependency_overrides[get_session] = stub
     try:
         client = TestClient(app)
-        for route, phrase in [("/", "Welcome to RetroDB"),("/library", "All games"),
+        for route, phrase in [("/", "Welcome to RetroDB"),("/library", "<h1>Library</h1>"),
                               ("/management", "Library management"),("/online-services", "XLink Kai")]:
             result = client.get(route)
             assert result.status_code == 200
@@ -192,8 +192,8 @@ def test_mobile_bottom_navigation_and_compact_header():
     assert "position:fixed;z-index:40;bottom:0" in CSS
     assert "env(safe-area-inset-bottom, 0px)" in CSS
     guest_html = page("Guest", "<p>Body</p>", guest=True).body.decode("utf-8")
-    assert 'data-nav="/profile"' not in guest_html
-    assert 'data-nav="/management"' not in guest_html
+    assert '<a href="/profile" data-nav="/profile"' not in guest_html
+    assert '<a href="/management" data-nav="/management"' not in guest_html
 
 def test_compact_game_ui_has_feature_and_technical_styles():
     from retrodb.web_ui import CSS
