@@ -219,3 +219,52 @@ def test_sega32x_clean_titles_types_and_multi_region():
     prototype.ra_match_status = "review"
     prototype.ra_hash_error = "local MD5 not registered; Suggested RA ID: 15989"
     assert "Unverified" not in sega32x_ra_label(prototype, False) or "not registered" in sega32x_ra_label(prototype, False)
+
+
+def test_sega32x_soft_pass_status_and_verified_alternative_lookup():
+    from types import SimpleNamespace
+    from retrodb.web_ui import (sega32x_soft_pass, sega32x_alternative_paths,
+                                sega32x_ra_label, sega32x_verified_alternative)
+    item = SimpleNamespace(
+        id=7, source_id=2, platform_id=10, filename="[32X] Virtua Racing Deluxe (U).zip",
+        ra_game_id=None, ra_match_status="review",
+        ra_hash_error=("This ZIP is not RA hash-matched; compatible same-game ZIP exists locally; "
+                       "Compatible alternate ZIP: Virtua Racing Deluxe (Japan).zip; "
+                       "Suggested RA ID: 11823"))
+    assert sega32x_soft_pass(item)
+    assert sega32x_alternative_paths(item) == ["Virtua Racing Deluxe (Japan).zip"]
+    assert "alternative exists" in sega32x_ra_label(item, False)
+    verified = SimpleNamespace(id=19, filename="Virtua Racing Deluxe (Japan).zip")
+    class Lookup:
+        query = None
+        def scalar(self, query):
+            self.query = query
+            return verified
+    db = Lookup()
+    assert sega32x_verified_alternative(db, item) is verified
+    sql = str(db.query.compile())
+    assert "relative_path" in sql and "ra_game_id" in sql
+    assert "source_id" in sql and "platform_id" in sql
+    assert "is_missing" in sql and "ra_match_status" in sql
+    assert "roms/sega/32x/Virtua Racing Deluxe (Japan).zip" in str(
+        db.query.compile().params.values())
+
+
+def test_sega32x_soft_pass_never_inferred_from_title_only():
+    from types import SimpleNamespace
+    from retrodb.web_ui import (sega32x_soft_pass, sega32x_verified_alternative,
+                                sega32x_alternative_paths, sega32x_ra_label)
+    item = SimpleNamespace(
+        id=7, source_id=2, platform_id=10, ra_game_id=None,
+        ra_match_status="review", ra_hash_error="Suggested RA ID: 11823")
+    class NoQueries:
+        def scalar(self, query):
+            raise AssertionError("A title suggestion must not trigger alternative lookup")
+    assert not sega32x_soft_pass(item)
+    assert sega32x_alternative_paths(item) == []
+    assert sega32x_verified_alternative(NoQueries(), item) is None
+    assert "not registered" in sega32x_ra_label(item, False)
+    item.ra_match_status = "matched"
+    item.ra_game_id = 11823
+    assert not sega32x_soft_pass(item)
+    assert sega32x_ra_label(item, False) == "Verified ROM hash; no achievement set"
