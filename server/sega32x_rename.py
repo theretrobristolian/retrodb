@@ -30,7 +30,7 @@ LANGUAGES = re.compile(
 # These qualifiers describe distinct ROM revisions, unreleased versions or
 # modifications. We cannot drop them without potentially hiding differences.
 SPECIAL = re.compile(
-    r"\b(?:proto(?:type)?|beta|alpha|demo|sample|hack|patched?|"
+    r"\b(?:proto(?:type)?|beta|alpha|demo|sample|hack|patch(?:ed)?|"
     r"translation|translated|unl(?:icensed)?|rev(?:ision)?|"
     r"bad dump|overdump|alt(?:ernate)?|pirate|homebrew|"
     r"working|fixed)\b",
@@ -45,6 +45,8 @@ def canonical_name(filename: str, verified_title: str = "", verified_region: str
         return "", "Not a ZIP"
     stem = Path(filename).stem
     stem = re.sub(r"^\s*\[32x\]\s*", "", stem, flags=re.I).strip()
+    if SPECIAL.search(stem):
+        return "", "Modified, revised or prototype ROM requires manual naming review"
     # Strip only suffix metadata; keep parenthesised words inside actual titles.
     while True:
         match = re.search(r"\s*\(([^()]*)\)\s*$", stem)
@@ -62,9 +64,20 @@ def canonical_name(filename: str, verified_title: str = "", verified_region: str
     title = stem
     if verified_title and not SPECIAL.search(verified_title):
         candidate = re.sub(r"^\s*~[^~]+~\s*", "", verified_title).strip()
+        # Colons and slashes in catalogue names are formatting punctuation,
+        # but not portable ZIP filenames on FAT/SMB/Windows.
+        candidate = re.sub(r"\s*[:/|]\s*", " - ", candidate)
         if candidate and not UNSAFE_FILENAME.search(candidate):
             title = candidate
-    region = filename_region(filename) or verified_region
+    source_region = filename_region(filename)
+    region = source_region or verified_region
+    if source_region and verified_region:
+        source_parts = {part.strip() for part in source_region.split(",")}
+        verified_parts = {part.strip() for part in verified_region.split(",")}
+        if source_parts == verified_parts:
+            region = verified_region  # Official No-Intro-like region ordering.
+        else:
+            return "", "Filename region conflicts with exact registered ROM hash region"
     if not region:
         return "", "No explicit source or verified-hash region"
     if not title or title in {".", ".."} or UNSAFE_FILENAME.search(title):
