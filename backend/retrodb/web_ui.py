@@ -175,6 +175,50 @@ def disc_id(item: LibraryItem) -> str:
     match = SERIAL_RE.search(item.filename) or SERIAL_RE.search(item.relative_path)
     return f"{match.group(1).upper()}-{match.group(2)}{match.group(3)}" if match else ""
 
+def sega32x_regions(filename: str) -> list[str]:
+    """Read explicit region tokens; multi-region labels remain multi-region."""
+    region_map = {"usa": "USA", "u": "USA", "europe": "Europe", "e": "Europe",
+                  "japan": "Japan", "j": "Japan", "world": "World",
+                  "asia": "Asia", "brazil": "Brazil", "australia": "Australia"}
+    regions = []
+    for group in re.findall(r"\\(([^()]*)\\)", filename):
+        for token in re.split(r"[,/]", group):
+            token = token.strip().lower()
+            # GoodTools labels: JU = Japan/USA, JUE = Japan/USA/Europe.
+            codes = {"ju": ("Japan", "USA"), "jue": ("Japan", "USA", "Europe")}.get(token)
+            candidates = codes or (region_map[token],) if token in region_map or token in ("ju", "jue") else ()
+            for candidate in candidates:
+                if candidate not in regions:
+                    regions.append(candidate)
+    return regions
+
+
+def sega32x_type(filename: str, ra_title: str = "") -> str:
+    """Classify release type only from explicit ROM/RA naming evidence."""
+    evidence = filename + " " + ra_title
+    if re.search(r"~\\s*hack\\s*~|\\bhack\\b|\\bpatch(?:ed)?\\b|resurrection", evidence, re.I):
+        return "Hack"
+    if re.search(r"~\\s*prototype\\s*~|\\bproto(?:type)?\\b", evidence, re.I):
+        return "Prototype"
+    if re.search(r"\\bhomebrew\\b", evidence, re.I):
+        return "Homebrew"
+    return "Retail"
+
+
+def sega32x_ra_label(item: LibraryItem, supported: bool) -> str:
+    """Do not mistake title suggestions or exact no-set hashes for RA support."""
+    if supported:
+        return "Verified ROM hash; achievement set available"
+    if item.ra_game_id and (item.ra_match_status or "").lower() == "matched":
+        return "Verified ROM hash; no achievement set"
+    detail = item.ra_hash_error or ""
+    if "Compatible alternate ZIP:" in detail:
+        return "Unverified local ROM; an exact verified alternative exists in your collection"
+    if "Suggested RA ID:" in detail:
+        return "Known title/alternative; local ROM MD5 is not registered with RA"
+    return "No verified RetroAchievements match"
+
+
 def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
     """Conservative PS1/PS2 disc-prefix region hints, not guaranteed disc origin."""
     if platform_slug == "playstation-3" and serial:
@@ -196,16 +240,15 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
             return ("🇯🇵", "Japan (disc prefix)")
         return ("🌐", "Region unknown")
     if platform_slug == "sega-32x":
-        # 32X carts have no Sony-style disc serial. Use only the explicit
-        # filename region, not a guess from the registered RA hash.
-        match = re.search(r"\((USA|U|Europe|E|Japan|J|World)\)", serial, re.I)
-        if match:
-            region = match.group(1).lower()
-            return {"usa": ("🇺🇸", "USA (filename)"), "u": ("🇺🇸", "USA (filename)"),
-                    "europe": ("🇪🇺", "Europe (filename)"), "e": ("🇪🇺", "Europe (filename)"),
-                    "japan": ("🇯🇵", "Japan (filename)"), "j": ("🇯🇵", "Japan (filename)"),
-                    "world": ("🌐", "World (filename)")}[region]
-        return ("🌐", "Region unknown")
+        # Region labels are filename claims, not proof of RA compatibility.
+        regions = sega32x_regions(serial)
+        if not regions:
+            return ("🌐", "Region unknown")
+        flags = {"USA": "🇺🇸", "Europe": "🇪🇺", "Japan": "🇯🇵",
+                 "World": "🌐", "Asia": "🌏", "Brazil": "🇧🇷",
+                 "Australia": "🇦🇺"}
+        return (" ".join(flags[x] for x in regions),
+                ", ".join(regions) + " (filename)")
     if platform_slug not in ("playstation", "playstation-2") or not serial:
         return ("🌐", "Region unknown")
     prefix = serial.split("-", 1)[0].upper()
@@ -271,7 +314,12 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
     if slug == "sega-32x":
-        title = re.sub(r"^\s*\[32X\]\s*", "", title, flags=re.I)
+        title = re.sub(r"^\\s*\\[32X\\]\\s*", "", title, flags=re.I)
+        title = re.sub(r"^\\s*~\\s*(?:Prototype|Hack|Homebrew)\\s*~\\s*", "", title, flags=re.I)
+        # Prefer the searchable short title over official alias lists.
+        if "|" in title:
+            title = title.split("|")[-1].strip()
+        title = re.sub(r"\\s*\\([^)]*\\)\\s*$", "", title) if not item.ra_game_title else title
     if slug == "playstation-portable":
         title = PSP_SERIAL_RE.sub("", title)
         title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|(?:RA[-_. ]?)?\d{4,8})\s*\]", "", title, flags=re.I)
@@ -517,10 +565,12 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         disc = disc_id(item)
         supported = ra_supported(item, item_slug(item))
         region_flag, region_label = disc_region(item.filename if item_slug(item) == "sega-32x" else disc, item_slug(item))
-        badge = 'Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown'))
+        badge = sega32x_ra_label(item, supported) if item_slug(item) == "sega-32x" else ('Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown')))
+        disc_cell = ('<span class="pill serial" title="Release type inferred from filename and RA catalogue">' +
+                     escape(sega32x_type(item.filename, item.ra_game_title or "")) + '</span>') if item_slug(item) == "sega-32x" else ('<span class="pill serial">' + escape(disc) + '</span>' if disc else '—')
         thumbnail = ""
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
-<td data-column="disc">{'<span class="pill serial">'+escape(disc)+'</span>' if disc else '—'}</td>
+<td data-column="disc">{disc_cell}</td>
 <td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
 {'' if ps3_only else '<td data-column="ra"><span class="ra-icon '+('yes' if supported else 'no')+'" role="img" aria-label="'+escape(badge,quote=True)+'" title="'+escape(badge,quote=True)+'">🏆</span></td>'}
 </tr>""")
@@ -553,15 +603,15 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <select name="order"><option value="asc">Ascending</option><option value="desc" {'selected' if order=='desc' else ''}>Descending</option></select>
 <button class="btn" type="submit">Apply</button><a class="btn" href="{base}">Reset</a></form>
 <div class="column-picker"><span class="label">Columns</span>
-<label><input type="checkbox" data-toggle="disc" checked> Disc ID</label>
+<label><input type="checkbox" data-toggle="disc" checked> {'Type' if sega32_only else 'Disc ID'}</label>
 <label><input type="checkbox" data-toggle="region" checked> Region</label>
 {'' if ps3_only else '<label><input type="checkbox" data-toggle="ra" checked> Achievements</label>'}
 </div>
 <div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
-<div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">{"ROM file" if sega32_only else "Disc ID"}</th>
+<div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">{"Type" if sega32_only else "Disc ID"}</th>
 <th data-column="region">Region</th>{'' if ps3_only else '<th data-column="ra" title="RetroAchievements">RA</th>'}</tr></thead>
 <tbody>{''.join(rows) or ('<tr><td colspan="3">No games match the current filters.</td></tr>' if ps3_only else '<tr><td colspan="4">No games match the current filters.</td></tr>')}</tbody></table></div>
-<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
+<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
@@ -824,7 +874,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                   f'{extra_info}<p class="muted meta-source">Sources: {escape(source_label)}</p></section>')
     collection_panel = (f'<section class="card"><h2>Your copy</h2>'
                         f'{detail("Console", platform.name if platform else None)}'
-                        f'{detail("Disc ID", disc_id(item))}'
+                        f'{detail("Disc ID", disc_id(item)) if not (platform and platform.slug == "sega-32x") else detail("Release type", sega32x_type(item.filename, item.ra_game_title or ""))}'
                         f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug == "playstation-3" else ""}'
                         f'{detail("RA result", "Verified ROM MD5" if item.ra_game_id and (item.ra_match_status or "") == "matched" else "Unverified title/variant suggestion" if item.ra_match_status == "review" else "Not matched") if platform and platform.slug == "sega-32x" else ""}'
                         f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug == "sega-32x" else ""}'
