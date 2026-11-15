@@ -69,10 +69,7 @@ def test_restricted_helper_only_accepts_allowlisted_operations(monkeypatch, tmp_
     calls = []
     monkeypatch.setattr(module, "command", lambda *args: calls.append(args))
     assert module.execute_admin_request({"admin": "operator", "operation": "restart-xerabora"})
-    assert calls == [
-        ("/usr/bin/systemctl", "restart", "xerabora.service"),
-        ("/usr/bin/systemctl", "is-active", "--quiet", "xerabora.service"),
-    ]
+    assert calls == [("/usr/bin/systemctl", "--no-block", "restart", "xerabora.service")]
     calls.clear()
     assert module.execute_admin_request({"admin": "operator", "operation": "reboot-server"})
     assert calls[0][:3] == ("/usr/bin/systemd-run", "--unit=retrodb-web-reboot", "--on-active=10s")
