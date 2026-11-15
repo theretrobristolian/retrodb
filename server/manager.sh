@@ -907,7 +907,21 @@ sega32x_audit() {
       --output "$report" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$report" || return 1
   chmod 0600 "$report" || return 1
+  # Stage under the service account: it cannot read $HOME directly.
+  local staged="/var/lib/retrodb/reports/sega-32x-portal-sync.csv"
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/lib/retrodb/reports || return 1
+  sudo install -m 0600 -o retrodb -g retrodb "$report" "$staged" || return 1
+  local sync_status=0
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.sega32x_sync --audit "$staged" --mount-root "$MOUNT" || sync_status=$?
+  sudo rm -f "$staged"
+  if [[ "$sync_status" -ne 0 ]]; then
+    echo '[ERROR] Sega 32X CSV was generated, but the website database was not updated.' >&2
+    echo '[INFO] The ROM collection remains unchanged.' >&2
+    return "$sync_status"
+  fi
   echo "[READY] $report"
+  echo '[READY] Sega 32X games published at /library/sega-32x and /consoles'
   echo '[INFO] Read-only: no ZIP files renamed, replaced or edited.'
 }
 
