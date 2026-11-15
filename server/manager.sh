@@ -867,6 +867,35 @@ xlink_import_menu() {
   rm -f "$tmp"
   echo '[OK] XLink source imported. Re-export Excel reports to apply.'
 }
+sega32x_audit() {
+  local root="$MOUNT/roms/sega/32x"
+  local catalogue="/var/cache/retrodb/providers/retroachievements/sega-32x.json"
+  local report="$HOME/retrodb-exports/RetroDB-Sega-32X-Audit.csv"
+  echo '[CHECK] Read-only Sega 32X ZIP inventory / RetroAchievements compatibility'
+  if ! sudo test -d "$root"; then
+    echo "[ERROR] Sega 32X folder not found: $root" >&2
+    echo '[INFO] Check the RetroNAS ROM layout; no files were changed.'
+    return 1
+  fi
+  if ! sudo test -r /etc/retrodb/retrodb.env; then
+    echo '[ERROR] Missing RetroDB RetroAchievements credentials config.' >&2
+    return 1
+  fi
+  # Cache as service user, same as the existing RA sync. Does not sync PS1/PS2.
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-32x || return 1
+  [[ -f "$catalogue" ]] || { echo '[ERROR] No 32X RA catalogue available.' >&2; return 1; }
+  mkdir -p "$HOME/retrodb-exports" || return 1
+  ( umask 077; sudo python3 "$HERE/report_32x_audit.py" \
+      --root "$root" --ra-catalogue "$catalogue" \
+      --ra-hashes-dir /var/cache/retrodb/providers/retroachievements/games \
+      --output "$report" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$report" || return 1
+  chmod 0600 "$report" || return 1
+  echo "[READY] $report"
+  echo '[INFO] Read-only: no ZIP files renamed, replaced or edited.'
+}
+
 more_menu() {
   local choice
   while true; do
@@ -883,6 +912,7 @@ more_menu() {
     echo '  8) RetroNAS settings         - Mount, connection and server config'
     echo '  9) Import PS2 online data    - Community CSV to offline catalogue'
     echo ' 10) Refresh XLink PS2 LAN    - Official supported-game titles'
+    echo ' 11) Audit Sega 32X ZIPs      - RA MD5, titles, regional variants (read only)'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -898,6 +928,7 @@ more_menu() {
       8) retronas_menu ;;
       9) online_import_menu; pause ;;
      10) xlink_import_menu; pause ;;
+     11) run sega32x_audit; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
