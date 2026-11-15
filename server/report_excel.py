@@ -342,6 +342,8 @@ def row_for(r, verified_sources=frozenset(), root='/mnt/retrodb-retronas', verif
         reason = ("No confirmed RetroAchievements listing for this title in the "
                   "current catalogue. GameDB disc ID and filename recognised; "
                   "no action required. This does not prove RA will never add a set.")
+        if r.get("local_serial") == "SLUS-01230":
+            reason += " Championship Motocross 2001 is distinct from the 1999 original (RA 17195)."
         r = {**r, "ra_set_status": "NOT_LISTED",
              "identity_resolution": "triaged-no-confirmed-ra-crosswalk",
              "alternative_candidates": ""}
