@@ -2,6 +2,12 @@
 import json
 from types import SimpleNamespace
 from fastapi.testclient import TestClient
+import pytest
+
+@pytest.fixture(autouse=True)
+def test_only_signing_secret(monkeypatch):
+    monkeypatch.setenv("RETRODB_SESSION_SECRET", "retrodb-profile-tests-" + "x" * 60)
+
 from retrodb.main import app
 from retrodb import session_auth, profile_ui
 
