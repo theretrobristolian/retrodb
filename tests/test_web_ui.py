@@ -202,3 +202,20 @@ def test_sega32x_filename_title_and_region():
     item.ra_game_title = None
     assert name(item, "sega-32x").startswith("Virtua Racing Deluxe")
     assert disc_region("[32X] Doom (Europe) [Patch].zip", "sega-32x")[0] == "🇪🇺"
+
+
+def test_sega32x_clean_titles_types_and_multi_region():
+    from types import SimpleNamespace
+    from retrodb.web_ui import name, sega32x_type, disc_region, sega32x_ra_label
+    prototype = SimpleNamespace(filename="[32X] Soulstar X (USA) (Proto).zip",
+                                ra_game_title="~Prototype~ Soul Star X | Soulstar X")
+    assert name(prototype, "sega-32x") == "Soulstar X"
+    assert sega32x_type(prototype.filename, prototype.ra_game_title) == "Prototype"
+    assert sega32x_type("[32X] Doom (Europe) [Patch Ressurrection v3.1].zip") == "Hack"
+    assert sega32x_type("[32X] Virtua Racing Deluxe (U).zip") == "Retail"
+    assert disc_region("[32X] Tempo (JU).zip", "sega-32x")[0] == "🇯🇵 🇺🇸"
+    assert disc_region("[32X] Metal Head (Japan, USA).zip", "sega-32x")[1].startswith("Japan, USA")
+    prototype.ra_game_id = None
+    prototype.ra_match_status = "review"
+    prototype.ra_hash_error = "local MD5 not registered; Suggested RA ID: 15989"
+    assert "Unverified" not in sega32x_ra_label(prototype, False) or "not registered" in sega32x_ra_label(prototype, False)
