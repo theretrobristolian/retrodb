@@ -1,5 +1,21 @@
 """Curated, reviewable console profiles. No third-party API credentials required."""
 PROFILES = {
+    "sega-32x": {
+        "uk": "January 1995", "jp": "3 December 1994", "us": "21 November 1994",
+        "predecessor": None, "successor": None,
+        "media": "Sega 32X cartridges; expansion for Sega Mega Drive / Genesis",
+        "cpu": "Two Hitachi SH-2 32-bit RISC processors",
+        "memory": "256 KB work RAM; video and frame buffers",
+        "video": "Video passthrough and overlay using Mega Drive / Genesis output",
+        "audio": "PWM sound plus Mega Drive / Genesis audio",
+        "ports": "Uses host Mega Drive / Genesis controller ports",
+        "storage": "Cartridge ROM; some titles offer battery-backed saves",
+        "generation": "Fourth",
+        "overview": "Sega 32X adds 32-bit processing to the Mega Drive / Genesis. RetroDB audits each ZIP ROM against the official RetroAchievements MD5 catalogue.",
+        "revisions": "Regional hardware variants for Mega Drive and Genesis hosts; compatibility depends on the host system and required cables.",
+        "accessories": "Required video mixing cable and power supply; compatible host console.",
+        "guides": ["32X cartridge compatibility", "ROM content hash versus ZIP hash", "RetroAchievements supported versions and region differences"]
+    },
     "playstation": {
         "uk":"29 September 1995","jp":"3 December 1994","us":"9 September 1995",
         "predecessor":None,"successor":"playstation-2","media":"CD-ROM","cpu":"MIPS R3000A-compatible, 32-bit, ~33.9 MHz",
