@@ -882,7 +882,7 @@ sega32x_audit() {
     return 1
   fi
   # Cache as service user, same as the existing RA sync. Does not sync PS1/PS2.
-  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+  sudo -u retrodb env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python \
     -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-32x || return 1
   [[ -f "$catalogue" ]] || { echo '[ERROR] No 32X RA catalogue available.' >&2; return 1; }
   mkdir -p "$HOME/retrodb-exports" || return 1
