@@ -1,0 +1,73 @@
+# Server management (Settings)
+
+RetroDB's authenticated **Settings** area has two sections:
+- **Library management** at `/settings/library` (previous `/management` bookmarks redirect there).
+- **Server management** at `/settings/server` (restart xeRAbora, reboot the Debian host).
+
+The second area is privileged. Being signed into RetroDB does **not** make an
+account a server administrator. Guests cannot visit Settings.
+
+## Authorise an administrator
+
+After deploying the updated code, create or edit the root-owned
+`/etc/retrodb/server-admins.json` allowlist. Deployment creates this file with
+`{"admins":[]}` on first run and preserves subsequent edits.
+
+Use the exact **RetroDB web login** username (the name before the colon in
+`/etc/retrodb/web-users-app.htpasswd`), **not** the Linux shell username or
+RetroAchievements account unless they happen to match.
+
+Example, replace `YOUR_RETRODB_LOGIN` with your actual web login:
+
+```bash
+sudo python3 - <<'PY'
+import json
+from pathlib import Path
+path = Path("/etc/retrodb/server-admins.json")
+data = json.loads(path.read_text())
+data["admins"] = sorted(set(data.get("admins", []) + ["YOUR_RETRODB_LOGIN"]))
+path.write_text(json.dumps(data, indent=2) + "\n")
+PY
+sudo chown root:retrodb /etc/retrodb/server-admins.json
+sudo chmod 0640 /etc/retrodb/server-admins.json
+```
+
+Log out of RetroDB and sign in with that account, then open **Settings →
+Server management**. No service restart is needed for allowlist changes.
+
+## How the controls work
+
+The web app checks the signed login cookie against the allowlist and validates
+a short-lived CSRF token plus an explicit confirmation word. Neither button
+submits a systemd unit name, shell command or file path.
+
+The already existing restricted
+`retrodb-xerabora-switch.socket` forwards approved requests from the
+unprivileged `retrodb` service account to its root-owned helper. The helper
+checks the administrator allowlist again and runs **only** these fixed actions:
+
+- `systemctl --no-block restart xerabora.service` — requests a restart without
+  waiting for a potentially hung xeRAbora process. Acknowledgement means the
+  job was queued, not that the service is healthy.
+- `systemd-run --unit=retrodb-web-reboot --on-active=10s /usr/bin/systemctl reboot`
+  — schedules reboot after the browser response has been sent. All services
+  temporarily disappear.
+
+The helper logs approved actions and denied/failed requests to its journal.
+
+## Verify and troubleshoot
+
+```bash
+systemctl status retrodb-xerabora-switch.socket --no-pager
+systemctl status retrodb-xerabora-switch.service --no-pager
+journalctl -u retrodb-xerabora-switch.service -n 50 --no-pager
+systemctl status xerabora.service --no-pager
+```
+
+The socket can be active while the helper service is inactive; the service is
+started automatically on the first connection. An unapproved web login sees a
+restricted-information page without action buttons.
+
+**Security note:** Do not add ordinary users to the admin allowlist. A server
+reboot is a privileged, system-wide operation and cannot be undone remotely
+once queued.
