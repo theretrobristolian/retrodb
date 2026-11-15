@@ -52,6 +52,7 @@ th,td{padding:13px 12px;border-bottom:1px solid #27334a}tr:hover td{background:#
 .ra-icon.yes{filter:sepia(1) saturate(3);color:#f5ca65}
 .ra-icon.no{filter:grayscale(1);opacity:.35}
 .ra-icon.no::after{content:"×";position:absolute;right:-4px;bottom:-7px;font-size:15px;font-weight:900;color:#e4e8f0;text-shadow:0 0 2px #10192d}
+.ra-soft{display:inline-block;background:#294364;color:#c4ddff;border:1px solid #57739d;border-radius:9px;padding:5px 7px;font-size:11px;font-weight:700;line-height:1.1;white-space:nowrap}
 @media(max-width:760px){
  .library-scroll table{width:100%;min-width:0;font-size:12px}
  .library-scroll th,.library-scroll td{padding:9px 4px}
@@ -203,6 +204,50 @@ def sega32x_type(filename: str, ra_title: str = "") -> str:
     if re.search(r"\bhomebrew\b", evidence, re.I):
         return "Homebrew"
     return "Retail"
+
+
+def sega32x_soft_pass(item: LibraryItem) -> bool:
+    """Status is persisted in audit diagnostics, not inferred from title alone."""
+    return ((item.ra_match_status or "").lower() == "review"
+            and "Compatible alternate ZIP:" in (item.ra_hash_error or ""))
+
+
+def sega32x_alternative_paths(item: LibraryItem) -> list[str]:
+    """Extract audit-provided paths; they are only hints until DB verification."""
+    if not sega32x_soft_pass(item):
+        return []
+    detail = item.ra_hash_error or ""
+    match = re.search(r"(?:^|;\\s*)Compatible alternate ZIP:\\s*(.*?)(?:;\\s*Suggested RA ID:|$)", detail)
+    if not match:
+        return []
+    return [value.strip() for value in match.group(1).split(";") if value.strip()]
+
+
+def sega32x_verified_alternative(db: Session, item: LibraryItem):
+    """Link only a live exact-match ZIP from the same platform and suggested RA ID."""
+    if not sega32x_soft_pass(item):
+        return None
+    match = re.search(r"(?:^|;\\s*)Suggested RA ID:\\s*(\\d+)(?:;|$)", item.ra_hash_error or "")
+    if not match:
+        return None
+    game_id = int(match.group(1))
+    for relative in sega32x_alternative_paths(item):
+        path = PurePosixPath(relative)
+        if (path.is_absolute() or ".." in path.parts or path.suffix.lower() != ".zip"):
+            continue
+        db_path = (PurePosixPath("roms/sega/32x") / path).as_posix()
+        alternative = db.scalar(select(LibraryItem).where(
+            LibraryItem.source_id == item.source_id,
+            LibraryItem.platform_id == item.platform_id,
+            LibraryItem.relative_path == db_path,
+            LibraryItem.is_missing.is_(False),
+            LibraryItem.ra_game_id == game_id,
+            func.lower(LibraryItem.ra_match_status) == "matched",
+            LibraryItem.id != item.id,
+        ).limit(1))
+        if alternative is not None:
+            return alternative
+    return None
 
 
 def sega32x_ra_label(item: LibraryItem, supported: bool) -> str:
@@ -568,11 +613,19 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         badge = sega32x_ra_label(item, supported) if item_slug(item) == "sega-32x" else ('Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown')))
         disc_cell = ('<span class="pill serial" title="Release type inferred from filename and RA catalogue">' +
                      escape(sega32x_type(item.filename, item.ra_game_title or "")) + '</span>') if item_slug(item) == "sega-32x" else ('<span class="pill serial">' + escape(disc) + '</span>' if disc else '—')
+        if item_slug(item) == "sega-32x" and sega32x_soft_pass(item):
+            ra_cell = ('<span class="ra-soft" role="img" aria-label="' +
+                       escape(badge, quote=True) + '" title="' +
+                       escape(badge, quote=True) + '">Soft pass</span>')
+        else:
+            ra_cell = ('<span class="ra-icon ' + ('yes' if supported else 'no') +
+                       '" role="img" aria-label="' + escape(badge, quote=True) +
+                       '" title="' + escape(badge, quote=True) + '">🏆</span>')
         thumbnail = ""
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{disc_cell}</td>
 <td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
-{'' if ps3_only else '<td data-column="ra"><span class="ra-icon '+('yes' if supported else 'no')+'" role="img" aria-label="'+escape(badge,quote=True)+'" title="'+escape(badge,quote=True)+'">🏆</span></td>'}
+{'' if ps3_only else '<td data-column="ra">' + ra_cell + '</td>'}
 </tr>""")
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
@@ -823,6 +876,8 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
         flags.append(f'<span class="feature-chip"><span class="feature-glyph" aria-hidden="true">{symbol}</span>{escape(text)}</span>')
     if ra_supported(item, platform.slug if platform else None):
         badge("🏆", "RetroAchievements verified")
+    elif platform and platform.slug == "sega-32x" and sega32x_soft_pass(item):
+        badge("↔", "Soft pass · verified alternative in collection")
     elif item.ra_game_id and platform and platform.slug in ("playstation", "playstation-2"):
         # Only label redundant copies when BOTH records share a confirmed RA ID.
         # Never infer coverage from matching titles or disc serials.
@@ -872,11 +927,32 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
         source_label += " + GameDB/IGDB"
     game_panel = (f'<section class="card"><h2>Game information</h2>{meta_panel}'
                   f'{extra_info}<p class="muted meta-source">Sources: {escape(source_label)}</p></section>')
+    alternative_panel = ""
+    if platform and platform.slug == "sega-32x" and sega32x_soft_pass(item):
+        verified = sega32x_verified_alternative(db, item)
+        if verified is not None:
+            alternative_name = escape(name(verified, "sega-32x"))
+            alternative_file = escape(verified.filename)
+            alternative_panel = (
+                '<section class="card"><h2>Verified alternative in your collection</h2>'
+                '<p>This ROM is not an exact RetroAchievements hash match. '
+                'Another ZIP in your collection is verified for the same RA game.</p>'
+                f'<p><a class="btn" href="/game/{int(verified.id)}">'
+                f'View {alternative_name} · {alternative_file}</a></p>'
+                '</section>'
+            )
+        else:
+            alternative_panel = (
+                '<section class="card"><h2>Alternative needs verification</h2>'
+                '<p>The audit reported another matching ZIP, but it is not currently '
+                'verified in the catalogue. Re-run the 32X audit to refresh the status.</p>'
+                '</section>'
+            )
     collection_panel = (f'<section class="card"><h2>Your copy</h2>'
                         f'{detail("Console", platform.name if platform else None)}'
                         f'{detail("Disc ID", disc_id(item)) if not (platform and platform.slug == "sega-32x") else detail("Release type", sega32x_type(item.filename, item.ra_game_title or ""))}'
                         f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug == "playstation-3" else ""}'
-                        f'{detail("RA result", "Verified ROM MD5" if item.ra_game_id and (item.ra_match_status or "") == "matched" else "Unverified title/variant suggestion" if item.ra_match_status == "review" else "Not matched") if platform and platform.slug == "sega-32x" else ""}'
+                        f'{detail("RA result", sega32x_ra_label(item, ra_supported(item, "sega-32x"))) if platform and platform.slug == "sega-32x" else ""}'
                         f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug == "sega-32x" else ""}'
                         f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
     online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
@@ -889,7 +965,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
 <p class="muted">{escape(platform.name if platform else 'Game library')}{' · ' + escape(serial) if serial else ''}</p></div></div>
 {capabilities}
 <div class="detail"><section class="card game-art-card"><h2>Cover art</h2><div class="game-art-grid">{artwork}</div></section>
-{game_panel}{collection_panel}
+{game_panel}{collection_panel}{alternative_panel}
 {f'<section class="card"><h2>Achievements</h2>{ra_link}</section>' if ra_link else ''}
 {online_section}</div>"""
     return page(name(item, platform.slug if platform else None), body, guest=is_guest(request))
