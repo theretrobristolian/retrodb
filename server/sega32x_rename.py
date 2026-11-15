@@ -129,6 +129,9 @@ def plan(root: Path, catalogue: Path, hash_dir: Path | None = None) -> list[dict
             record["reason"] = "Source is unavailable or is a symbolic link"
         elif not row.get("rom_member"):
             record["reason"] = row.get("reason") or "ZIP has no single validated ROM member"
+        elif (row["status"] in ("EXACT_RA", "EXACT_NO_SET")
+              and SPECIAL.search(str(row.get("ra_title") or ""))):
+            record["reason"] = "Verified RA identity is a prototype, hack or special build"
         else:
             exact = row["status"] in ("EXACT_RA", "EXACT_NO_SET")
             trusted_region = registered_hash_regions(
