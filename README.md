@@ -6,7 +6,7 @@ The starting focus is **original PlayStation (PS1), PlayStation 2 (PS2), and Pla
 
 ## What it's for
 
-**Sega 32X auditing:** RetroDB's **More options → 11** performs a read-only audit of `roms/sega/32x` ZIPs against official RetroAchievements ROM-content MD5 hashes. It ignores BIOS/TXT files, provides verified RA game titles and regional-variant soft passes, and writes `~/retrodb-exports/RetroDB-Sega-32X-Audit.csv`. No ROMs are renamed or modified. See [server documentation](server/README.md#sega-32x-retroachievements-audit-read-only).
+**Sega 32X auditing and naming:** The normal **Audit games** workflow now includes 32X ZIPs, checks ROM-content hashes against RetroAchievements and refreshes the 32X web library. A standalone 32X audit remains under **More options → 11**. **Rename games → Sega 32X** previews concise, No-Intro-inspired ZIP names like `Knuckles' Chaotix (Japan, USA).zip`, then requires explicit confirmation before renaming outer ZIP files only. Ambiguous revisions, hacks, and collisions remain untouched. See [server documentation](server/README.md#sega-32x-concise-zip-rename).
 
 - **Audit ROM/disc-image libraries:** index files, identify serials and releases, check filenames and flag questionable or unmatched copies.
 - **Match RetroAchievements:** identify supported games and known-good hashes, and help spot versions that may need attention.
