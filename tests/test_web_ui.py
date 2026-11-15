@@ -171,7 +171,7 @@ def test_mobile_navigation_wraps_without_horizontal_overflow():
     assert "header nav a,header nav button" in CSS
     assert 'action="/logout"' in html
     assert 'href="/profile"' in html
-    assert 'href="/management"' in html
+    assert 'href="/settings"' in html
     assert 'href="/online-services"' in html
     assert 'action="/logout"' in html
 
@@ -188,12 +188,12 @@ def test_mobile_bottom_navigation_and_compact_header():
     assert 'class="mobile-nav"' in html
     assert 'class="mobile-actions"' in html
     assert 'data-nav="/profile"' in html
-    assert 'data-nav="/management"' in html
+    assert 'data-nav="/settings"' in html
     assert "position:fixed;z-index:40;bottom:0" in CSS
     assert "env(safe-area-inset-bottom, 0px)" in CSS
     guest_html = page("Guest", "<p>Body</p>", guest=True).body.decode("utf-8")
     assert '<a href="/profile" data-nav="/profile"' not in guest_html
-    assert '<a href="/management" data-nav="/management"' not in guest_html
+    assert '<a href="/settings" data-nav="/settings"' not in guest_html
 
 def test_compact_game_ui_has_feature_and_technical_styles():
     from retrodb.web_ui import CSS
