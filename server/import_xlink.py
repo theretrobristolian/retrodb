@@ -84,12 +84,15 @@ def parse_wikitext(text):
     titles = []
     for raw in rest.splitlines():
         line = raw.strip()
+        if line == "|}":
+            break  # End of the MediaWiki table, not a game title.
         if not line.startswith("|") or line.startswith("|-") or line.startswith("|+"):
             continue
         first = line[1:].split("||", 1)[0].strip()
-        # A MediaWiki row can carry cell attributes before its visible content.
-        if "|" in first:
-            first = first.rsplit("|", 1)[-1].strip()
+        # An attribute separator is outside a wiki link. Preserve the pipe in
+        # [[target|display title]] so the link regex can extract its label.
+        if "|" in first and not first.startswith("[["):
+            first = first.split("|", 1)[1].strip()
         first = re.sub(r"\[\[([^]|]+)\|([^]]+)\]\]", r"\2", first)
         first = re.sub(r"\[\[([^]]+)\]\]", r"\1", first)
         first = re.sub(r"<[^>]+>", "", first)
