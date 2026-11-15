@@ -69,16 +69,16 @@ def select_ps2_table(tables):
                          f"({len(candidates)} candidates, {len(tables)} tables). "
                          f"Extracted table samples: {examples!r}")
     rows = candidates[0][1]
-    return [row for row in rows if row and row[0].casefold().strip() not in ("title", "game")]
+    return [row for row in rows if row and row[0].casefold().strip() not in ("title", "game", "game name")]
 
 
 def parse_wikitext(text):
     """Parse the PS2 supported-games wiki table from MediaWiki source text."""
-    section = re.search(r"(?im)^={2,6}\\s*Supported Games\\s*={2,6}\\s*$", text)
+    section = re.search(r"(?im)^={2,6}\s*Supported Games\s*={2,6}\s*$", text)
     if not section:
         raise ValueError("MediaWiki page has no Supported Games section")
     rest = text[section.end():]
-    next_heading = re.search(r"(?m)^={2,6}[^=].*={2,6}\\s*$", rest)
+    next_heading = re.search(r"(?m)^={2,6}[^=].*={2,6}\s*$", rest)
     if next_heading:
         rest = rest[:next_heading.start()]
     titles = []
@@ -90,8 +90,8 @@ def parse_wikitext(text):
         # A MediaWiki row can carry cell attributes before its visible content.
         if "|" in first:
             first = first.rsplit("|", 1)[-1].strip()
-        first = re.sub(r"\\[\\[([^]|]+)\\|([^]]+)\\]\\]", r"\\2", first)
-        first = re.sub(r"\\[\\[([^]]+)\\]\\]", r"\\1", first)
+        first = re.sub(r"\[\[([^]|]+)\|([^]]+)\]\]", r"\2", first)
+        first = re.sub(r"\[\[([^]]+)\]\]", r"\1", first)
         first = re.sub(r"<[^>]+>", "", first)
         first = re.sub(r"'{2,}", "", first).strip()
         if first and first.casefold() not in ("title", "game"):
