@@ -27,4 +27,6 @@ def test_core_model_tables_are_registered() -> None:
         "region",
         "release",
         "release_language",
+        "collection_source",
+        "library_item",
     }
