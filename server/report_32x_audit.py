@@ -70,7 +70,28 @@ def load_catalogue(path):
                 by_hash.setdefault(h.lower(), row)
     if not games:
         raise ValueError("No official Sega 32X games in catalogue")
-    return by_hash, by_title
+    return by_hash, by_title, games
+
+# Curated identity aliases, linked to the official RA game IDs. These suggest
+# an identity only; no alias can manufacture an exact ROM hash match.
+# Sources: retroachievements.org/game/{id}, as reviewed for these releases.
+REVIEWED_IDENTITIES = (
+    (re.compile(r"doom.*ress?urrection|doom.*resurrection", re.I), 18179),
+    (re.compile(r"pinocchio", re.I), 16800),
+    (re.compile(r"soul\s*star\s*x|soulstar\s*x", re.I), 15989),
+    (re.compile(r"virtua\s+racing\s+deluxe", re.I), 11823),
+)
+
+
+def candidate_by_identity(filename, stem, by_id, by_title):
+    # A reviewed hack/prototype MUST be resolved before generic Doom matching.
+    for pattern, game_id in REVIEWED_IDENTITIES:
+        if pattern.search(filename):
+            entry = by_id.get(game_id)
+            if entry:
+                return [entry], "Reviewed title alias (RA game/%s)" % game_id
+    return list(dict.fromkeys(by_title.get(title_key(stem), []))), "Exact normalised title"
+
 
 def rom_hash(path):
     """Return (ROM member name, size, MD5). Raise on ambiguous/invalid ZIPs."""
@@ -117,7 +138,7 @@ def hash_descriptions(hash_dir, game_id):
 def audit(root, catalogue, hash_dir=None):
     if not root.is_dir():
         raise FileNotFoundError(f"32X collection directory unavailable: {root}")
-    by_hash, by_title = load_catalogue(catalogue)
+    by_hash, by_title, by_id = load_catalogue(catalogue)
     rows = []
     for path in sorted(root.rglob("*")):
         if path.is_symlink() or not path.is_file() or path.suffix.lower() != ".zip":
@@ -144,15 +165,14 @@ def audit(root, catalogue, hash_dir=None):
                        ra_game_id=gid, ra_title=title, ra_achievements=count,
                        status="EXACT_RA" if count else "EXACT_NO_SET")
         else:
-            matches = list(dict.fromkeys(by_title.get(title_key(stem), [])))
+            matches, identity_evidence = candidate_by_identity(path.name, stem, by_id, by_title)
             if len(matches) == 1:
                 gid, title, count = matches[0]
                 row.update(display_title=title, title_source="RetroAchievements title candidate",
                            suggested_ra_game_id=gid, suggested_ra_title=title,
                            status="ALTERNATIVE_REVIEW" if count else "NO_SET_CANDIDATE",
-                           reason="Filename title only; local ROM hash not registered")
+                           reason=identity_evidence + "; local ROM hash not registered")
                 descriptions = hash_descriptions(hash_dir, gid)
-                evidence = [name for name, h in descriptions if h in by_hash and by_hash[h][0] == gid]
                 # Metadata gives supported names, but never invent a downloadable URL.
                 if descriptions:
                     row["suggested_release"] = "; ".join(name for name, _ in descriptions[:4] if name)[:500]
