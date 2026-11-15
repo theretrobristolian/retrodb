@@ -61,7 +61,7 @@ def server_settings(request: Request):
 <h1>Server management</h1><p class="muted">Server controls are limited to explicitly approved administrators.</p>""")
     result = request.query_params.get("result")
     notices = {
-        "restart": "xeRAbora restart completed.",
+        "restart": "xeRAbora restart requested. It may take a moment to become available.",
         "reboot": "Server restart requested. This page may disconnect while the system reboots.",
         "error": "The action failed or the management helper is unavailable. Check the helper journal.",
     }
