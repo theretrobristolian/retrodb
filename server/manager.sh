@@ -3,7 +3,22 @@ set -Eeuo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # Refresh the checkout before opening the interactive manager. No sudo or
 # background updates: clean main, trusted origin and fast-forward only.
-auto_update_menu() {
+auto_update_permissions_menu() {
+  local script=/opt/retrodb/server/server_permissions.py
+  if [[ ! -f "$script" ]]; then
+    echo '[STOP] Permissions menu is not deployed yet.'
+    echo 'Run: sudo bash server/deploy.sh'
+    return 1
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    echo '[STOP] This menu needs an interactive terminal.'
+    return 1
+  fi
+  echo '[INFO] Server permissions require administrator approval through sudo.'
+  sudo /usr/bin/python3 "$script"
+}
+
+menu() {
   local root remote current target
   root="$(cd "$HERE/.." && pwd -P)"
   command -v git >/dev/null || { echo '[INFO] Git unavailable; opening installed menu.'; return 0; }
@@ -1108,6 +1123,7 @@ menu() {
     echo '  3) Rename games      - PS1 / PS2 / PS3 (safe preview)'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
+    echo '  5) Permissions            - Manage website server-control access'
     echo '  0) Exit'
     echo
     echo '----------------------------------------------------------------'
@@ -1132,6 +1148,7 @@ menu() {
         esac
         pause ;;
       4) more_menu ;;
+      5) run permissions_menu; pause ;;
       0|q|Q) break ;;
       *) echo 'Invalid option.'; pause ;;
     esac
