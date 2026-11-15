@@ -539,8 +539,8 @@ def test_championship_motocross_sequel_does_not_inherit_predecessor_ra_id():
         "release_guidance": "", "alternative_candidates": "",
     }
     row = report.row_for(raw)
-    assert row[3] == "UNKNOWN"
-    assert row[14] == "UNRESOLVED"
+    assert row[3] == "NO SET"  # Reviewed as not listed, not equivalent to its predecessor.
+    assert row[14] == "NOT_LISTED"
     assert str(row[6]) != "17195"
     assert "distinct" in row[5]
 
