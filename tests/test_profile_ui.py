@@ -15,6 +15,7 @@ def test_linked_player_profile_renders_avatar_and_points(tmp_path, monkeypatch):
     config.write_text(json.dumps({"player": "PoodingPower"}))
     monkeypatch.setattr(profile_ui, "LINKS", config)
     monkeypatch.setattr(session_auth, "user_from_cookie", lambda _: "player")
+    monkeypatch.setattr(profile_ui, "user_from_cookie", lambda _: "player")
     monkeypatch.setattr(profile_ui, "_fetch_profile", lambda u,k: {
         "User": "PoodingPower", "UserPic": "/UserPic/PoodingPower.png",
         "TotalPoints": 1234, "TotalSoftcorePoints": 500, "Motto": "Happy gaming"})
@@ -37,6 +38,7 @@ def test_unlinked_user_not_implicitly_linked(tmp_path, monkeypatch):
     config.write_text("{}")
     monkeypatch.setattr(profile_ui, "LINKS", config)
     monkeypatch.setattr(session_auth, "user_from_cookie", lambda _: "player")
+    monkeypatch.setattr(profile_ui, "user_from_cookie", lambda _: "player")
     response = TestClient(app).get("/profile")
     assert response.status_code == 200
     assert "has not been linked" in response.text
