@@ -3,22 +3,7 @@ set -Eeuo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 # Refresh the checkout before opening the interactive manager. No sudo or
 # background updates: clean main, trusted origin and fast-forward only.
-auto_update_permissions_menu() {
-  local script=/opt/retrodb/server/server_permissions.py
-  if [[ ! -f "$script" ]]; then
-    echo '[STOP] Permissions menu is not deployed yet.'
-    echo 'Run: sudo bash server/deploy.sh'
-    return 1
-  fi
-  if [[ ! -t 0 || ! -t 1 ]]; then
-    echo '[STOP] This menu needs an interactive terminal.'
-    return 1
-  fi
-  echo '[INFO] Server permissions require administrator approval through sudo.'
-  sudo /usr/bin/python3 "$script"
-}
-
-menu() {
+auto_update_menu() {
   local root remote current target
   root="$(cd "$HERE/.." && pwd -P)"
   command -v git >/dev/null || { echo '[INFO] Git unavailable; opening installed menu.'; return 0; }
@@ -1110,6 +1095,22 @@ PYPS3DELETE
   sudo umount "$PILOT_ROOT" || { echo '[WARNING] Writable mount still active; inspect immediately.'; return 1; }
   (( result == 0 )) || { echo "[STOP] Rename incomplete; inspect journal: $journal"; return "$result"; }
   echo '[OK] PS3 renames completed. Re-run this menu to verify.'
+}
+
+
+permissions_menu() {
+  local script=/opt/retrodb/server/server_permissions.py
+  if [[ ! -f "$script" ]]; then
+    echo '[STOP] Permissions menu is not deployed yet.'
+    echo 'Run: sudo bash server/deploy.sh'
+    return 1
+  fi
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    echo '[STOP] This menu needs an interactive terminal.'
+    return 1
+  fi
+  echo '[INFO] Server permissions require administrator approval through sudo.'
+  sudo /usr/bin/python3 "$script"
 }
 
 menu() {
