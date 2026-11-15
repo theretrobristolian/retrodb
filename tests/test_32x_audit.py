@@ -46,7 +46,8 @@ def test_exact_and_soft_pass_regional_zip(tmp_path):
     catalogue(source, good)
     rows = audit32.audit(roms, source)
     assert len(rows) == 2
-    matched, other = rows
+    matched = next(row for row in rows if row["status"] == "EXACT_RA")
+    other = next(row for row in rows if row["status"] == "SOFT_PASS_VARIANT")
     assert matched["status"] == "EXACT_RA"
     assert matched["display_title"] == "After Burner Complete"
     assert matched["title_source"] == "RetroAchievements hash"
