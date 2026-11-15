@@ -16,7 +16,7 @@ def test_actions_include_incompatible_and_unknown_but_not_no_set_or_verified():
     entries = [entry("a.iso", "UNKNOWN"), entry("b.iso", "NO"),
                entry("c.iso", "ERROR"), entry("d.iso", "NO SET"), entry("e.iso", "YES")]
     actions = module.action_rows(entries, "Sony PlayStation 2")
-    assert {row[2] for row in actions} == {"a.iso", "b.iso", "c.iso"}
+    assert {row[2] for row in actions} == {"a.iso", "c.iso"}  # NO means an unverified variant, not automatically actionable.
     assert all(row[0] == "Sony PlayStation 2" for row in actions)
 
 
