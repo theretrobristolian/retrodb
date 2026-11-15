@@ -253,7 +253,8 @@ def rank_game_candidates(
         (
             (title_similarity(local_path, game.title), game)
             for game in games
-            if is_compatible_title_candidate(local_path, game.title)
+            if (comparable_title(local_path) == comparable_title(game.title)
+                or is_compatible_title_candidate(local_path, game.title))
         ),
         key=lambda pair: pair[0],
         reverse=True,
@@ -337,7 +338,7 @@ def game_db_ra_candidates(
         return None, "gamedb-ambiguous", best_score, review
     # Strict fuzzy threshold, clear margin, and identical sequel/version markers.
     # A fuzzy recommendation still needs an RAHasher-compatible replacement ISO.
-    if best_score >= 0.94 and best_score - second_score >= 0.10:
+    if best_score >= 0.97 and best_score - second_score >= 0.10:
         return best, "gamedb-high-confidence-title", best_score, ""
     return None, "gamedb-review", best_score, review
 
