@@ -274,17 +274,23 @@ sync_gamedb() {
 }
 
 audit() {
-  stage "1/8" "Prerequisites and read-only RetroNAS connection"
+  stage "1/9" "Prerequisites and read-only RetroNAS connection"
   mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.' >&2; return 1; }
   sudo test -x /opt/retrodb-tools/RAHasher || { echo '[ERROR] RAHasher unavailable.' >&2; return 1; }
   printf '[OK] RetroNAS mounted; RAHasher available.\n'
-  step "2/8" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
-  step "3/8" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
-  step "4/8" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
-  step "5/8" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
-  step "6/8" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
-  step "7/8" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
-  step "8/8" "Export formatted Excel workbook and raw CSV" export_csv || return 1
+  step "2/9" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
+  step "3/9" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
+  step "4/9" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
+  step "5/9" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
+  step "6/9" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
+  step "7/9" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
+  step "8/9" "Export formatted Excel workbook and raw CSV" export_csv || return 1
+  if sudo test -d "$MOUNT/roms/sega/32x"; then
+    step "9/9" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
+  else
+    stage "9/9" "Sega 32X collection"
+    echo '[INFO] 32X directory not found; skipping this optional platform.'
+  fi
   printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
   echo 'NOTE: No original RetroNAS game images were changed.'
 }
@@ -867,6 +873,58 @@ xlink_import_menu() {
   rm -f "$tmp"
   echo '[OK] XLink source imported. Re-export Excel reports to apply.'
 }
+sega32x_rename() {
+  local root="$MOUNT/roms/sega/32x"
+  local catalogue="/var/cache/retrodb/providers/retroachievements/sega-32x.json"
+  local hashes="/var/cache/retrodb/providers/retroachievements/games"
+  local rwroot="$PILOT_ROOT/roms/sega/32x"
+  local source answer journal result=0
+
+  sudo test -d "$root" || { echo '[STOP] Sega 32X directory missing; mount RetroNAS first.'; return 1; }
+  sudo test -r "$catalogue" || {
+    echo '[INFO] The 32X RA catalogue is missing; auditing first.'
+    sega32x_audit || return 1
+  }
+  echo '[PREVIEW] No-Intro-inspired concise ZIP filenames (title + region only).'
+  echo '[INFO] Internal ZIP member filenames will remain unchanged.'
+  sudo python3 "$HERE/sega32x_rename.py" preview \
+    --root "$root" --ra-catalogue "$catalogue" \
+    --ra-hashes-dir "$hashes" || return 1
+  echo
+  read -rp 'Type RENAME 32X to apply eligible ZIP-only renames (Enter cancels): ' answer
+  [[ "$answer" == "RENAME 32X" ]] || { echo 'Cancelled; no changes made.'; return 0; }
+  source="$(retronas_cifs_source)" || return 1
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo '[STOP] Temporary writable RetroNAS mount already active; do not proceed.'
+    return 1
+  fi
+  mkdir -p -m 0700 "$HOME/retrodb-exports/32x-rename-journals" || return 1
+  journal="$HOME/retrodb-exports/32x-rename-journals/rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+  sudo mount -t cifs "$source" "$PILOT_ROOT" \
+    -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  sudo python3 "$HERE/sega32x_rename.py" apply \
+    --root "$rwroot" --ra-catalogue "$catalogue" \
+    --ra-hashes-dir "$hashes" --journal "$journal" --confirm "RENAME 32X" || result=$?
+  sudo umount "$PILOT_ROOT" || {
+    echo '[WARNING] Temporary writable mount remains active! Unmount it before retrying.'
+    return 1
+  }
+  (( result == 0 )) || {
+    echo "[STOP] Rename failed or was interrupted. Inspect journal (if created): $journal"
+    return "$result"
+  }
+  if sudo test -f "$journal"; then
+    sudo chown "$(id -un):$(id -gn)" "$journal" || return 1
+    chmod 0600 "$journal" || return 1
+    echo "[READY] Rename journal: $journal"
+    echo '[NEXT] Re-running 32X audit to refresh web catalogue paths.'
+    sega32x_audit
+  else
+    echo '[OK] No eligible archive renames; no journal was necessary.'
+  fi
+}
+
 sega32x_audit() {
   local root="$MOUNT/roms/sega/32x"
   local catalogue="/var/cache/retrodb/providers/retroachievements/sega-32x.json"
@@ -941,7 +999,7 @@ more_menu() {
     echo '  8) RetroNAS settings         - Mount, connection and server config'
     echo '  9) Import PS2 online data    - Community CSV to offline catalogue'
     echo ' 10) Refresh XLink PS2 LAN    - Official supported-game titles'
-    echo ' 11) Audit Sega 32X ZIPs      - RA MD5, titles, regional variants (read only)'
+    echo ' 11) Audit Sega 32X ZIPs      - Read-only standalone audit (also in full audit)'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -1125,7 +1183,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 / PS2 / PS3 (safe preview)'
+    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X (preview first)'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  5) Permissions            - Manage website server-control access'
@@ -1144,11 +1202,13 @@ menu() {
         echo '  1) PlayStation 1 - Rename all eligible BIN/CUE pairs'
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         echo '  3) PlayStation 3 - Preview ISO and extracted folders, then rename'
+        echo '  4) Sega 32X - Rename ZIP files to title + region (preview first)'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
           2) run opl_update_all ;;
           3) run ps3_audit_rename ;;
+          4) run sega32x_rename ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
