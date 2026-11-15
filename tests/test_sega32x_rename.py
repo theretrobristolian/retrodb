@@ -42,12 +42,27 @@ def test_concise_no_intro_inspired_names():
     target, reason = naming.canonical_name("After Burner Complete (USA) (En,Fr).zip")
     assert target == "After Burner Complete (USA).zip"
     assert not reason
+    target, reason = naming.canonical_name(
+        "[32X] Amazing Spider-Man, The - Web of Fire (USA).zip",
+        "The Amazing Spider-Man: Web of Fire",
+    )
+    assert target == "The Amazing Spider-Man - Web of Fire (USA).zip"
+    assert not reason
+    target, reason = naming.canonical_name(
+        "[32X] Knuckles' Chaotix (U) ~ Chaotix (J).zip",
+        "Knuckles' Chaotix",
+        "Japan, USA",
+    )
+    assert target == "Knuckles' Chaotix (Japan, USA).zip"
+    assert not reason
 
 
 @pytest.mark.parametrize("filename", [
     "Doom (Europe) (Rev 1).zip",
     "Soul Star X (USA) (Proto).zip",
     "Doom (USA) (Hack).zip",
+    "[32X] Doom (Europe) [Patch Ressurrection v3.1].zip",
+    "[32X] Soulstar X (USA) (Proto).zip",
     "Doom.zip",
 ])
 def test_special_variants_and_missing_region_not_renamed(filename):
@@ -110,3 +125,11 @@ def test_registered_hash_region_used_only_for_exact_rom(tmp_path):
     rows = naming.plan(root, ra, hash_dir)
     assert rows[0]["status"] == "REVIEW"
     assert "region" in rows[0]["reason"].lower()
+
+def test_hash_region_conflict_requires_review():
+    name, reason = naming.canonical_name(
+        "Some Game (Europe).zip", "Some Game", "USA",
+    )
+    assert not name
+    assert "conflicts" in reason
+
