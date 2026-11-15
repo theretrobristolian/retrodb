@@ -133,3 +133,19 @@ def test_reviewed_identity_soft_passes_only_with_real_verified_zip(tmp_path):
     assert sorted(row["status"] for row in rows) == ["EXACT_RA", "SOFT_PASS_VARIANT"]
     other = next(row for row in rows if row["status"] == "SOFT_PASS_VARIANT")
     assert "supported" in other["local_verified_variant"]
+
+
+def test_multi_region_labels_do_not_collapse_to_first_country():
+    assert audit32.filename_region("Virtua Fighter (JU).zip") == "Japan, USA"
+    assert audit32.filename_region("NBA Jam (JUE).zip") == "Japan, USA, Europe"
+    assert audit32.filename_region("Metal Head (Japan, USA).zip") == "Japan, USA"
+    assert audit32.filename_region("Tempo (Unknown).zip") == ""
+
+
+def test_loose_rom_is_not_claimed_as_a_verified_zip(tmp_path):
+    folder = tmp_path / "32x"
+    folder.mkdir()
+    (folder / "Virtua Racing Deluxe (Japan).32x").write_bytes(b"example-rom")
+    source = tmp_path / "ra.json"
+    catalogue(source, b"other")
+    assert audit32.audit(folder, source) == []
