@@ -232,6 +232,16 @@ def main() -> int:
                 f"[OK] {system_name}: {result.games} games, "
                 f"{result.hashes} hashes ({source})."
             )
+        if args.command == "ra-sync-32x":
+            # Only a few reviewed mismatch candidates need release metadata.
+            # Failure to retrieve optional descriptions must never block
+            # the read-only audit or invalidate the official game hash list.
+            for game_id in (11823, 18179, 12777, 15989, 16800):
+                try:
+                    records = client.get_game_hashes(game_id, force=args.force)
+                    print(f"[OK] 32X RA game {game_id}: {len(records)} registered release descriptions (cached).")
+                except RetroAchievementsError as exc:
+                    print(f"[WARNING] Optional 32X hash descriptions for RA {game_id} unavailable: {exc}")
         print("[+] RetroAchievements catalogue sync complete.")
         return 0
     except (RetroAchievementsError, LibraryScanError, MatchError, PatchError) as exc:
