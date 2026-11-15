@@ -40,14 +40,24 @@ def filename_title(name):
     return value or Path(name).stem
 
 def filename_region(name):
-    aliases = {"USA": "USA", "U": "USA", "Europe": "Europe",
-               "E": "Europe", "Japan": "Japan", "J": "Japan",
-               "World": "World", "Asia": "Asia", "Brazil": "Brazil",
-               "Australia": "Australia"}
-    for token, region in aliases.items():
-        if re.search(r"\(" + re.escape(token) + r"(?:,|\))", name, re.I):
-            return region
-    return ""
+    """Preserve explicit single/multiple region labels, never infer from RA."""
+    aliases = {"usa": "USA", "u": "USA", "europe": "Europe",
+               "e": "Europe", "japan": "Japan", "j": "Japan",
+               "world": "World", "asia": "Asia", "brazil": "Brazil",
+               "australia": "Australia"}
+    regions = []
+    for group in re.findall(r"\\(([^()]*)\\)", name):
+        for token in re.split(r"[,/]", group):
+            token = token.strip().lower()
+            names = {"ju": ("Japan", "USA"), "jue": ("Japan", "USA", "Europe")}.get(token)
+            if names is None:
+                names = (aliases[token],) if token in aliases else ()
+            for region in names:
+                if region not in regions:
+                    regions.append(region)
+    return ", ".join(regions)
+
+
 
 def load_catalogue(path):
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -226,6 +236,18 @@ def main():
     print(f"[OK] Sega 32X: audited {len(rows)} game ZIPs -> {args.output}")
     for state, count in sorted(Counter(row["status"] for row in rows).items()):
         print(f"  {state}: {count}")
+    loose = sorted(p.relative_to(args.root).as_posix()
+                   for p in args.root.rglob("*")
+                   if p.is_file() and not p.is_symlink() and
+                   p.suffix.lower() in ROM_SUFFIXES and
+                   "bios" not in p.stem.casefold())
+    if loose:
+        print(f"[WARN] {len(loose)} loose ROM(s) excluded from ZIP audit:")
+        for entry in loose[:20]:
+            print(f"  [LOOSE] {entry}")
+        if len(loose) > 20:
+            print(f"  ... and {len(loose) - 20} more")
+        print("[INFO] Archive single ROMs as ZIPs and re-run to include them; files unchanged.")
     print("[INFO] Only supported ROM members were hashed. TXT and BIOS ZIPs ignored.")
     print("[INFO] No ROMs, names, or archive contents were modified.")
 
