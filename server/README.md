@@ -74,7 +74,9 @@ independent audit scans `/mnt/retrodb-retronas/roms/sega/32x` and writes
   exact hash matches. An unmatched ZIP can receive an RA catalogue title
   candidate through conservative filename matching, explicitly labelled
   *unverified* rather than presented as an approved hash match. This
-  standalone CSV does not yet rewrite the main web UI's game titles.
+  audit now also synchronises ROM records into the website's Sega 32X
+  console and library pages. Only exact MD5 matches receive verified RA
+  IDs and gold trophies; all title candidates remain unverified.
 - Reports `EXACT_RA`, `EXACT_NO_SET`, `ALTERNATIVE_REVIEW`,
   `SOFT_PASS_VARIANT`, `NO_SET_CANDIDATE`, `UNMATCHED`,
   `AMBIGUOUS_TITLE`, or `REVIEW`. A soft pass means another local ZIP
@@ -84,12 +86,19 @@ independent audit scans `/mnt/retrodb-retronas/roms/sega/32x` and writes
 - When per-game RA hash descriptions are already cached, reports the
   supported release names/regions for manual review. Otherwise provides
   the official registered MD5s as evidence, never fabricated download
-  URLs or alternate ZIP filenames.
+  URLs or alternate ZIP filenames. Reviewed aliases identify Doom 32X:
+  Resurrection (RA 18179, separate from original Doom), Pinocchio
+  prototype (16800), Soul Star X (15989), and Virtua Racing Deluxe
+  (11823), without asserting their modified ROM hashes are supported.
 
 This action is deliberately **audit only**. It never renames or edits ZIPs,
 patches ROM data, deletes duplicates, or writes to the RetroNAS collection.
 The audit requires configured RA Web API credentials and the existing
-RetroNAS read-only mount. Raw export can also run directly:
+RetroNAS read-only mount. After pulling changes, run
+`sudo bash server/deploy.sh` once to install the backend scanner and website
+integration; the menu then publishes to `/consoles/sega-32x` and
+`/library/sega-32x`. The PostgreSQL inventory is updated, but the ROM
+collection stays read-only. Raw export can also run directly:
 
 ```bash
 python3 server/report_32x_audit.py \
