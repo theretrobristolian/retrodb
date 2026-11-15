@@ -181,7 +181,7 @@ def sega32x_regions(filename: str) -> list[str]:
                   "japan": "Japan", "j": "Japan", "world": "World",
                   "asia": "Asia", "brazil": "Brazil", "australia": "Australia"}
     regions = []
-    for group in re.findall(r"\\(([^()]*)\\)", filename):
+    for group in re.findall(r"\(([^()]*)\)", filename):
         for token in re.split(r"[,/]", group):
             token = token.strip().lower()
             # GoodTools labels: JU = Japan/USA, JUE = Japan/USA/Europe.
@@ -196,11 +196,11 @@ def sega32x_regions(filename: str) -> list[str]:
 def sega32x_type(filename: str, ra_title: str = "") -> str:
     """Classify release type only from explicit ROM/RA naming evidence."""
     evidence = filename + " " + ra_title
-    if re.search(r"~\\s*hack\\s*~|\\bhack\\b|\\bpatch(?:ed)?\\b|resurrection", evidence, re.I):
+    if re.search(r"~\s*hack\s*~|\bhack\b|\bpatch(?:ed)?\b|resurrection", evidence, re.I):
         return "Hack"
-    if re.search(r"~\\s*prototype\\s*~|\\bproto(?:type)?\\b", evidence, re.I):
+    if re.search(r"~\s*prototype\s*~|\bproto(?:type)?\b", evidence, re.I):
         return "Prototype"
-    if re.search(r"\\bhomebrew\\b", evidence, re.I):
+    if re.search(r"\bhomebrew\b", evidence, re.I):
         return "Homebrew"
     return "Retail"
 
@@ -314,12 +314,12 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
     title = re.sub(r"^(?:OLD_|NEW_)", "", title, flags=re.I)
     title = SERIAL_RE.sub("", title)
     if slug == "sega-32x":
-        title = re.sub(r"^\\s*\\[32X\\]\\s*", "", title, flags=re.I)
-        title = re.sub(r"^\\s*~\\s*(?:Prototype|Hack|Homebrew)\\s*~\\s*", "", title, flags=re.I)
+        title = re.sub(r"^\s*\[32X\]\s*", "", title, flags=re.I)
+        title = re.sub(r"^\s*~\s*(?:Prototype|Hack|Homebrew)\s*~\s*", "", title, flags=re.I)
         # Prefer the searchable short title over official alias lists.
         if "|" in title:
             title = title.split("|")[-1].strip()
-        title = re.sub(r"\\s*\\([^)]*\\)\\s*$", "", title) if not item.ra_game_title else title
+        title = re.sub(r"\s*\([^)]*\)\s*$", "", title) if not item.ra_game_title else title
     if slug == "playstation-portable":
         title = PSP_SERIAL_RE.sub("", title)
         title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|(?:RA[-_. ]?)?\d{4,8})\s*\]", "", title, flags=re.I)
