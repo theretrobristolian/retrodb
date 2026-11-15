@@ -7,7 +7,8 @@ the internal ROM entry and its bytes are intentionally left untouched.
 
 All proposals use the existing 32X audit (single-ROM ZIP and streamed RA MD5).
 A fresh audit is required at apply time; all destination collisions, including
-case-insensitive ones, are rejected before any file is renamed.
+case-insensitive ones, are rejected before any file is renamed. Case-only
+changes are treated as already valid to avoid CIFS case-alias overwrites.
 """
 from __future__ import annotations
 
@@ -16,7 +17,6 @@ import json
 import os
 import re
 import sys
-import uuid
 from collections import Counter
 from pathlib import Path
 
@@ -37,8 +37,6 @@ SPECIAL = re.compile(
     re.I,
 )
 UNSAFE_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-REGION_GROUP = re.compile(r"\(([^()]*)\)")
-FIELD_ORDER = ("status", "source", "target", "region", "audit_status", "reason")
 
 
 def canonical_name(filename: str, verified_title: str = "", verified_region: str = "") -> tuple[str, str]:
@@ -132,7 +130,8 @@ def plan(root: Path, catalogue: Path, hash_dir: Path | None = None) -> list[dict
                 proposed = (Path(old).parent / target_name).as_posix()
                 record["region"] = filename_region(archive.name) or trusted_region
                 record["target"] = proposed
-                record["status"] = "VALID" if old == proposed else "RENAME_CANDIDATE"
+                record["status"] = ("VALID" if old.casefold() == proposed.casefold()
+                                    else "RENAME_CANDIDATE")
         proposals.append(record)
     # Never overwrite even if destination is one of the sources in this batch.
     # Doing so creates an order-dependent rename. Require explicit resolution.
