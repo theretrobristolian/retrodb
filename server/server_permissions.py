@@ -63,11 +63,9 @@ def write_admins(selected, path=ADMINS):
     st = path.lstat() if path.exists() or path.is_symlink() else None
     if st and (not stat.S_ISREG(st.st_mode) or st.st_uid != 0):
         raise PermissionError("Refusing unsafe or non-root-owned permissions file")
-    # This menu never deletes previously authorised accounts that have gone
-    # missing from htpasswd. They remain unavailable while absent, and can be
-    # reviewed when the account is restored.
-    inactive = current - current_users
-    updated = sorted(set(selected) | inactive, key=str.casefold)
+    # Remove stale authorisations on explicit save: a deleted web account
+    # should not silently regain host controls if its name is later reused.
+    updated = sorted(set(selected), key=str.casefold)
     parent = path.parent
     directory = parent.stat()
     if directory.st_uid != 0 or directory.st_mode & 0o022:
@@ -197,7 +195,7 @@ def main():
     write_admins(selected)
     print("[OK] Server management permissions updated.")
     if inactive:
-        print("[INFO] Previously approved, currently absent web accounts were preserved:", ", ".join(sorted(inactive)))
+        print("[INFO] Removed stale permissions for absent web accounts:", ", ".join(sorted(inactive)))
 
 
 if __name__ == "__main__":
