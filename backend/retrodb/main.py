@@ -10,6 +10,7 @@ from retrodb.models import Platform
 from retrodb.schemas import PlatformRead
 from retrodb.web_ui import router as web_router
 from retrodb.profile_ui import router as profile_router
+from retrodb.server_management import router as server_management_router
 from retrodb.artwork import router as artwork_router
 from retrodb.branding import router as branding_router
 from retrodb.session_auth import router as auth_router, enforce_session
@@ -56,6 +57,7 @@ def list_platforms(session: Session = Depends(get_session)) -> list[Platform]:
 # Read-only v1 browser application; shares the existing database session.
 app.include_router(web_router)
 app.include_router(profile_router)
+app.include_router(server_management_router)
 app.include_router(artwork_router)
 app.include_router(branding_router)
 
