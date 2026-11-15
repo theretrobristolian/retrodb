@@ -126,6 +126,29 @@ def test_registered_hash_region_used_only_for_exact_rom(tmp_path):
     assert rows[0]["status"] == "REVIEW"
     assert "region" in rows[0]["reason"].lower()
 
+def test_ra_verified_prototype_identity_is_not_normalised_away(tmp_path):
+    root = tmp_path / "32x"
+    root.mkdir()
+    rom = b"prototype-rom"
+    with zipfile.ZipFile(root / "Virtua Hamster (USA).zip", "w") as archive:
+        archive.writestr("game.32x", rom)
+    ra = tmp_path / "ra.json"
+    ra.write_text(json.dumps([{
+        "ID": 17, "Title": "~Prototype~ Virtua Hamster",
+        "ConsoleID": 10, "NumAchievements": 9,
+        "Hashes": [hashlib.md5(rom).hexdigest()],
+    }]))
+    rows = naming.plan(root, ra)
+    assert rows[0]["status"] == "REVIEW"
+    assert "prototype" in rows[0]["reason"].lower()
+
+
+def test_case_only_filename_changes_are_considered_valid(tmp_path):
+    root, ra, _ = fixture(tmp_path, source="knuckles' chaotix (Japan, USA).zip")
+    rows = naming.plan(root, ra)
+    assert rows[0]["status"] == "VALID"
+
+
 def test_hash_region_conflict_requires_review():
     name, reason = naming.canonical_name(
         "Some Game (Europe).zip", "Some Game", "USA",
