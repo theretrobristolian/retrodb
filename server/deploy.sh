@@ -174,6 +174,27 @@ ensure_web_user_access() {
 
 run_step 'Preparing persistent session signing key and user hashes' ensure_web_session_secret
 run_step 'Verifying app password file access' ensure_web_user_access
+# Server control permissions are explicit: no RetroDB account is a host
+# administrator by default. Preserve configured approvals across deployments.
+ensure_server_admins() {
+    local file=/etc/retrodb/server-admins.json
+    if [[ ! -e "$file" ]]; then
+        printf '{"admins":[]}\\n' > "$file"
+    fi
+    python3 - "$file" <<'PYADMINS'
+import json, sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+if (not isinstance(data, dict) or not isinstance(data.get("admins"), list)
+        or any(not isinstance(name, str) or not name or len(name) > 48
+               or not name.replace("-", "").replace("_", "").isalnum()
+               for name in data["admins"])):
+    raise SystemExit("Invalid server-admins.json; expected {\\\"admins\\\":[\\\"username\\\"]}")
+PYADMINS
+    chown root:"$APP_GROUP" "$file"
+    chmod 0640 "$file"
+}
+run_step 'Preparing explicit server administrator allowlist' ensure_server_admins
 run_step 'Provisioning PostgreSQL database and role' provision_database
 run_step 'Synchronising application files' sync_application
 run_step 'Creating Python virtual environment' python3 -m venv "$APP_ROOT/.venv"
@@ -190,7 +211,11 @@ run_migrations() (
 )
 run_step 'Applying database migrations' run_migrations
 run_step 'Installing systemd service' install -o root -g root -m 0644 "$APP_ROOT/server/retrodb.service" "$SERVICE_FILE"
+run_step 'Installing restricted xeRAbora management socket' install -o root -g root -m 0644 "$APP_ROOT/server/retrodb-xerabora-switch.socket" /etc/systemd/system/retrodb-xerabora-switch.socket
+run_step 'Installing restricted xeRAbora management helper' install -o root -g root -m 0644 "$APP_ROOT/server/retrodb-xerabora-switch.service" /etc/systemd/system/retrodb-xerabora-switch.service
 run_step 'Reloading systemd' systemctl daemon-reload
+run_step 'Enabling restricted management socket' systemctl enable --now retrodb-xerabora-switch.socket
+run_step 'Reloading running management helper' systemctl try-restart retrodb-xerabora-switch.service
 run_step 'Enabling RetroDB at boot' systemctl enable retrodb.service
 run_step 'Restarting RetroDB' systemctl restart retrodb.service
 run_step 'Checking RetroDB service' systemctl is-active --quiet retrodb.service
