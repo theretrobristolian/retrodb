@@ -217,7 +217,7 @@ def sega32x_alternative_paths(item: LibraryItem) -> list[str]:
     if not sega32x_soft_pass(item):
         return []
     detail = item.ra_hash_error or ""
-    match = re.search(r"(?:^|;\\s*)Compatible alternate ZIP:\\s*(.*?)(?:;\\s*Suggested RA ID:|$)", detail)
+    match = re.search(r"(?:^|;\s*)Compatible alternate ZIP:\s*(.*?)(?:;\s*Suggested RA ID:|$)", detail)
     if not match:
         return []
     return [value.strip() for value in match.group(1).split(";") if value.strip()]
@@ -227,7 +227,7 @@ def sega32x_verified_alternative(db: Session, item: LibraryItem):
     """Link only a live exact-match ZIP from the same platform and suggested RA ID."""
     if not sega32x_soft_pass(item):
         return None
-    match = re.search(r"(?:^|;\\s*)Suggested RA ID:\\s*(\\d+)(?:;|$)", item.ra_hash_error or "")
+    match = re.search(r"(?:^|;\s*)Suggested RA ID:\s*(\d+)(?:;|$)", item.ra_hash_error or "")
     if not match:
         return None
     game_id = int(match.group(1))
