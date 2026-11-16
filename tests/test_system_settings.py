@@ -42,6 +42,11 @@ def test_admin_settings_layout_and_static_refresh(monkeypatch):
     assert "retrodb-vm" in home.text
     assert "192.0.2.15" in home.text
     assert "VMware Virtual Platform" in home.text
+    # Short host details share two columns on phones; OS/model span both.
+    assert '.sys-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}' in home.text
+    assert '.sys-fact--wide{grid-column:1/-1}' in home.text
+    assert home.text.count('class="sys-fact sys-fact--wide"') == 2
+    assert home.text.index("Hardware</div>") < home.text.index("Architecture</div>")
     assert "17.5%" in home.text
     assert "2.0 GiB" in home.text
     assert "System disk (/)" in home.text
