@@ -114,6 +114,12 @@ def render_settings(request: Request):
 .sys-fact{padding:12px;background:#19283e;border:1px solid #354764;border-radius:12px;min-width:0;overflow-wrap:anywhere}
 .sys-fact-label{font-size:12px;color:#b3c3dc;margin-bottom:7px}
 .sys-fact-value{font-size:15px;font-weight:600;color:#f3f7ff}
+@media (max-width:600px){
+ .sys-facts{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .sys-fact{padding:12px 10px}
+ .sys-fact--wide{grid-column:1/-1}
+ .sys-fact-value{font-size:14px;line-height:1.4}
+}
 .sys-meters{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:16px;margin:16px 0 20px}
 .sys-meter{min-width:0}.sys-meter-label{display:flex;flex-wrap:wrap;justify-content:space-between;gap:5px;margin-bottom:9px;font-size:13px}
 .sys-meter-label span{color:#bacbe4}
@@ -127,20 +133,21 @@ def render_settings(request: Request):
     if admin:
         try:
             values = snapshot or {}
-            def fact(label, value):
-                return (f'<div class="sys-fact"><div class="sys-fact-label">{escape(label)}</div>'
+            def fact(label, value, wide=False):
+                css_class = "sys-fact sys-fact--wide" if wide else "sys-fact"
+                return (f'<div class="{css_class}"><div class="sys-fact-label">{escape(label)}</div>'
                         f'<div class="sys-fact-value">{escape(str(value if value is not None else "Unavailable"))}</div></div>')
             fields = [
-                ("Hostname", values.get("hostname")),
-                ("IP address", values.get("ip")),
-                ("Operating system", values.get("os")),
-                ("Hardware", values.get("hardware_type")),
-                ("Manufacturer / model", values.get("model")),
-                ("Architecture", values.get("architecture")),
-                ("Uptime", duration(values.get("uptime"))),
-                ("CPU", str(values.get("cpu_cores") or "Unknown") + " logical cores"),
+                ("Hostname", values.get("hostname"), False),
+                ("IP address", values.get("ip"), False),
+                ("Operating system", values.get("os"), True),
+                ("Hardware", values.get("hardware_type"), False),
+                ("Architecture", values.get("architecture"), False),
+                ("Manufacturer / model", values.get("model"), True),
+                ("Uptime", duration(values.get("uptime")), False),
+                ("CPU", str(values.get("cpu_cores") or "Unknown") + " logical cores", False),
             ]
-            facts = "".join(fact(label, value) for label, value in fields)
+            facts = "".join(fact(label, value, wide) for label, value, wide in fields)
             meters = []
             cpu = values.get("cpu_percent")
             if cpu is not None:
