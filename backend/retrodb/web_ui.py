@@ -974,14 +974,8 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
 def settings_home(request: Request):
     if is_guest(request):
         raise HTTPException(403, "Settings are not available to guests")
-    return page("Settings", """<div class="crumb"><a href="/">Dashboard</a> / Settings</div>
-<h1>Settings</h1><p class="muted">Manage your RetroDB library and server.</p>
-<div class="grid">
-<a class="card" href="/settings/library"><h2>Library management</h2>
-<p class="muted">Collection inventory, audit information and upcoming maintenance tools.</p></a>
-<a class="card" href="/settings/server"><h2>Server management</h2>
-<p class="muted">Restart xeRAbora or reboot the Debian server (approved administrators only).</p></a>
-</div>""")
+    from retrodb.server_management import render_settings
+    return render_settings(request)
 
 
 @router.get("/management", response_class=HTMLResponse)
