@@ -1,8 +1,11 @@
 # Server management (Settings)
 
-RetroDB's authenticated **Settings** area has two sections:
-- **Library management** at `/settings/library` (previous `/management` bookmarks redirect there).
-- **Server management** at `/settings/server` (restart xeRAbora, reboot the Debian host).
+RetroDB's authenticated **Settings** page (`/settings`) has three sections in order:
+- **System information**: read-only hostname, IPv4 addresses, operating system, hardware classification (VM, Raspberry Pi or physical/unknown), manufacturer/model, uptime, logical CPU count, CPU utilisation, memory, system disk and mounted RetroNAS capacity.
+- **Services**: xeRAbora's current systemd status and a confirmed restart button. Additional supported services may be added later.
+- **Library management**: unchanged inventory and maintenance preview, linked at `/settings/library` (the old `/management` bookmark redirects there).
+
+Utilisation and service status are **snapshots**, not a live poll. Press **Refresh** for updated values. The **Restart server** button is at the bottom of System information; **Restart xeRAbora** belongs to the Services card. Both retain the existing confirmation dialogs. The older `/settings/server` deep link displays the consolidated Settings page.
 
 The second area is privileged. Being signed into RetroDB does **not** make an
 account a server administrator. Guests cannot visit Settings.
