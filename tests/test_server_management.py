@@ -22,7 +22,7 @@ def test_settings_server_blocks_guests_and_unapproved_users(monkeypatch, tmp_pat
     monkeypatch.setattr(server_management, "ADMINS", admins)
     restricted = client.get("/settings/server")
     assert restricted.status_code == 200
-    assert "limited to explicitly approved" in restricted.text
+    assert "available to approved administrators" in restricted.text
     assert 'data-open-dialog="reboot-server"' not in restricted.text
     assert client.post("/settings/server/action", data={"action": "reboot-server"}).status_code == 403
 
@@ -54,7 +54,7 @@ def test_admin_server_buttons_require_exact_csrf_and_confirmation(monkeypatch, t
     success = client.post(path, data={"action": "restart-xerabora",
                                      "confirm": "RESTART", "csrf_token": tokens[-1]})
     assert success.status_code == 303
-    assert success.headers["location"] == "/settings/server?result=restart"
+    assert success.headers["location"] == "/settings?result=restart"
     assert calls == [("operator", "restart-xerabora")]
 
 
