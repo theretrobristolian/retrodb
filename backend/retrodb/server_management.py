@@ -156,7 +156,7 @@ def render_settings(request: Request):
             captured = escape(str(values.get("captured") or "Unknown"))
             system_html = f"""<section class="card" id="system-information">
 <div class="sys-head"><div><div class="eyebrow">Host overview</div><h2>System information</h2></div>
-<a class="btn" href="/settings?refresh=1#system-information" aria-label="Refresh system information">↻ Refresh</a></div>
+<button class="btn" type="button" data-refresh-settings aria-label="Refresh system information">↻ Refresh</button></div>
 <p class="muted">Snapshot captured {captured}; values update only when you refresh.</p>
 <div class="sys-facts">{facts}</div>
 <h3>Resource utilisation</h3><div class="sys-meters">{''.join(meters)}</div>
@@ -168,7 +168,7 @@ def render_settings(request: Request):
             state = escape(str(values.get("xerabora") or "unknown"))
             services_html = f"""<section class="card" id="services">
 <div class="sys-head"><div><div class="eyebrow">Hosted services</div><h2>Services</h2></div>
-<a href="/settings?refresh=1#services" class="btn" aria-label="Refresh service status">↻ Refresh</a></div>
+<button class="btn" type="button" data-refresh-settings aria-label="Refresh service status">↻ Refresh</button></div>
 <div class="sys-service"><div><h3>xeRAbora</h3>
 <span class="sys-state" data-state="{state}">{state.title()}</span>
 <p class="muted">PS2 RetroAchievements service. A restart may interrupt connected sessions.</p></div>
@@ -199,6 +199,9 @@ def render_settings(request: Request):
 <h2>Library management</h2><p class="muted">Inventory, audit results and planned maintenance tools are unchanged.</p>
 <a class="btn" href="/settings/library">Open library management</a></section>"""
     script = """<script>(function(){
+document.querySelectorAll("[data-refresh-settings]").forEach(button=>{
+ button.addEventListener("click",()=>window.location.reload());
+});
 document.querySelectorAll("[data-open-dialog]").forEach(button=>{
  button.addEventListener("click",()=>{
   const dialog=document.getElementById(button.dataset.openDialog);
