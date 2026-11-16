@@ -176,8 +176,20 @@ def render_settings(request: Request):
 {confirmation_dialog("restart-xerabora", "Restart xeRAbora", "RESTART", "Restart the xeRAbora service? Connected PS2 sessions may be interrupted.")}
 </section>"""
         except (OSError, ValueError, TypeError):
-            system_html = '<section class="card"><h2>System information</h2><p class="muted">Host information is unavailable. Refresh or check service logs.</p></section>'
-            services_html = '<section class="card"><h2>Services</h2><p class="muted">Service information is unavailable.</p></section>'
+            # Telemetry issues must not take away an approved admin's ability
+            # to recover a hung service or reboot the host.
+            system_html = ('<section class="card"><h2>System information</h2>'
+                           '<p class="muted">Host information is unavailable. Refresh or check service logs.</p>'
+                           '<button class="btn" type="button" data-open-dialog="reboot-server">Restart server</button>'
+                           + confirmation_dialog("reboot-server", "Restart server", "REBOOT",
+                                                 "Reboot the entire host and interrupt all hosted services?")
+                           + '</section>')
+            services_html = ('<section class="card"><h2>Services</h2>'
+                             '<p class="muted">Service status is unavailable.</p>'
+                             '<button class="btn" type="button" data-open-dialog="restart-xerabora">Restart xeRAbora</button>'
+                             + confirmation_dialog("restart-xerabora", "Restart xeRAbora", "RESTART",
+                                                   "Restart xeRAbora and interrupt connected sessions?")
+                             + '</section>')
     else:
         system_html = ('<section class="card"><h2>System information</h2>'
                        '<p class="muted">Host details and power controls are available to approved administrators.</p></section>')
