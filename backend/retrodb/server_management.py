@@ -52,7 +52,7 @@ def perform_action(user: str, action: str) -> None:
 
 def format_bytes(value: int) -> str:
     amount = float(value)
-    for unit in ("B", "KiB", "GiB", "TiB", "PiB"):
+    for unit in ("B", "KiB", "MiB", "GiB", "TiB", "PiB"):
         if amount < 1024 or unit == "PiB":
             return f"{amount:.1f} {unit}"
         amount /= 1024
@@ -93,8 +93,12 @@ def render_settings(request: Request):
     if not user or user == "__retrodb_guest__":
         return Response("Sign-in required", status_code=403)
     admin = is_server_admin(user)
-    # No unauthorised host/network inventory disclosure.
-    snapshot = system_info.snapshot() if admin else None
+    # No unauthorised host/network inventory disclosure. Failed telemetry
+    # should never stop the entire Settings page from rendering.
+    try:
+        snapshot = system_info.snapshot() if admin else None
+    except (OSError, ValueError, RuntimeError, TypeError):
+        snapshot = {}
     notice_codes = {
         "restart": "xeRAbora restart requested. Refresh to see the latest service status.",
         "reboot": "Server reboot requested. RetroDB may disconnect while the host restarts.",
