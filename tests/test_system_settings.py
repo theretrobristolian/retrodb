@@ -45,12 +45,15 @@ def test_admin_settings_layout_and_static_refresh(monkeypatch):
     assert "17.5%" in home.text
     assert "2.0 GiB" in home.text
     assert "System disk (/)" in home.text
-    assert 'href="/settings?refresh=1#system-information"' in home.text
+    assert 'data-refresh-settings aria-label="Refresh system information"' in home.text
     assert home.text.index('id="system-information"') < home.text.index('id="services"')
     assert home.text.index('id="services"') < home.text.index('id="library-management"')
     assert home.text.index('data-open-dialog="reboot-server"') < home.text.index('data-open-dialog="restart-xerabora"')
     assert 'data-state="active"' in home.text
     assert "RetroNAS share" not in home.text
+    assert 'data-refresh-settings aria-label="Refresh service status"' in home.text
+    assert 'window.location.reload()' in home.text
+    assert 'href="/settings?refresh=1#' not in home.text
     assert reads == [1]
     refreshed = client.get("/settings?refresh=1")
     assert refreshed.status_code == 200
