@@ -49,8 +49,11 @@ def hardware() -> tuple[str, str]:
 def ipv4_addresses() -> str:
     # Fixed binary and arguments. No user input is used in the command.
     try:
+        binary = shutil.which("ip")
+        if not binary:
+            return "Unavailable"
         completed = subprocess.run(
-            ["/usr/sbin/ip", "-o", "-4", "addr", "show", "scope", "global"],
+            [binary, "-o", "-4", "addr", "show", "scope", "global"],
             capture_output=True, text=True, timeout=2, check=False,
         )
         if completed.returncode != 0:
