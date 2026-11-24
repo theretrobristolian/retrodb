@@ -13,9 +13,14 @@ def test_full_audit_skips_expensive_patch_prepare():
     patch_audit = text.split("\npatch_audit() {", 1)[1].split("\npatch_download() {", 1)[0]
     patch_apply = text.split("\npatch_apply() {", 1)[1].split("\ndeploy_ps1_patch() {", 1)[0]
     assert 'step "7/10" "Check cached patch packages' in audit
-    assert "patch-prepare" not in patch_audit
-    assert "patch-download" in patch_audit
-    assert "patch-prepare" in patch_apply
+    # Check invoked commands, not comments explaining why a command is absent.
+    executable_lines = lambda section: "\n".join(
+        line for line in section.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    assert '"$HERE/retronas.sh" patch-prepare' not in executable_lines(patch_audit)
+    assert '"$HERE/retronas.sh" patch-download' in executable_lines(patch_audit)
+    assert '"$HERE/retronas.sh" patch-prepare' in executable_lines(patch_apply)
     assert 'local prep_arg="-"' in text
     assert '--quiet --root "$ps3_iso"' in text
 
