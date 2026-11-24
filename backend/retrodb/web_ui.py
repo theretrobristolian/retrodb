@@ -167,6 +167,9 @@ PS3_SERIAL_RE = re.compile(r"(?<![A-Z0-9])((?:BL|BC)[A-Z]{2})[-_ .]?(\d{5})(?![A
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
 def disc_id(item: LibraryItem) -> str:
+    if re.search(r"/roms/nintendo/wii/", "/" + item.relative_path, re.I):
+        match = re.fullmatch(r"([A-Z0-9]{6})\.(?:wbfs|iso|rvz)", item.filename, re.I)
+        return match.group(1).upper() if match else ""
     if re.search(r"/playstationportable/", item.relative_path, re.I):
         match_psp = PSP_SERIAL_RE.search(item.filename)
         return (match_psp.group(1) + match_psp.group(2)).upper() if match_psp else ""
@@ -265,7 +268,15 @@ def sega32x_ra_label(item: LibraryItem, supported: bool) -> str:
 
 
 def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
-    """Conservative PS1/PS2 disc-prefix region hints, not guaranteed disc origin."""
+    """Conservative region hints from filename/disc ID, not verified provenance."""
+    if platform_slug == "wii" and len(serial) == 6:
+        hints = {"E": ("🇺🇸", "USA"), "P": ("🇪🇺", "Europe"),
+                 "J": ("🇯🇵", "Japan"), "K": ("🇰🇷", "Korea"),
+                 "D": ("🇩🇪", "Germany"), "F": ("🇫🇷", "France"),
+                 "I": ("🇮🇹", "Italy"), "S": ("🇪🇸", "Spain"),
+                 "U": ("🇦🇺", "Australia"), "A": ("🌐", "World")}
+        flag, label = hints.get(serial[3].upper(), ("🌐", "Unknown"))
+        return flag, f"{label} (disc ID hint)"
     if platform_slug == "playstation-3" and serial:
         prefix = serial[:4].upper()
         if prefix in ("BLUS", "BCUS"):
