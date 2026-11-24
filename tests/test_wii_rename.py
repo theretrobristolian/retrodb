@@ -155,7 +155,7 @@ def test_smb_case_alias_never_depends_on_samefile_inode(tmp_path, monkeypatch):
     original_exists = Path.exists
     def smb_exists(path):
         if path == target:
-            return True
+            return original_exists(folder) or original_exists(target)
         return original_exists(path)
     monkeypatch.setattr(Path, "exists", smb_exists)
     def forbid_samefile(*_args, **_kwargs):
