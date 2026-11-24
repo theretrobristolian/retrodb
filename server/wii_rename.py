@@ -154,8 +154,8 @@ def apply(root: Path, rows: list[dict[str, str]], journal: Path,
                 or current["target"] != row["target"]
                 or src.is_symlink() or not src.is_dir()
                 or src.parent != dest.parent or row["disc_id"] != current["disc_id"]
-                or (dest.exists() and not src.samefile(dest))
-                or (dest.is_symlink() and not src.samefile(dest))):
+                or dest.is_symlink()
+                or (dest.exists() and not src.samefile(dest))):
             raise ValueError("Folder changed or destination occupied: " + row["source"])
         if not FOLDER.fullmatch(row["target"]) or FOLDER.fullmatch(row["target"]).group(2).upper() != row["disc_id"]:
             raise ValueError("Unsafe destination disc ID")
