@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import uuid
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -378,6 +379,7 @@ def main():
     parser.add_argument("--journal", type=Path)
     parser.add_argument("--games-root", type=Path)
     parser.add_argument("--confirm", default="")
+    parser.add_argument("--quiet", action="store_true", help="summary and limited exceptions only (full CSV unchanged)")
     args = parser.parse_args()
     if args.command == "recover":
         if not args.journal:
@@ -401,8 +403,17 @@ def main():
     rows, plans = audit(args.root, titles)
     if args.games_root:
         rows.extend(audit_extracted(args.games_root, catalogue(args.catalogue)))
-    for row in rows:
-        print(f'{row["status"]:17} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
+    if args.quiet and args.command == "audit":
+        counts = Counter(str(row["status"]) for row in rows)
+        print("[PS3] " + " | ".join(f"{name}: {count}" for name, count in sorted(counts.items())))
+        exceptions = [row for row in rows if str(row["status"]).upper() not in ("VALID", "EXTRACTED_VALID")]
+        for row in exceptions[:20]:
+            print(f'  {row["status"]:17} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
+        if len(exceptions) > 20:
+            print(f"  ... {len(exceptions) - 20} additional non-VALID entries (see full CSV)")
+    else:
+        for row in rows:
+            print(f'{row["status"]:17} {row["existing_iso"]} -> {row["proposed_iso"]} ({row["reason"]})')
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         with args.output.open("w", newline="", encoding="utf-8") as stream:
