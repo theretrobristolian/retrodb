@@ -134,6 +134,29 @@ def plan(root: Path, gametdb: Path | None = None) -> list[dict[str, str]]:
     return entries
 
 
+
+def destination_is_occupied(root: Path, source_name: str, target_name: str) -> bool:
+    """Check directory *entries*, not samefile/stat on a CIFS alias.
+
+    A case-insensitive SMB server may resolve both spellings to the same
+    directory, but report unstable/incomparable inode numbers for them.
+    Never trust samefile() as the basis for overwriting an SMB destination.
+    """
+    source_found = False
+    for entry in root.iterdir():
+        if entry.name == source_name:
+            source_found = True
+        if entry.name.casefold() == target_name.casefold() and entry.name != source_name:
+            return True
+    if not source_found:
+        return True  # Require the original spelling still visible on this mount.
+    if source_name.casefold() == target_name.casefold():
+        return False  # Only the same source entry matches the target.
+    target = root / target_name
+    return target.exists() or target.is_symlink()
+
+
+
 def apply(root: Path, rows: list[dict[str, str]], journal: Path,
           gametdb: Path | None = None) -> int:
     if journal.exists() or journal.is_symlink():
@@ -154,8 +177,7 @@ def apply(root: Path, rows: list[dict[str, str]], journal: Path,
                 or current["target"] != row["target"]
                 or src.is_symlink() or not src.is_dir()
                 or src.parent != dest.parent or row["disc_id"] != current["disc_id"]
-                or dest.is_symlink()
-                or (dest.exists() and not src.samefile(dest))):
+                or destination_is_occupied(root, row["source"], row["target"])):
             raise ValueError("Folder changed or destination occupied: " + row["source"])
         if not FOLDER.fullmatch(row["target"]) or FOLDER.fullmatch(row["target"]).group(2).upper() != row["disc_id"]:
             raise ValueError("Unsafe destination disc ID")
@@ -172,7 +194,8 @@ def apply(root: Path, rows: list[dict[str, str]], journal: Path,
     for item in summary["operations"]:
         src, dest = root / item["source"], root / item["target"]
         try:
-            if src.is_symlink() or not src.is_dir() or (dest.exists() and not src.samefile(dest)):
+            if (src.is_symlink() or not src.is_dir()
+                    or destination_is_occupied(root, item["source"], item["target"])):
                 raise ValueError("Source or destination changed")
             if src.name.casefold() == dest.name.casefold():
                 # On case-insensitive SMB, a direct case-only rename may be a
