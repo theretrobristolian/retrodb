@@ -89,6 +89,17 @@ def test_optional_gametdb_xml_matches_disc_id(tmp_path):
     assert rows[0]["status"] == "TITLE_CANDIDATE"
 
 
+def test_real_gametdb_locale_structure(tmp_path):
+    root, _ = create(tmp_path)
+    xml = tmp_path / "wii.xml"
+    xml.write_text('<datafile><game><id>S3AE5G</id><locale lang="FR">'
+                   '<title>French title</title></locale><locale lang="EN">'
+                   '<title>Attack of the Movies 3D</title></locale></game></datafile>')
+    row = wii.audit(root, ra_catalogue(tmp_path), xml)[0]
+    assert row["title"] == "Attack of the Movies 3D"
+    assert row["title_source"] == "GameTDB disc ID"
+
+
 def test_wrong_console_in_ra_catalogue_ignored(tmp_path):
     path = tmp_path / "wii.json"
     path.write_text('[{"ID":11,"ConsoleID":10,"Title":"Not Wii",'
