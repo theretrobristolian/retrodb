@@ -58,9 +58,19 @@ def game_catalogue(path: Path | None) -> dict[str, list[tuple[int, str, int]]]:
 
 
 def gametdb_titles(path: Path | None) -> dict[str, str]:
-    """Optional downloaded GameTDB XML; local cache only, no web requests."""
+    """Optional cached GameTDB XML or English title table, indexed by Wii ID."""
     if path is None or not path.is_file():
         return {}
+    if path.suffix.lower() == ".txt":
+        names = {}
+        for line in path.read_text(encoding="utf-8-sig").splitlines():
+            if " = " not in line:
+                continue
+            disc_id, title = line.split(" = ", 1)
+            disc_id, title = disc_id.strip().upper(), title.strip()
+            if ID.fullmatch(disc_id) and title and len(title) <= 250:
+                names[disc_id] = title
+        return names
     titles = {}
     # Safe, streaming XML; do not download/parse an untrusted URL directly.
     for _, element in ET.iterparse(path, events=("end",)):
