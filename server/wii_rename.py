@@ -38,6 +38,9 @@ def title_case(text: str) -> str:
     for position, word in enumerate(words):
         left = re.match(r"^\W*", word).group()
         right = re.search(r"\W*$", word).group()
+        if len(left) + len(right) >= len(word):
+            result.append(word)  # Standalone "&", "-", etc. must not duplicate.
+            continue
         core = word[len(left):len(word)-len(right) if right else None]
         key = core.lower()
         if key in ACRONYMS:
