@@ -119,3 +119,11 @@ def test_existing_journal_prevents_repeat(tmp_path):
     journal.write_text("{}")
     with pytest.raises(ValueError, match="journal"):
         rename.apply(tmp_path, rename.plan(tmp_path), journal)
+
+def test_menu_integrates_wii_and_32x_without_duplicate_more_options():
+    menu = (ROOT / 'manager.sh').read_text(encoding='utf-8')
+    assert 'step "9/10" "Audit Sega 32X' in menu
+    assert 'step "10/10" "Audit Nintendo Wii' in menu
+    assert "echo ' 11) Audit Sega 32X" not in menu
+    assert "echo ' 12) Audit Nintendo Wii" not in menu
+    assert '5) run wii_rename' in menu
