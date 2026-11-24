@@ -111,7 +111,11 @@ The tool previews all proposals, requires the exact `RENAME WII` phrase,
 then uses a temporary writable SMB mount (never the normal read-only
 mount). It refuses collisions and ambiguous images, and journals all
 operations under `~/retrodb-exports/wii-rename-journals/`.
+Case-only corrections (for example `TRAUMA TEAM` to `Trauma Team`) use a
+unique intermediate folder on the same SMB share. Its name is recorded in
+the journal before the move, so an interrupted rename can be located and
+recovered without touching WBFS contents.
 On success RetroDB re-audits Wii and refreshes database paths.
-Inspect interrupted rename journals before retrying.
+Inspect interrupted rename journals and temporary folders before retrying.
 
 A folder name correction never establishes RA content-hash compatibility.
