@@ -107,10 +107,21 @@ def test_folder_symlink_never_traversed(tmp_path):
     assert rename.plan(tmp_path) == []
 
 
-def test_case_only_change_not_applied_over_smb(tmp_path):
-    make_game(tmp_path, "trauma team", "SK3EEB")
+def test_case_only_change_uses_intermediate_folder_and_keeps_bytes(tmp_path):
+    folder = make_game(tmp_path, "trauma team", "SK3EEB")
+    original_bytes = (folder / "SK3EEB.wbfs").read_bytes()
     row = rename.plan(tmp_path)[0]
-    assert row["status"] == "VALID"
+    assert row["status"] == "RENAME_CANDIDATE"
+    assert row["target"] == "Trauma Team [SK3EEB]"
+    journal = tmp_path.parent / "case-rename-journal.json"
+    assert rename.apply(tmp_path, [row], journal) == 1
+    dest = tmp_path / "Trauma Team [SK3EEB]"
+    assert dest.is_dir()
+    assert (dest / "SK3EEB.wbfs").read_bytes() == original_bytes
+    assert not list(tmp_path.glob(".retrodb-wii-rename-*"))
+    operations = json.loads(journal.read_text())["operations"]
+    assert operations[0]["state"] == "done"
+    assert operations[0]["intermediate"].startswith(".retrodb-wii-rename-")
 
 
 def test_existing_journal_prevents_repeat(tmp_path):
