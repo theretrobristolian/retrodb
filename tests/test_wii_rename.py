@@ -108,7 +108,7 @@ def test_folder_symlink_never_traversed(tmp_path):
 
 
 def test_case_only_change_uses_intermediate_folder_and_keeps_bytes(tmp_path):
-    folder = make_game(tmp_path, "trauma team", "SK3EEB")
+    folder = make_game(tmp_path, "TRAUMA TEAM", "SK3EEB")
     original_bytes = (folder / "SK3EEB.wbfs").read_bytes()
     row = rename.plan(tmp_path)[0]
     assert row["status"] == "RENAME_CANDIDATE"
