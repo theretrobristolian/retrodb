@@ -1,5 +1,21 @@
 """Curated, reviewable console profiles. No third-party API credentials required."""
 PROFILES = {
+    "wii": {
+        "uk": "8 December 2006", "jp": "2 December 2006", "us": "19 November 2006",
+        "predecessor": None, "successor": None,
+        "media": "Wii optical discs; optional digital WiiWare distribution",
+        "cpu": "IBM Broadway PowerPC processor",
+        "memory": "24 MB main 1T-SRAM plus 64 MB external GDDR3",
+        "video": "Composite, component YPbPr and RGB SCART (regional hardware differences)",
+        "audio": "Stereo analogue; Dolby Pro Logic II support",
+        "ports": "USB 2.0, GameCube ports on early revisions, Bluetooth controllers, SD card",
+        "storage": "Internal flash, SD cards and external USB storage with homebrew software",
+        "generation": "Seventh",
+        "overview": "Nintendo's motion-controlled Wii launched in 2006. RetroDB indexes its WBFS disc images read-only using six-character disc IDs. RetroAchievements has supported Wii since March 2026; filename/ID matches are not verified hashes.",
+        "revisions": "Original RVL-001, Family Edition RVL-101 and Wii mini RVL-201.",
+        "accessories": "Wii Remote, Nunchuk, Sensor Bar, Classic Controller, Wii Balance Board.",
+        "guides": ["WBFS game folder and disc ID conventions", "Disc ID versus RetroAchievements hash verification", "Wii and Dolphin compatibility"],
+    },
     "sega-32x": {
         "uk": "January 1995", "jp": "3 December 1994", "us": "21 November 1994",
         "predecessor": None, "successor": None,
