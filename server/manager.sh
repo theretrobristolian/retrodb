@@ -989,21 +989,34 @@ sega32x_audit() {
   echo '[INFO] Read-only: no ZIP files renamed, replaced or edited.'
 }
 
+wii_titles_refresh() {
+  local cache="/var/cache/retrodb/providers/gametdb/wii-titles.txt"
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gametdb || return 1
+  if ! sudo python3 "$HERE/wii_titles_cache.py" --output "$cache"; then
+    echo '[WARN] GameTDB title download unavailable. Existing local cache or safe fallback will be used.'
+    return 1
+  fi
+  sudo chown retrodb:retrodb "$cache" || return 1
+}
+ 
 wii_rename() {
   local root="$MOUNT/roms/nintendo/wii"
   local rwroot="$PILOT_ROOT/roms/nintendo/wii"
-  local metadata="/var/cache/retrodb/providers/gametdb/wii.xml"
+  local metadata="/var/cache/retrodb/providers/gametdb/wii-titles.txt"
   local journal_dir="$HOME/retrodb-exports/wii-rename-journals"
   local answer source journal rc=0
   local extra=()
   mount_ready || return 1
   sudo test -d "$root" || { echo "[STOP] Wii library not mounted: $root"; return 1; }
+  wii_titles_refresh || true
   if sudo test -r "$metadata"; then
     extra=(--gametdb-cache "$metadata")
-    echo '[INFO] Using GameTDB titles from exact Wii disc IDs where available.'
+    echo '[INFO] Using GameTDB English titles matched to exact Wii disc IDs.'
+  elif sudo test -r /var/cache/retrodb/providers/gametdb/wii.xml; then
+    extra=(--gametdb-cache /var/cache/retrodb/providers/gametdb/wii.xml)
+    echo '[INFO] Using existing GameTDB XML cache.'
   else
-    echo '[INFO] No GameTDB XML cache. Conservatively normalising ALL-CAPS names only.'
-    echo '[INFO] Mixed-case titles will be preserved unless metadata is installed later.'
+    echo '[INFO] No GameTDB titles available; previewing conservative ALL-CAPS formatting only.'
   fi
   echo '[PREVIEW] Renames move the game folder only; disc IDs and WBFS filenames are unchanged.'
   sudo python3 "$HERE/wii_rename.py" preview --root "$root" "${extra[@]}" || return 1
@@ -1045,7 +1058,7 @@ wii_rename() {
 wii_audit() {
   local root="$MOUNT/roms/nintendo/wii"
   local catalogue="/var/cache/retrodb/providers/retroachievements/wii.json"
-  local metadata="/var/cache/retrodb/providers/gametdb/wii.xml"
+  local metadata="/var/cache/retrodb/providers/gametdb/wii-titles.txt"
   local report="$HOME/retrodb-exports/RetroDB-Nintendo-Wii-Audit.csv"
   local staged="/var/lib/retrodb/reports/nintendo-wii-portal-sync.csv"
   local result=0
@@ -1058,8 +1071,11 @@ wii_audit() {
   sudo test -r "$catalogue" || { echo '[ERROR] Wii RetroAchievements catalogue missing.' >&2; return 1; }
   mkdir -p "$HOME/retrodb-exports" || return 1
   local extra=()
+  wii_titles_refresh || true
   if sudo test -r "$metadata"; then
     extra=(--gametdb-cache "$metadata")
+  elif sudo test -r /var/cache/retrodb/providers/gametdb/wii.xml; then
+    extra=(--gametdb-cache /var/cache/retrodb/providers/gametdb/wii.xml)
   fi
   ( umask 077; sudo python3 "$HERE/report_wii_audit.py" \
     --root "$root" --ra-catalogue "$catalogue" \
