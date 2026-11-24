@@ -26,7 +26,7 @@ ACRONYMS = {"wii": "Wii", "wiifit": "WiiFit", "nba": "NBA", "nfl": "NFL",
             "nhl": "NHL", "mlb": "MLB", "wwe": "WWE", "ufc": "UFC",
             "fifa": "FIFA", "lego": "LEGO", "csi": "CSI", "usa": "USA",
             "uk": "UK", "ds": "DS", "3d": "3D", "2d": "2D",
-            "vs": "vs.", "ii": "II", "iii": "III", "iv": "IV"}
+            "vs": "vs", "ii": "II", "iii": "III", "iv": "IV"}
 SMALL = {"and", "at", "by", "for", "from", "in", "of", "on", "or", "the", "to", "vs"}
 SHORT_WORDS = {"A", "I"}
 
