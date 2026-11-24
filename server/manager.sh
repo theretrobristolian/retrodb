@@ -138,8 +138,6 @@ export_csv() {
   install -d -m 0700 "$HOME/retrodb-exports"
   sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$REPORT" "$EXPORT"
   local excel="$HOME/retrodb-exports/RetroDB-Compatibility.xlsx"
-  local prepare="/var/lib/retrodb/patches/patch-prepare.json"
-  local prepared_copy="$HOME/retrodb-exports/patch-prepare.json"
   local ps1_csv="$HOME/retrodb-exports/RetroDB-PS1-Audit.csv"
   local ps1_root="$MOUNT/roms/sony/playstation1"
   if sudo test -d "$ps1_root"; then
