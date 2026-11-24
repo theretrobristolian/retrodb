@@ -288,7 +288,7 @@ audit() {
   if sudo test -d "$MOUNT/roms/sega/32x"; then
     step "9/10" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
   else
-    stage "9/9" "Sega 32X collection"
+    stage "9/10" "Sega 32X collection"
     echo '[INFO] 32X directory not found; skipping this optional platform.'
   fi
   if sudo test -d "$MOUNT/roms/nintendo/wii"; then
