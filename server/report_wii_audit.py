@@ -67,7 +67,11 @@ def gametdb_titles(path: Path | None) -> dict[str, str]:
         if element.tag != "game":
             continue
         serial = (element.findtext("id") or "").strip().upper()
-        title = (element.findtext("title") or "").strip()
+        # GameTDB normally stores titles inside language-labelled locale
+        # elements, not directly under <game>.
+        title = (element.findtext("./locale[@lang='EN']/title")
+                 or element.findtext("./locale[@lang='en']/title")
+                 or element.findtext("title") or "").strip()
         if ID.fullmatch(serial) and title and len(title) <= 250:
             titles[serial] = title
         element.clear()
@@ -85,6 +89,10 @@ def audit(root: Path, ra_catalogue: Path | None = None,
         if path.is_symlink() or not path.is_file() or path.suffix.lower() not in (".wbfs", ".iso", ".rvz"):
             continue
         relative = path.relative_to(root)
+        # The supported Wii layout is strictly one game directory deep.
+        # Ignore extra nested tools/backups rather than publishing unsafe paths.
+        if len(relative.parts) != 2:
+            continue
         # A folder and a file must independently agree on the complete disc ID.
         match = FOLDER.fullmatch(path.parent.name)
         disk_id = path.stem.upper()
