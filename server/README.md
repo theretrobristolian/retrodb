@@ -48,12 +48,27 @@ Run `retrodb` as your normal user:
 
 | Menu | Operation |
 |---|---|
-| 1 | Full PS1/PS2/PS3 and Sega 32X audit; exports compatibility data and refreshes 32X web listings |
+| 1 | Full PS1/PS2/PS3, Sega 32X and Wii audit; exports compatibility data and refreshes console listings |
 | 2 | Patch one verified RA game ID locally; for PS1, offer confirmed deployment to RetroNAS with verified `OLD_` BIN/CUE backups |
 | 3 | PS1 BIN/CUE, PS2 OPL ISO, PS3 ISO/extracted, and Sega 32X ZIP-only naming; all use preview and confirmation |
 | 4 | More options: exports, diagnostics, maintenance, connection settings and standalone read-only 32X audit |
 
 The normal collection mount stays read-only. The confirmed PS1 deployment temporarily mounts the same share writable, validates the supplied patched CUE/BIN pair, copies and checksum-verifies `OLD_` backups, then publishes the verified patch. The PS2 legacy network deployment code still exists but is **not** part of the current menu-2 completion path. Check journals before retrying an interrupted write. Detailed instructions: [RetroNAS scanning](../docs/retronas-scanning.md).
+
+### Nintendo Wii read-only WBFS integration
+
+The regular **Audit games** action now detects `roms/nintendo/wii` on the
+existing RetroNAS mount and inventories Wii game folders (for example
+`Attack of the Movies 3D [S3AE5G]/S3AE5G.wbfs`). A standalone Wii scan is
+also available from **More options → 12**.
+
+The scan verifies folder/file **disc-ID consistency**, caches the official
+RetroAchievements Wii **system 19** catalogue, and indexes Wii titles into the
+normal `/consoles/wii` and `/library/wii` pages. Optional downloaded
+GameTDB English-locale XML may enrich titles by exact six-character disc ID.
+This stage **does not compute Wii RA hashes**: a title candidate is not an
+exact hash match and earns no verified trophy. No Wii images or mounts are
+changed. See [Wii integration documentation](../docs/wii-integration.md).
 
 ### Sega 32X concise ZIP rename
 
