@@ -85,7 +85,16 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
                                 release_date=date(2006, 11, 19))
             session.add(platform)
             session.flush()
+        # Reuse a unique existing row after a *folder-only rename*. Wii WBFS
+        # basename, size and mtime remain identical; preserve library item IDs
+        # rather than creating a new row and marking the old one missing.
+        previous_items = session.scalars(select(LibraryItem).where(
+            LibraryItem.source_id == source.id,
+            LibraryItem.platform_id == platform.id,
+            LibraryItem.is_missing.is_(False))).all()
+        incoming = {(ROOT_RELATIVE / p).as_posix() for p in paths}
         seen = set()
+        reused = set()
         for row, relative in zip(records, paths):
             db_path = (ROOT_RELATIVE / relative).as_posix()
             seen.add(db_path)
@@ -93,6 +102,21 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
             item = session.scalar(select(LibraryItem).where(
                 LibraryItem.source_id == source.id,
                 LibraryItem.relative_path == db_path))
+            if item is None and row["disc_id"]:
+                candidates = [
+                    old for old in previous_items
+                    if old.id not in reused
+                    and old.relative_path not in incoming
+                    and old.filename.casefold() == row["filename"].casefold()
+                    and old.size_bytes == stat.st_size
+                    and old.modified_at.timestamp() == stat.st_mtime
+                    and old.relative_path.startswith(ROOT_RELATIVE.as_posix() + "/")
+                    and not (mount_root / old.relative_path).exists()
+                ]
+                if len(candidates) == 1:
+                    item = candidates[0]
+                    reused.add(item.id)
+                    item.relative_path = db_path
             if item is None:
                 item = LibraryItem(source_id=source.id, platform_id=platform.id,
                                    relative_path=db_path, filename=row["filename"],
