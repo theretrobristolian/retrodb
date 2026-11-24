@@ -21,7 +21,7 @@ from retrodb.models import CollectionSource, LibraryItem, Platform
 
 ROOT_RELATIVE = Path("roms/nintendo/wii")
 ID = re.compile(r"^[A-Z0-9]{6}$")
-NAME = re.compile(r"^(.+?) \[([A-Z0-9]{6})\]$")
+NAME = re.compile(r"^(.+?) \[([A-Z0-9]{6})\]$", re.I)
 STATES = {"IDENTIFIED", "TITLE_CANDIDATE", "AMBIGUOUS_TITLE", "REVIEW"}
 EXTENSIONS = {".wbfs", ".iso", ".rvz"}
 
@@ -45,7 +45,7 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
         folder = NAME.fullmatch(relative.parent.name)
         disc_id = relative.stem.upper()
         if row["status"] != "REVIEW" and (not folder or not ID.fullmatch(disc_id)
-                                           or disc_id != folder.group(2)
+                                           or disc_id != folder.group(2).upper()
                                            or row["disc_id"] != disc_id):
             raise ValueError("Wii disc ID mismatch")
         if row["status"] == "REVIEW" and row["disc_id"]:
