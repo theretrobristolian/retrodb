@@ -68,7 +68,7 @@ def gametdb_titles(path: Path | None) -> dict[str, str]:
                 continue
             disc_id, title = line.split(" = ", 1)
             disc_id, title = disc_id.strip().upper(), title.strip()
-            if ID.fullmatch(disc_id) and title and len(title) <= 250:
+            if ID.fullmatch(disc_id) and disc_id != "TITLES" and title and len(title) <= 250:
                 names[disc_id] = title
         return names
     titles = {}
