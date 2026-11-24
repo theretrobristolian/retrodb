@@ -274,22 +274,28 @@ sync_gamedb() {
 }
 
 audit() {
-  stage "1/9" "Prerequisites and read-only RetroNAS connection"
+  stage "1/10" "Prerequisites and read-only RetroNAS connection"
   mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.' >&2; return 1; }
   sudo test -x /opt/retrodb-tools/RAHasher || { echo '[ERROR] RAHasher unavailable.' >&2; return 1; }
   printf '[OK] RetroNAS mounted; RAHasher available.\n'
-  step "2/9" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
-  step "3/9" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
-  step "4/9" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
-  step "5/9" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
-  step "6/9" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
-  step "7/9" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
-  step "8/9" "Export formatted Excel workbook and raw CSV" export_csv || return 1
+  step "2/10" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
+  step "3/10" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
+  step "4/10" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
+  step "5/10" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
+  step "6/10" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
+  step "7/10" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
+  step "8/10" "Export formatted Excel workbook and raw CSV" export_csv || return 1
   if sudo test -d "$MOUNT/roms/sega/32x"; then
-    step "9/9" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
+    step "9/10" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
   else
     stage "9/9" "Sega 32X collection"
     echo '[INFO] 32X directory not found; skipping this optional platform.'
+  fi
+  if sudo test -d "$MOUNT/roms/nintendo/wii"; then
+    step "10/10" "Audit Nintendo Wii games and refresh web library" wii_audit || return 1
+  else
+    stage "10/10" "Nintendo Wii collection"
+    echo '[INFO] Wii directory not present; skipping this optional platform.'
   fi
   printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
   echo 'NOTE: No original RetroNAS game images were changed.'
@@ -983,6 +989,44 @@ sega32x_audit() {
   echo '[INFO] Read-only: no ZIP files renamed, replaced or edited.'
 }
 
+wii_audit() {
+  local root="$MOUNT/roms/nintendo/wii"
+  local catalogue="/var/cache/retrodb/providers/retroachievements/wii.json"
+  local metadata="/var/cache/retrodb/providers/gametdb/wii.xml"
+  local report="$HOME/retrodb-exports/RetroDB-Nintendo-Wii-Audit.csv"
+  local staged="/var/lib/retrodb/reports/nintendo-wii-portal-sync.csv"
+  local result=0
+
+  echo '[CHECK] Read-only Nintendo Wii WBFS inventory / RetroAchievements titles'
+  sudo test -d "$root" || { echo "[ERROR] Wii directory unavailable: $root" >&2; return 1; }
+  sudo test -r /etc/retrodb/retrodb.env || { echo '[ERROR] RetroAchievements configuration missing.' >&2; return 1; }
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-wii || return 1
+  sudo test -r "$catalogue" || { echo '[ERROR] Wii RetroAchievements catalogue missing.' >&2; return 1; }
+  mkdir -p "$HOME/retrodb-exports" || return 1
+  local extra=()
+  if sudo test -r "$metadata"; then
+    extra=(--gametdb-cache "$metadata")
+  fi
+  ( umask 077; sudo python3 "$HERE/report_wii_audit.py" \
+    --root "$root" --ra-catalogue "$catalogue" \
+    "${extra[@]}" --output "$report" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$report" || return 1
+  chmod 0600 "$report" || return 1
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/lib/retrodb/reports || return 1
+  sudo install -m 0600 -o retrodb -g retrodb "$report" "$staged" || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.wii_sync --audit "$staged" --mount-root "$MOUNT" || result=$?
+  sudo rm -f "$staged"
+  (( result == 0 )) || {
+    echo '[ERROR] Wii audit CSV produced, but portal sync failed; ROMs untouched.' >&2
+    return "$result"
+  }
+  echo "[READY] $report"
+  echo '[READY] Nintendo Wii available at /consoles/wii and /library/wii'
+  echo '[INFO] Wii disc-ID matches are not RA hash verification.'
+}
+
 more_menu() {
   local choice
   while true; do
@@ -1000,6 +1044,7 @@ more_menu() {
     echo '  9) Import PS2 online data    - Community CSV to offline catalogue'
     echo ' 10) Refresh XLink PS2 LAN    - Official supported-game titles'
     echo ' 11) Audit Sega 32X ZIPs      - Read-only standalone audit (also in full audit)'
+    echo ' 12) Audit Nintendo Wii       - WBFS disc IDs and RA title candidates'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -1016,6 +1061,7 @@ more_menu() {
       9) online_import_menu; pause ;;
      10) xlink_import_menu; pause ;;
      11) run sega32x_audit; pause ;;
+     12) run wii_audit; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
