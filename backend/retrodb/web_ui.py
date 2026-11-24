@@ -932,7 +932,8 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
         extra_info += detail("Genres", ", ".join(extra["genres"][:4]))
     meta_panel = ('<div class="info-pairs">' + release + '</div>') if release else '<p class="muted">No release metadata available yet.</p>'
     online_panel = online_details(online) if online else ""
-    source_label = ("RetroAchievements 32X ROM hash catalogue" if platform and platform.slug == "sega-32x" else "TheGamesDB cache and local GameDB" if tgdb else "Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
+    source_label = ("Wii disc ID / folder; optional GameTDB and RetroAchievements title catalogue (unverified hash)" if platform and platform.slug == "wii"
+                    else "RetroAchievements 32X ROM hash catalogue" if platform and platform.slug == "sega-32x" else "TheGamesDB cache and local GameDB" if tgdb else "Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
                     else "RetroAchievements")
     if extra:
         source_label += " + GameDB/IGDB"
@@ -962,9 +963,10 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     collection_panel = (f'<section class="card"><h2>Your copy</h2>'
                         f'{detail("Console", platform.name if platform else None)}'
                         f'{detail("Disc ID", disc_id(item)) if not (platform and platform.slug == "sega-32x") else detail("Release type", sega32x_type(item.filename, item.ra_game_title or ""))}'
-                        f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug == "playstation-3" else ""}'
+                        f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug in ("playstation-3", "wii") else ""}'
                         f'{detail("RA result", sega32x_ra_label(item, ra_supported(item, "sega-32x"))) if platform and platform.slug == "sega-32x" else ""}'
-                        f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug == "sega-32x" else ""}'
+                        f'{detail("RA result", "Wii disc identified; RA title candidate only — disc hash not verified") if platform and platform.slug == "wii" else ""}'
+                        f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug in ("sega-32x", "wii") else ""}'
                         f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
     online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
     ra_link = (f'<a href="https://retroachievements.org/game/{int(item.ra_game_id)}"'
