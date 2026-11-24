@@ -50,8 +50,8 @@ Run `retrodb` as your normal user:
 |---|---|
 | 1 | Full PS1/PS2/PS3, Sega 32X and Wii audit; exports compatibility data and refreshes console listings |
 | 2 | Patch one verified RA game ID locally; for PS1, offer confirmed deployment to RetroNAS with verified `OLD_` BIN/CUE backups |
-| 3 | PS1 BIN/CUE, PS2 OPL ISO, PS3 ISO/extracted, and Sega 32X ZIP-only naming; all use preview and confirmation |
-| 4 | More options: exports, diagnostics, maintenance, connection settings and standalone read-only 32X audit |
+| 3 | PS1 BIN/CUE, PS2 OPL ISO, PS3 ISO/extracted, Sega 32X ZIP and Nintendo Wii folder naming; all preview before confirmation |
+| 4 | More options: exports, diagnostics, maintenance and connection settings (32X/Wii run in the full audit) |
 
 The normal collection mount stays read-only. The confirmed PS1 deployment temporarily mounts the same share writable, validates the supplied patched CUE/BIN pair, copies and checksum-verifies `OLD_` backups, then publishes the verified patch. The PS2 legacy network deployment code still exists but is **not** part of the current menu-2 completion path. Check journals before retrying an interrupted write. Detailed instructions: [RetroNAS scanning](../docs/retronas-scanning.md).
 
@@ -59,8 +59,7 @@ The normal collection mount stays read-only. The confirmed PS1 deployment tempor
 
 The regular **Audit games** action now detects `roms/nintendo/wii` on the
 existing RetroNAS mount and inventories Wii game folders (for example
-`Attack of the Movies 3D [S3AE5G]/S3AE5G.wbfs`). A standalone Wii scan is
-also available from **More options → 12**.
+`Attack of the Movies 3D [S3AE5G]/S3AE5G.wbfs`). Wii is included in the normal full audit; no separate More options entry is needed.
 
 The scan verifies folder/file **disc-ID consistency**, caches the official
 RetroAchievements Wii **system 19** catalogue, and indexes Wii titles into the
@@ -69,6 +68,10 @@ GameTDB English-locale XML may enrich titles by exact six-character disc ID.
 This stage **does not compute Wii RA hashes**: a title candidate is not an
 exact hash match and earns no verified trophy. No Wii images or mounts are
 changed. See [Wii integration documentation](../docs/wii-integration.md).
+
+### Nintendo Wii folder naming
+
+Choose **Rename games → 5 Nintendo Wii** to preview ID-preserving folder title corrections. The tool fetches and caches GameTDB's English title list keyed by exact six-character Wii disc ID, or conservatively normalises ALL-CAPS folder names when no authoritative title is available. Only the directory changes; its WBFS file remains named by disc ID and is never rewritten. A temporary writable RetroNAS mount, collision preflight, explicit `RENAME WII` confirmation and write-ahead journal protect changes. On success the normal Wii audit refreshes database paths. See [Wii integration](../docs/wii-integration.md).
 
 ### Sega 32X concise ZIP rename
 
