@@ -11,6 +11,7 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 URL = "https://www.gametdb.com/wiitdb.txt?LANG=EN"
 LIMIT = 4 * 1024 * 1024
@@ -24,7 +25,8 @@ def refresh(path: Path, force: bool = False) -> tuple[int, str]:
     try:
         request = Request(URL, headers={"User-Agent": "RetroDB/0.1 (Wii metadata cache)"})
         with urlopen(request, timeout=15) as response:
-            if response.geturl() != URL:
+            endpoint = urlsplit(response.geturl())
+            if endpoint.scheme != "https" or endpoint.hostname not in {"www.gametdb.com", "gametdb.com"}:
                 raise ValueError("Unexpected GameTDB redirect")
             content = response.read(LIMIT + 1)
         if len(content) > LIMIT:
