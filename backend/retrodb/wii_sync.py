@@ -109,7 +109,7 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
                     and old.relative_path not in incoming
                     and old.filename.casefold() == row["filename"].casefold()
                     and old.size_bytes == stat.st_size
-                    and old.modified_at.timestamp() == stat.st_mtime
+                    and abs(old.modified_at.timestamp() - stat.st_mtime) < 0.01
                     and old.relative_path.startswith(ROOT_RELATIVE.as_posix() + "/")
                     and not (mount_root / old.relative_path).exists()
                 ]
