@@ -142,3 +142,35 @@ def test_menu_integrates_wii_and_32x_without_duplicate_more_options():
 
 def test_all_caps_title_preserves_standalone_punctuation():
     assert rename.title_case("ZACK & WIKI - QUEST FOR BARBAROS") == "Zack & Wiki - Quest for Barbaros"
+
+
+def test_smb_case_alias_never_depends_on_samefile_inode(tmp_path, monkeypatch):
+    folder = make_game(tmp_path, "Crash - Mind Over Mutant", "RC8E7D")
+    metadata = tmp_path.parent / "gametdb-crash.txt"
+    metadata.write_text("RC8E7D = Crash - Mind over Mutant\n")
+    rows = rename.plan(tmp_path, metadata)
+    assert rows[0]["status"] == "RENAME_CANDIDATE"
+    target = tmp_path / "Crash - Mind over Mutant [RC8E7D]"
+    # CIFS may say both spellings exist but report unrelated inode numbers.
+    original_exists = Path.exists
+    def smb_exists(path):
+        if path == target:
+            return True
+        return original_exists(path)
+    monkeypatch.setattr(Path, "exists", smb_exists)
+    def forbid_samefile(*_args, **_kwargs):
+        raise AssertionError("CIFS inode identity must not be consulted")
+    monkeypatch.setattr(Path, "samefile", forbid_samefile)
+    assert rename.destination_is_occupied(tmp_path, folder.name, target.name) is False
+    assert rename.destination_is_occupied(tmp_path, folder.name, "Different Existing Folder") is False
+    journal = tmp_path.parent / "smb-case-journal.json"
+    assert rename.apply(tmp_path, rows, journal, metadata) == 1
+    assert (target / "RC8E7D.wbfs").is_file()
+
+
+def test_destination_conflict_detected_by_directory_entries(tmp_path):
+    make_game(tmp_path, "TRAUMA TEAM", "SK3EEB")
+    (tmp_path / "Trauma Team [SK3EEB]").mkdir()
+    assert rename.destination_is_occupied(
+        tmp_path, "TRAUMA TEAM [SK3EEB]", "Trauma Team [SK3EEB]"
+    )
