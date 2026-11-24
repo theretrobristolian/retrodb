@@ -127,3 +127,7 @@ def test_menu_integrates_wii_and_32x_without_duplicate_more_options():
     assert "echo ' 11) Audit Sega 32X" not in menu
     assert "echo ' 12) Audit Nintendo Wii" not in menu
     assert '5) run wii_rename' in menu
+
+
+def test_all_caps_title_preserves_standalone_punctuation():
+    assert rename.title_case("ZACK & WIKI - QUEST FOR BARBAROS") == "Zack & Wiki - Quest for Barbaros"
