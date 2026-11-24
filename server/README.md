@@ -40,6 +40,19 @@ For eligible PS1 CUE/BIN collisions, menu 3 previews and requires explicit `RENA
 | xeRAbora service/profile management | [Integration guide](../integrations/xerabora/README.md) |
 | PS2 MemCard PRO2 FTP / offline `.mc2` builder | xeRAbora menu option 8; [Memory-card guide](../integrations/xerabora/README.md#memcard-pro2-and-offline-memory-card-image-manager-menu-8) |
 
+The normal **Audit games** workflow is fast and read-only: stage 7 checks
+cached/downloaded official patch packages but does **not** verify patch
+source image checksums. The previous full-source checksum pass read many
+gigabytes over RetroNAS even when no patch was being applied. Mandatory
+source verification remains in **2) Patch PS1 / PS2**, before any patch
+operation or NAS deployment. Normal audit reports do not reuse potentially
+stale `patch-prepare.json` as evidence that a source is currently verified.
+
+The full audit's PS3 stage writes **every record** into
+`~/retrodb-exports/RetroDB-PS3-Audit.csv`, but the terminal displays a
+compact status summary and up to 20 exceptions. Full per-file previews
+remain visible under **3) Rename games → PlayStation 3**.
+
 Patching is **one RA game ID at a time**, never a bulk patch operation. Review the selected game's source, expected RA hash and the separate NAS-write confirmation. For renames, review the preview before the explicit apply confirmation. Imported metadata and uncertain identity matches require manual review. GameDB matching deliberately leaves ambiguous releases unresolved for manual inspection.
 
 ## Current interactive manager
