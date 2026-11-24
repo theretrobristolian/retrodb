@@ -31,9 +31,9 @@ tested separately before assigning verified RA game IDs.
 ## How to run
 
 After updating and deploying RetroDB, use the existing `retrodb` command.
-The normal **Audit games** workflow now includes **Nintendo Wii** as its last
-stage when `roms/nintendo/wii` exists. Alternatively, choose **More options
-→ 12 Audit Nintendo Wii** for a standalone, read-only run.
+The normal **Audit games** workflow includes **Nintendo Wii** as its last
+stage when `roms/nintendo/wii` exists. Wii and 32X are intentionally not
+duplicated under More options; both run with the full audit.
 
 During the audit RetroDB calls its existing cache-first provider for
 RetroAchievements system **19 (Wii)** and stores the response at:
@@ -64,8 +64,12 @@ collection source as other platforms.
 
 ## Optional GameTDB names
 
-If an administrator has obtained a Wii title catalogue in a compatible
-GameTDB XML format, it may be placed at:
+RetroDB caches GameTDB's public English Wii disc-ID title list (up to 30 days)
+when auditing or previewing Wii renames, under
+`/var/cache/retrodb/providers/gametdb/wii-titles.txt`.
+If GameTDB is unavailable, an existing cache is reused or the scanner
+falls back to folder-title evidence. A pre-existing GameTDB XML catalogue
+is also accepted at:
 
 ```text
 /var/cache/retrodb/providers/gametdb/wii.xml
@@ -85,3 +89,29 @@ RetroDB falls back to the title already in the folder name.
    official catalogue and the registered game has published achievements.
 4. Keep unsupported, uncertain, different-region and duplicate dumps visible
    without falsely claiming they are verified.
+
+## Wii folder naming (Rename games → Nintendo Wii)
+
+The rename preserves the Wii loader layout:
+
+```text
+Game Title [DISC_ID]/DISC_ID.wbfs
+```
+
+It renames **only the containing folder**. WBFS, ISO, RVZ and sidecar
+contents are unchanged. The best title source is GameTDB matched to the
+**exact six-character Wii disc ID**. If a title is unavailable, the
+tool only proposes conservative ALL-CAPS formatting. It preserves
+existing mixed-case titles instead of guessing expansions of abbreviations.
+
+For example, `SUPER MONKEY BALL BANANA BLITZ [RSME8P]` becomes
+`Super Monkey Ball Banana Blitz [RSME8P]`.
+
+The tool previews all proposals, requires the exact `RENAME WII` phrase,
+then uses a temporary writable SMB mount (never the normal read-only
+mount). It refuses collisions and ambiguous images, and journals all
+operations under `~/retrodb-exports/wii-rename-journals/`.
+On success RetroDB re-audits Wii and refreshes database paths.
+Inspect interrupted rename journals before retrying.
+
+A folder name correction never establishes RA content-hash compatibility.
