@@ -12,6 +12,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from collections import Counter
 from pathlib import Path
 
@@ -107,7 +108,7 @@ def plan(root: Path, gametdb: Path | None = None) -> list[dict[str, str]]:
             dest = f"{title} [{disc_id}]"
             if origin.startswith("Invalid"):
                 row["reason"] = origin
-            elif dest.casefold() == folder.name.casefold():
+            elif dest == folder.name:
                 row["status"] = "VALID"
                 row["reason"] = "Already named consistently"
             elif INVALID.search(dest) or dest in {".", ".."}:
@@ -118,19 +119,23 @@ def plan(root: Path, gametdb: Path | None = None) -> list[dict[str, str]]:
 
     # SMB shares are commonly case-insensitive. Do not overwrite case aliases,
     # swap two directories or permit two sources to converge on one target.
-    occupied = {p.name.casefold() for p in root.iterdir()}
+    occupied = {}
+    for child in root.iterdir():
+        occupied.setdefault(child.name.casefold(), set()).add(child.name)
     target_counts = Counter(r["target"].casefold() for r in entries
                             if r["status"] == "RENAME_CANDIDATE")
     for row in entries:
         if row["status"] != "RENAME_CANDIDATE":
             continue
-        if row["target"].casefold() in occupied or target_counts[row["target"].casefold()] > 1:
+        others = occupied.get(row["target"].casefold(), set()) - {row["source"]}
+        if others or target_counts[row["target"].casefold()] > 1:
             row["status"] = "REVIEW_COLLISION"
             row["reason"] = "Destination exists or multiple folders propose the same name"
     return entries
 
 
-def apply(root: Path, rows: list[dict[str, str]], journal: Path) -> int:
+def apply(root: Path, rows: list[dict[str, str]], journal: Path,
+          gametdb: Path | None = None) -> int:
     if journal.exists() or journal.is_symlink():
         raise ValueError("Refusing to overwrite an existing journal")
     candidates = [row for row in rows if row["status"] == "RENAME_CANDIDATE"]
@@ -138,22 +143,26 @@ def apply(root: Path, rows: list[dict[str, str]], journal: Path) -> int:
         return 0
     # Verify the complete plan before starting. Re-run this validation on the
     # writable mount, never trust only the preview from the read-only mount.
-    live = plan(root, None)
+    live = plan(root, gametdb)
     by_src = {row["source"]: row for row in live}
     # A locally cached GameTDB title may produce different suggestions from
     # an all-caps fallback. Permit only the target explicitly previewed.
     for row in candidates:
         src, dest = root / row["source"], root / row["target"]
-        if (row["source"] not in by_src or by_src[row["source"]]["status"] == "REVIEW"
-                or src.is_symlink() or not src.is_dir() or dest.exists() or dest.is_symlink()
-                or src.parent != dest.parent or row["disc_id"] != by_src[row["source"]]["disc_id"]):
+        current = by_src.get(row["source"])
+        if (current is None or current["status"] != "RENAME_CANDIDATE"
+                or current["target"] != row["target"]
+                or src.is_symlink() or not src.is_dir()
+                or src.parent != dest.parent or row["disc_id"] != current["disc_id"]
+                or (dest.exists() and not src.samefile(dest))
+                or (dest.is_symlink() and not src.samefile(dest))):
             raise ValueError("Folder changed or destination occupied: " + row["source"])
         if not FOLDER.fullmatch(row["target"]) or FOLDER.fullmatch(row["target"]).group(2).upper() != row["disc_id"]:
             raise ValueError("Unsafe destination disc ID")
     journal.parent.mkdir(parents=True, exist_ok=True)
     summary = {"schema": 1, "operation": "wii-folder-rename",
-               "operations": [{"source": r["source"], "target": r["target"], "state": "pending"}
-                              for r in candidates]}
+               "operations": [{"source": r["source"], "target": r["target"], "state": "pending",
+                               "intermediate": ""} for r in candidates]}
     def record():
         temporary = journal.with_name(journal.name + ".tmp")
         temporary.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
@@ -163,9 +172,26 @@ def apply(root: Path, rows: list[dict[str, str]], journal: Path) -> int:
     for item in summary["operations"]:
         src, dest = root / item["source"], root / item["target"]
         try:
-            if src.is_symlink() or not src.is_dir() or dest.exists() or dest.is_symlink():
+            if src.is_symlink() or not src.is_dir() or (dest.exists() and not src.samefile(dest)):
                 raise ValueError("Source or destination changed")
-            os.rename(src, dest)  # Same share, folder only; WBFS bytes unchanged.
+            if src.name.casefold() == dest.name.casefold():
+                # On case-insensitive SMB, a direct case-only rename may be a
+                # no-op. Use a unique intermediate folder on the SAME share.
+                # Record it BEFORE moving so an interruption can be recovered.
+                intermediate = root / (".retrodb-wii-rename-" + uuid.uuid4().hex)
+                if intermediate.exists() or intermediate.is_symlink():
+                    raise ValueError("Intermediate folder already exists")
+                item["intermediate"] = intermediate.name
+                item["state"] = "moving-to-intermediate"
+                record()
+                os.rename(src, intermediate)
+                item["state"] = "at-intermediate"
+                record()
+                if dest.exists() or dest.is_symlink():
+                    raise ValueError("Destination unexpectedly occupied")
+                os.rename(intermediate, dest)
+            else:
+                os.rename(src, dest)  # Folder only; WBFS bytes unchanged.
             item["state"] = "done"
             renamed += 1
             record()
@@ -198,7 +224,7 @@ def main(argv=None):
     if args.action == "preview":
         print("[INFO] Preview only. No Wii folder or image changed.")
         return 0
-    count = apply(args.root, rows, args.journal)
+    count = apply(args.root, rows, args.journal, args.gametdb_cache)
     print(f"[OK] Renamed {count} Wii folders. Internal disc files remain untouched.")
     return 0
 
