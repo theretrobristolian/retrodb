@@ -157,7 +157,7 @@ export_csv() {
   if sudo test -d "$ps3_iso"; then
     sudo install -d -o retrodb -g retrodb -m 0750 /var/cache/retrodb/providers/gamedb || return 1
     sudo env PYTHONPATH="$HERE/../backend" /opt/retrodb/.venv/bin/python -m retrodb.providers.gamedb --platform playstation-3 || return 1
-    ( umask 077; sudo python3 "$HERE/ps3_rename.py" audit --root "$ps3_iso" --games-root "$ps3_games" --catalogue "$ps3_cache" --output "$ps3_csv" ) || return 1
+    ( umask 077; sudo python3 "$HERE/ps3_rename.py" audit --quiet --root "$ps3_iso" --games-root "$ps3_games" --catalogue "$ps3_cache" --output "$ps3_csv" ) || return 1
     sudo chown "$(id -un):$(id -gn)" "$ps3_csv" || return 1
     chmod 0600 "$ps3_csv" || return 1
   else
@@ -191,13 +191,11 @@ export_csv() {
     echo '[WARNING] PSP ISO directory unavailable; export will omit PSP inventory.'
     rm -f "$psp_csv"
   fi
+  # A previous patch-prepare.json can be stale after source files change.
+  # Never display historic verification as current within the full audit.
+  # A patch operation always verifies its own source again before use.
   local prep_arg="-"
-  if sudo -n test -f "$prepare" 2>/dev/null || sudo test -f "$prepare"; then
-    sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$prepare" "$prepared_copy" || return 1
-    prep_arg="$prepared_copy"
-  else
-    echo '[INFO] Patch preparation unavailable; verified patch evidence omitted.'
-  fi
+  echo '[INFO] Patch-source verification is not part of the full audit; workbook marks it unverified.'
   local ps1_arg="-" ps3_arg="-"
   [[ -f "$ps1_csv" ]] && ps1_arg="$ps1_csv"
   [[ -f "$ps3_csv" ]] && ps3_arg="$ps3_csv"
@@ -283,7 +281,7 @@ audit() {
   step "4/10" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
   step "5/10" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
   step "6/10" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
-  step "7/10" "Download / reuse official patches, verify existing source ISOs" patch_audit || return 1
+  step "7/10" "Check cached patch packages (no ISO checksum verification)" patch_audit || return 1
   step "8/10" "Export formatted Excel workbook and raw CSV" export_csv || return 1
   if sudo test -d "$MOUNT/roms/sega/32x"; then
     step "9/10" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
@@ -301,25 +299,12 @@ audit() {
   echo 'NOTE: No original RetroNAS game images were changed.'
 }
 patch_audit() {
-  # Time the two distinct operations to identify download versus SMB checksum cost.
-  # Individual patch download failures must not block source verification.
-  local started download_started verify_started ended download_rc=0 verify_rc=0
-  started="$(date +%s)"
-  printf '[TIMING] Stage 7 started: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
-
-  download_started="$(date +%s)"
-  printf '[TIMING] Patch download/cache check started: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
-  sudo bash "$HERE/retronas.sh" patch-download || download_rc=$?
-  printf '[TIMING] Patch download/cache check ended: %s | elapsed: %ss\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$(($(date +%s) - download_started))"
-  (( download_rc == 0 )) || echo "[WARN] Some patch downloads failed; checking available packages anyway."
-
-  verify_started="$(date +%s)"
-  printf '[TIMING] Source ISO checksum verification started: %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')"
-  sudo bash "$HERE/retronas.sh" patch-prepare || verify_rc=$?
-  ended="$(date +%s)"
-  printf '[TIMING] Source ISO checksum verification ended: %s | elapsed: %ss\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$((ended - verify_started))"
-  printf '[TIMING] Stage 7 ended: %s | total elapsed: %ss\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$((ended - started))"
-  return "$verify_rc"
+  # The full audit MUST NOT run patch-prepare: it reads whole ISO/BIN
+  # contents over SMB, even when there is no eligible patch to apply.
+  # Detailed source validation remains mandatory in patch_apply().
+  echo '[INFO] Checking official patch packages. No source ISO/BIN hashes will be calculated.'
+  sudo bash "$HERE/retronas.sh" patch-download || return 1
+  echo '[INFO] Patch-source verification deferred until selecting Patch PS1 / PS2.'
 }
 patch_download() {
   mount_ready || return 1
