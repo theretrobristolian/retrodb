@@ -39,7 +39,7 @@ def refresh(path: Path, force: bool = False) -> tuple[int, str]:
                 continue
             key, title = line.split(" = ", 1)
             key, title = key.strip().upper(), title.strip()
-            if ID.fullmatch(key) and 0 < len(title) <= 250:
+            if ID.fullmatch(key) and key != "TITLES" and 0 < len(title) <= 250:
                 found[key] = title
         if len(found) < 100:
             raise ValueError("GameTDB title response was invalid or incomplete")
