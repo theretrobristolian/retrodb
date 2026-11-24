@@ -989,6 +989,59 @@ sega32x_audit() {
   echo '[INFO] Read-only: no ZIP files renamed, replaced or edited.'
 }
 
+wii_rename() {
+  local root="$MOUNT/roms/nintendo/wii"
+  local rwroot="$PILOT_ROOT/roms/nintendo/wii"
+  local metadata="/var/cache/retrodb/providers/gametdb/wii.xml"
+  local journal_dir="$HOME/retrodb-exports/wii-rename-journals"
+  local answer source journal rc=0
+  local extra=()
+  mount_ready || return 1
+  sudo test -d "$root" || { echo "[STOP] Wii library not mounted: $root"; return 1; }
+  if sudo test -r "$metadata"; then
+    extra=(--gametdb-cache "$metadata")
+    echo '[INFO] Using GameTDB titles from exact Wii disc IDs where available.'
+  else
+    echo '[INFO] No GameTDB XML cache. Conservatively normalising ALL-CAPS names only.'
+    echo '[INFO] Mixed-case titles will be preserved unless metadata is installed later.'
+  fi
+  echo '[PREVIEW] Renames move the game folder only; disc IDs and WBFS filenames are unchanged.'
+  sudo python3 "$HERE/wii_rename.py" preview --root "$root" "${extra[@]}" || return 1
+  echo
+  read -rp 'Type RENAME WII to apply all eligible folder renames (Enter cancels): ' answer
+  [[ "$answer" == "RENAME WII" ]] || { echo 'Cancelled; nothing changed.'; return 0; }
+
+  source="$(retronas_cifs_source)" || return 1
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo '[STOP] Temporary writable RetroNAS mount already active; unmount it first.'
+    return 1
+  fi
+  mkdir -p -m 0700 "$journal_dir" || return 1
+  journal="$journal_dir/rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+  sudo mount -t cifs "$source" "$PILOT_ROOT" \
+    -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  sudo python3 "$HERE/wii_rename.py" apply \
+    --root "$rwroot" "${extra[@]}" --journal "$journal" --confirm "RENAME WII" || rc=$?
+  sudo umount "$PILOT_ROOT" || {
+    echo '[WARNING] Writable RetroNAS mount is still active; unmount it before retrying.'
+    return 1
+  }
+  if [[ "$rc" -ne 0 ]]; then
+    echo "[STOP] Wii rename stopped; inspect journal (if created): $journal"
+    return "$rc"
+  fi
+  if sudo test -f "$journal"; then
+    sudo chown "$(id -un):$(id -gn)" "$journal" || return 1
+    chmod 0600 "$journal" || return 1
+    echo "[READY] Wii folder rename journal: $journal"
+    echo '[NEXT] Refreshing Wii audit and the web library...'
+    wii_audit || return 1
+  else
+    echo '[OK] No Wii folders needed renaming.'
+  fi
+}
+ 
 wii_audit() {
   local root="$MOUNT/roms/nintendo/wii"
   local catalogue="/var/cache/retrodb/providers/retroachievements/wii.json"
@@ -1043,8 +1096,6 @@ more_menu() {
     echo '  8) RetroNAS settings         - Mount, connection and server config'
     echo '  9) Import PS2 online data    - Community CSV to offline catalogue'
     echo ' 10) Refresh XLink PS2 LAN    - Official supported-game titles'
-    echo ' 11) Audit Sega 32X ZIPs      - Read-only standalone audit (also in full audit)'
-    echo ' 12) Audit Nintendo Wii       - WBFS disc IDs and RA title candidates'
     echo
     echo '  0) Back to main menu'
     echo '----------------------------------------------------------------'
@@ -1060,8 +1111,6 @@ more_menu() {
       8) retronas_menu ;;
       9) online_import_menu; pause ;;
      10) xlink_import_menu; pause ;;
-     11) run sega32x_audit; pause ;;
-     12) run wii_audit; pause ;;
       0|q|Q) return 0 ;;
       *) echo 'Invalid option.'; pause ;;
     esac
@@ -1229,7 +1278,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X (preview first)'
+    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  5) Permissions            - Manage website server-control access'
@@ -1249,12 +1298,14 @@ menu() {
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         echo '  3) PlayStation 3 - Preview ISO and extracted folders, then rename'
         echo '  4) Sega 32X - Rename ZIP files to title + region (preview first)'
+        echo '  5) Nintendo Wii - Correct folder titles, preserving [DISC_ID]'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
           2) run opl_update_all ;;
           3) run ps3_audit_rename ;;
           4) run sega32x_rename ;;
+          5) run wii_rename ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
