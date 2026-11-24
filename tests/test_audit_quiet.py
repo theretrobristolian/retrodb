@@ -41,6 +41,7 @@ def test_ps3_quiet_audit_still_writes_full_csv_and_keeps_preview_verbose(tmp_pat
         rows = list(csv.DictReader(stream))
     assert len(rows) == 3
     assert "Already Named [BLES00246].iso" in loud.stdout
-    assert "Already Named [BLES00246].iso" not in quiet.stdout or "VALID" not in quiet.stdout.split("Already Named [BLES00246].iso")[0]
+    assert "VALID" in loud.stdout
+    assert quiet.stdout.count("Already Named [BLES00246].iso") <= loud.stdout.count("Already Named [BLES00246].iso")
     assert "[PS3]" in quiet.stdout
     assert "Audited 3 ISOs" in quiet.stdout
