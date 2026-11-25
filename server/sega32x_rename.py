@@ -135,7 +135,7 @@ def plan(root: Path, catalogue: Path, hash_dir: Path | None = None) -> list[dict
         elif (row["status"] in ("EXACT_RA", "EXACT_NO_SET")
               and SPECIAL.search(str(row.get("ra_title") or ""))
               and not SPECIAL.search(archive.stem)):
-            record["reason"] = "Verified special-build identity needs explicit filename qualifier"
+            record["reason"] = "Verified prototype or special-build identity needs explicit filename qualifier"
         else:
             exact = row["status"] in ("EXACT_RA", "EXACT_NO_SET")
             trusted_region = registered_hash_regions(
