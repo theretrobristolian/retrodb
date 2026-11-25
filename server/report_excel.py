@@ -565,7 +565,27 @@ def ps1_action_row(r):
             source]
 
 
-def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None):
+WII_COLUMNS = ['Game Title', 'Disc ID', 'Filename', 'RA Game ID', 'RA Supported (theoretical)']
+
+
+def wii_export_rows(records):
+    rows = []
+    for record in records:
+        game_id = record.get('ra_game_id', '')
+        support = 'Unknown'
+        if record.get('status') == 'TITLE_CANDIDATE' and game_id:
+            try:
+                count = int(record.get('ra_achievements', ''))
+                if count >= 0:
+                    support = 'Yes' if count > 0 else 'No'
+            except (ValueError, TypeError):
+                pass
+        rows.append([record.get('title', ''), record.get('disc_id', ''),
+                     record.get('filename', ''), game_id, support])
+    return sorted(rows, key=lambda row: (row[0].casefold(), row[1], row[2].casefold()))
+
+
+def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
     entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
@@ -757,6 +777,16 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                         f'{100*unresolved/effective:.2f}%' if effective else '0.00%',
                         f'{100*(compatible+no_set)/effective:.2f}%' if effective else '0.00%'])
         print(f'[INFO] PSP ISO inventory: {len(psp_records)} files integrated (PSP RA hash verification included).')
+    if wii_audit and Path(wii_audit).is_file():
+        with open(wii_audit, newline='', encoding='utf-8-sig') as handle:
+            wii_rows = wii_export_rows(csv.DictReader(handle))
+        sheets.append(('Nintendo Wii', [WII_COLUMNS] + wii_rows))
+        wii_csv = Path(destination).with_name('RetroDB-Nintendo-Wii.csv')
+        with wii_csv.open('w', newline='', encoding='utf-8') as handle:
+            writer = csv.writer(handle)
+            writer.writerow(WII_COLUMNS)
+            writer.writerows(wii_rows)
+        print(f'[INFO] Wii inventory: {len(wii_rows)} files; theoretical title support only, no verified hashes.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
@@ -795,5 +825,5 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
     print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4,5,6,7): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv]')
-    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None)
+    if len(sys.argv) not in (3,4,5,6,7,8): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv]')
+    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None)
