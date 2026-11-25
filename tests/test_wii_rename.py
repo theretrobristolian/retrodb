@@ -81,7 +81,7 @@ def test_wrong_disc_id_and_multiple_images_require_review(tmp_path):
     (folder / "SK3EEE.iso").write_bytes(b"another-image")
     row = rename.plan(tmp_path)[0]
     assert row["status"] == "REVIEW"
-    assert "one primary" in row["reason"]
+    assert "disc IDs disagree" in row["reason"]
 
 
 def test_recheck_detects_removed_source_after_preview(tmp_path):
