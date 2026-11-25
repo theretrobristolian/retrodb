@@ -1143,12 +1143,29 @@ wii_audit() {
   echo '[INFO] Wii disc-ID matches are not RA hash verification.'
 }
 
+megacd_audit() {
+  local root="$MOUNT/roms/sega/megacd"
+  local catalogue="/var/cache/retrodb/providers/retroachievements/megacd.json"
+  local report="$HOME/retrodb-exports/RetroDB-Sega-Mega-CD.csv"
+  mount_ready || return 1
+  sudo test -d "$root" || { echo '[STOP] Mega CD directory unavailable.'; return 1; }
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-megacd || return 1
+  sudo test -r "$catalogue" || return 1
+  install -d -m 0700 "$HOME/retrodb-exports" || return 1
+  ( umask 077; sudo python3 "$HERE/report_megacd_audit.py" --root "$root" \
+    --hasher /opt/retrodb-tools/RAHasher --ra-catalogue "$catalogue" --output "$report" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$report" || return 1
+  chmod 0600 "$report"
+}
+
 more_menu() {
   local choice
   while true; do
     header
     echo ' MORE OPTIONS'
     echo '----------------------------------------------------------------'
+    echo '  12) Audit Sega Mega CD - BIN/CUE folders and RA hashes'
     echo '  1) Export reports            - Rebuild Excel from last audit'
     echo '  2) Download official patches - Refresh local patch packages'
     echo '  3) Service status            - RetroDB, xeRAbora and RetroNAS'
@@ -1164,6 +1181,7 @@ more_menu() {
     echo '----------------------------------------------------------------'
     read -rp 'Choose an option: ' choice || return 0
     case "$choice" in
+      12) run megacd_audit; pause ;;
       1) run export_csv; pause ;;
       2) run patch_download; pause ;;
       3) run service_details; pause ;;
