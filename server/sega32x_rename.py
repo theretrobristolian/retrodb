@@ -40,55 +40,58 @@ UNSAFE_FILENAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
 def canonical_name(filename: str, verified_title: str = "", verified_region: str = "") -> tuple[str, str]:
-    """Return (target name, review reason). Never guess a missing region."""
+    """Preserve special-build qualifiers while normalising safe ZIP names."""
     if not filename.lower().endswith(".zip"):
         return "", "Not a ZIP"
-    stem = Path(filename).stem
-    stem = re.sub(r"^\s*\[32x\]\s*", "", stem, flags=re.I).strip()
-    if SPECIAL.search(stem):
-        return "", "Modified, revised or prototype ROM requires manual naming review"
-    # Strip only suffix metadata; keep parenthesised words inside actual titles.
-    while True:
-        match = re.search(r"\s*\(([^()]*)\)\s*$", stem)
-        if not match:
-            break
-        value = match.group(1).strip()
-        if SPECIAL.search(value):
-            return "", "Revision, hack or prototype requires manual naming review"
-        if filename_region("(" + value + ")") or LANGUAGES.fullmatch(value):
-            stem = stem[:match.start()].strip()
-            continue
-        break
-    # A title backed by an exact registered RA hash is preferred when it is a
-    # normal retail title, not an RA-labelled hack or prototype.
-    title = stem
-    if verified_title and not SPECIAL.search(verified_title):
-        candidate = re.sub(r"^\s*~[^~]+~\s*", "", verified_title).strip()
-        # Colons and slashes in catalogue names are formatting punctuation,
-        # but not portable ZIP filenames on FAT/SMB/Windows.
-        candidate = re.sub(r"\s*[:/|]\s*", " - ", candidate)
-        if candidate and not UNSAFE_FILENAME.search(candidate):
-            title = candidate
+    stem = re.sub(r"^\\s*\\[32x\\]\\s*", "", Path(filename).stem, flags=re.I).strip()
     source_region = filename_region(filename)
     region = source_region or verified_region
     if source_region and verified_region:
         source_parts = {part.strip() for part in source_region.split(",")}
         verified_parts = {part.strip() for part in verified_region.split(",")}
-        if source_parts == verified_parts:
-            region = verified_region  # Official No-Intro-like region ordering.
-        else:
+        if source_parts != verified_parts:
             return "", "Filename region conflicts with exact registered ROM hash region"
+        region = verified_region
     if not region:
         return "", "No explicit source or verified-hash region"
+
+    # Known special naming correction: preserve the hack/version designation.
+    # Identity is NOT evidence of an exact RA hash.
+    if re.fullmatch(r"Doom \\(Europe\\) \\[Patch Ressurrection v3\\.1\\]", stem, re.I):
+        return "Doom 32X Resurrection (Europe) (Hack v3.1).zip", ""
+
+    # Extract a trailing series of metadata tokens. Preserve special versions,
+    # dates and prototype flags; remove region/language tokens only.
+    suffixes = []
+    while True:
+        match = re.search(r"\\s*(\\(([^()]*)\\)|\\[([^\\[\\]]*)\\])\\s*$", stem)
+        if not match:
+            break
+        token = (match.group(2) or match.group(3)).strip()
+        if filename_region("(" + token + ")") or LANGUAGES.fullmatch(token):
+            pass
+        elif (SPECIAL.search(token) or re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", token)):
+            suffixes.insert(0, "(" + token + ")")
+        else:
+            break  # Unrecognised qualifiers must not silently disappear.
+        stem = stem[:match.start()].strip()
+
+    title = stem
+    if verified_title and not SPECIAL.search(verified_title):
+        candidate = re.sub(r"^\\s*~[^~]+~\\s*", "", verified_title).strip()
+        candidate = re.sub(r"\\s*[:/|]\\s*", " - ", candidate)
+        if candidate and not UNSAFE_FILENAME.search(candidate):
+            title = candidate
+
+    # Special tokens embedded in the title cannot safely be rewritten.
     if not title or title in {".", ".."} or UNSAFE_FILENAME.search(title):
         return "", "Invalid or unsafe game title"
     if SPECIAL.search(title):
-        return "", "Special build name requires manual review"
-    # Windows / SMB / FAT-compatible conservative names.
-    title = re.sub(r"\s+", " ", title).strip(" .")
+        return "", "Unrecognised special-build title requires manual review"
+    title = re.sub(r"\\s+", " ", title).strip(" .")
     if not title or len(title) > 170:
         return "", "Title is empty or too long"
-    return f"{title} ({region}).zip", ""
+    return f"{title} ({region})" + (" " + " ".join(suffixes) if suffixes else "") + ".zip", ""
 
 
 def registered_hash_regions(hash_dir: Path | None, game_id: str, md5: str) -> str:
@@ -130,8 +133,9 @@ def plan(root: Path, catalogue: Path, hash_dir: Path | None = None) -> list[dict
         elif not row.get("rom_member"):
             record["reason"] = row.get("reason") or "ZIP has no single validated ROM member"
         elif (row["status"] in ("EXACT_RA", "EXACT_NO_SET")
-              and SPECIAL.search(str(row.get("ra_title") or ""))):
-            record["reason"] = "Verified RA identity is a prototype, hack or special build"
+              and SPECIAL.search(str(row.get("ra_title") or ""))
+              and not SPECIAL.search(archive.stem)):
+            record["reason"] = "Verified special-build identity needs explicit filename qualifier"
         else:
             exact = row["status"] in ("EXACT_RA", "EXACT_NO_SET")
             trusted_region = registered_hash_regions(
