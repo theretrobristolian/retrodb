@@ -1053,7 +1053,9 @@ PYWIIJ
     return 1
   }
   if [[ "$rc" -ne 0 ]]; then
-    echo "[STOP] Wii rename stopped; inspect journal (if created): $journal"
+    echo "[STOP] Wii ISO import / folder rename stopped. Inspect journals (if created):"
+    echo "  ISO import: $import_journal"
+    echo "  Folder rename: $journal"
     return "$rc"
   fi
   local changed=0
