@@ -46,15 +46,23 @@ def layout(cue, title):
             output.append(line)
     return blocks, "\n".join(output) + "\n"
 
+def canonical_name(title):
+    """Normalize inverted articles only; retain all release qualifiers."""
+    match = re.fullmatch(r"(.+?), (The|A|An)(\s*(?:\([^()]*\)\s*)*)", title, re.I)
+    return (match[2] + " " + match[1] + match[3]).strip() if match else title
+
 def candidates(root):
     for row in inventory(root):
-        if row["status"] != "TIDY_CANDIDATE":
+        target = canonical_name(row["folder"])
+        if row["status"] != "TIDY_CANDIDATE" and not (row["status"] == "VALID" and target != row["folder"]):
             if row["status"] == "REVIEW":
                 print(f"REVIEW {row['folder']}: {row['reason']}")
             continue
         cue = root / row["folder"] / row["filename"]
         try:
-            blocks, text = layout(cue, row["folder"])
+            blocks, text = layout(cue, target)
+            if target != row["folder"] and ((root / target).exists() or (root / target).is_symlink()):
+                raise ValueError("Canonical folder already exists")
         except (ValueError, OSError) as exc:
             print(f"REVIEW {row['folder']}: {exc}")
             continue
@@ -109,19 +117,24 @@ def record(journal, data):
 
 def apply(root, cue, blocks, text, hasher, journal):
     folder = cue.parent
+    title = canonical_name(folder.name)
+    destination = root / title
     token = uuid.uuid4().hex
     stage = root / (".megacd-stage-" + token)
     backup = root / ("OLD_" + folder.name)
     if backup.exists() or backup.is_symlink():
-        raise ValueError("Backup already exists: " + str(backup))
+        # Preserve original split-track backups from previous verified merges.
+        backup = root / ("OLD_" + folder.name + "-tidy-" + token)
+    if destination != folder and (destination.exists() or destination.is_symlink()):
+        raise ValueError("Destination collision")
     original_cue = digest(cue)
     before = ra_hash(cue, hasher)
     if not before:
         raise ValueError("Original RA hash unavailable")
-    record(journal, dict(state="planned", folder=str(folder), stage=str(stage), backup=str(backup)))
+    record(journal, dict(state="planned", folder=str(folder), destination=str(destination), stage=str(stage), backup=str(backup)))
     stage.mkdir()
-    merged = stage / (folder.name + ".bin")
-    new_cue = stage / (folder.name + ".cue")
+    merged = stage / (title + ".bin")
+    new_cue = stage / (title + ".cue")
     write_verified(blocks, merged)
     with new_cue.open("x", encoding="utf-8", newline="\n") as f:
         f.write(text)
@@ -137,16 +150,16 @@ def apply(root, cue, blocks, text, hasher, journal):
     actual = [(t["mode"], t["indexes"]) for b in output for t in b["tracks"]]
     if expected != actual or digest(cue) != original_cue or ra_hash(new_cue, hasher) != before:
         raise ValueError("CUE layout or RA hash verification failed")
-    record(journal, dict(state="verified", folder=str(folder), stage=str(stage), backup=str(backup), ra_hash=before))
+    record(journal, dict(state="verified", folder=str(folder), destination=str(destination), stage=str(stage), backup=str(backup), ra_hash=before))
     if backup.exists() or backup.is_symlink():
         raise ValueError("Backup collision")
     folder.rename(backup)
-    record(journal, dict(state="original_retained", folder=str(folder), stage=str(stage), backup=str(backup)))
-    if folder.exists() or folder.is_symlink():
+    record(journal, dict(state="original_retained", folder=str(folder), destination=str(destination), stage=str(stage), backup=str(backup)))
+    if destination.exists() or destination.is_symlink():
         raise ValueError("Destination collision")
-    stage.rename(folder)
-    record(journal, dict(state="done", folder=str(folder), backup=str(backup), ra_hash=before))
-    print("DONE", folder.name, "| original retained:", backup.name)
+    stage.rename(destination)
+    record(journal, dict(state="done", folder=str(folder), destination=str(destination), backup=str(backup), ra_hash=before))
+    print("DONE", destination.name, "| original retained:", backup.name)
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
@@ -164,7 +177,7 @@ def main():
         p.error("Explicit confirmation and journal required")
     plan = list(candidates(a.root))
     for cue, blocks, text in plan:
-        print(f"PREVIEW {cue.parent.name}: {len(blocks)} BIN(s) -> {cue.parent.name}.bin/.cue")
+        print(f"PREVIEW {cue.parent.name}: {len(blocks)} BIN(s) -> {canonical_name(cue.parent.name)}.bin/.cue")
     print(f"Eligible: {len(plan)}; originals will be retained as OLD_ folders")
     if a.mode == "apply":
         with a.journal.open("x"):
