@@ -43,7 +43,7 @@ def canonical_name(filename: str, verified_title: str = "", verified_region: str
     """Preserve special-build qualifiers while normalising safe ZIP names."""
     if not filename.lower().endswith(".zip"):
         return "", "Not a ZIP"
-    stem = re.sub(r"^\\s*\\[32x\\]\\s*", "", Path(filename).stem, flags=re.I).strip()
+    stem = re.sub(r"^\s*\[32x\]\s*", "", Path(filename).stem, flags=re.I).strip()
     source_region = filename_region(filename)
     region = source_region or verified_region
     if source_region and verified_region:
@@ -57,20 +57,20 @@ def canonical_name(filename: str, verified_title: str = "", verified_region: str
 
     # Known special naming correction: preserve the hack/version designation.
     # Identity is NOT evidence of an exact RA hash.
-    if re.fullmatch(r"Doom \\(Europe\\) \\[Patch Ressurrection v3\\.1\\]", stem, re.I):
+    if re.fullmatch(r"Doom \(Europe\) \[Patch Ressurrection v3\.1\]", stem, re.I):
         return "Doom 32X Resurrection (Europe) (Hack v3.1).zip", ""
 
     # Extract a trailing series of metadata tokens. Preserve special versions,
     # dates and prototype flags; remove region/language tokens only.
     suffixes = []
     while True:
-        match = re.search(r"\\s*(\\(([^()]*)\\)|\\[([^\\[\\]]*)\\])\\s*$", stem)
+        match = re.search(r"\s*(\(([^()]*)\)|\[([^\[\]]*)\])\s*$", stem)
         if not match:
             break
         token = (match.group(2) or match.group(3)).strip()
         if filename_region("(" + token + ")") or LANGUAGES.fullmatch(token):
             pass
-        elif (SPECIAL.search(token) or re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", token)):
+        elif (SPECIAL.search(token) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", token)):
             suffixes.insert(0, "(" + token + ")")
         else:
             break  # Unrecognised qualifiers must not silently disappear.
@@ -78,8 +78,8 @@ def canonical_name(filename: str, verified_title: str = "", verified_region: str
 
     title = stem
     if verified_title and not SPECIAL.search(verified_title):
-        candidate = re.sub(r"^\\s*~[^~]+~\\s*", "", verified_title).strip()
-        candidate = re.sub(r"\\s*[:/|]\\s*", " - ", candidate)
+        candidate = re.sub(r"^\s*~[^~]+~\s*", "", verified_title).strip()
+        candidate = re.sub(r"\s*[:/|]\s*", " - ", candidate)
         if candidate and not UNSAFE_FILENAME.search(candidate):
             title = candidate
 
@@ -88,7 +88,7 @@ def canonical_name(filename: str, verified_title: str = "", verified_region: str
         return "", "Invalid or unsafe game title"
     if SPECIAL.search(title):
         return "", "Unrecognised special-build title requires manual review"
-    title = re.sub(r"\\s+", " ", title).strip(" .")
+    title = re.sub(r"\s+", " ", title).strip(" .")
     if not title or len(title) > 170:
         return "", "Title is empty or too long"
     return f"{title} ({region})" + (" " + " ".join(suffixes) if suffixes else "") + ".zip", ""
