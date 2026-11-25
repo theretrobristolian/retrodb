@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Read-only Nintendo Wii WBFS inventory and conservative RA title suggestions.
+"""Read-only Nintendo Wii image inventory and conservative RA title suggestions.
 
 Disc IDs identify releases but DO NOT establish RetroAchievements hash support.
-No WBFS disc image is hashed as a normal file or modified.
+No Wii disc image is content-hashed or modified.
 """
 from __future__ import annotations
 
@@ -131,7 +131,7 @@ def audit(root: Path, ra_catalogue: Path | None = None,
             if len(candidates) == 1:
                 ra_id, ra_name, achievements = candidates[0]
                 status = "TITLE_CANDIDATE"
-                reason = "RA title candidate only; WBFS content hash not verified"
+                reason = "RA title candidate only; Wii disc content hash not verified"
             elif len(candidates) > 1:
                 status = "AMBIGUOUS_TITLE"
                 reason = "Several RA titles match; needs review"
@@ -167,7 +167,7 @@ def main() -> None:
     print(f"[OK] Nintendo Wii: {len(rows)} disc image(s) -> {args.output}")
     for state, count in sorted(Counter(str(row["status"]) for row in rows).items()):
         print(f"  {state}: {count}")
-    print("[INFO] RA title candidates are UNVERIFIED. No WBFS content hash was computed.")
+    print("[INFO] RA title candidates are UNVERIFIED. No Wii disc content hash was computed.")
     print("[INFO] ROMs and RetroNAS files remained read-only.")
 
 
