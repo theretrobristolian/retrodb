@@ -592,7 +592,7 @@ def wii_export_rows(records):
     return sorted(rows, key=lambda row: (row[0].casefold(), row[1], row[2].casefold()))
 
 
-def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None):
+def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None,megacd_audit=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
     entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
@@ -794,6 +794,20 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
             writer.writerow(WII_COLUMNS)
             writer.writerows(wii_rows)
         print(f'[INFO] Wii inventory: {len(wii_rows)} files; theoretical title support only, no verified hashes.')
+    if megacd_audit and Path(megacd_audit).is_file():
+        with open(megacd_audit, newline='', encoding='utf-8-sig') as handle:
+            cd_records = list(csv.DictReader(handle))
+        columns = ['Game Title', 'Folder', 'Filename', 'Disc ID', 'Tracks',
+                   'BIN files', 'RA Game ID', 'RA Status', 'RA hash', 'Audit status',
+                   'Reason', 'File size (bytes)', 'File size (GiB)']
+        cd_rows = []
+        for r in cd_records:
+            size = int(r.get('size_bytes') or 0)
+            cd_rows.append([r['title'], r['folder'], r['filename'], r['serial'],
+                            r['tracks'], r['files'], r['ra_game_id'], r['ra_status'],
+                            r['ra_hash'], r['status'], r['reason'], size, round(size / GIB, 6)])
+        sheets.append(('Sega Mega CD', [columns] + sorted(cd_rows, key=lambda r: r[0].casefold())))
+        print(f'[INFO] Mega CD: {len(cd_rows)} inventory records integrated.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
@@ -832,5 +846,5 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
     print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4,5,6,7,8): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv]')
-    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None)
+    if len(sys.argv) not in (3,4,5,6,7,8,9): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv] [megacd-audit.csv]')
+    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None, sys.argv[8] if len(sys.argv)>=9 and sys.argv[8] != '-' else None)
