@@ -214,7 +214,27 @@ export_csv() {
   sudo chown "$(id -un):$(id -gn)" "$EXPORT" || return 1
   [[ -f "$ps3_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$ps3_csv"
   [[ -f "$psp_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$psp_csv"
-  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" ) || return 1
+  local wii_csv="$HOME/retrodb-exports/RetroDB-Nintendo-Wii-Audit.csv"
+  local wii_root="$MOUNT/roms/nintendo/wii"
+  local wii_catalogue="/var/cache/retrodb/providers/retroachievements/wii.json"
+  local wii_args=()
+  if sudo test -d "$wii_root"; then
+    sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+      -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-wii || echo '[WARNING] Wii RA refresh failed; using cached catalogue if available.'
+    wii_titles_refresh || true
+    if sudo test -r /var/cache/retrodb/providers/gametdb/wii-titles.txt; then
+      wii_args+=(--gametdb-cache /var/cache/retrodb/providers/gametdb/wii-titles.txt)
+    elif sudo test -r /var/cache/retrodb/providers/gametdb/wii.xml; then
+      wii_args+=(--gametdb-cache /var/cache/retrodb/providers/gametdb/wii.xml)
+    fi
+    ( umask 077; sudo python3 "$HERE/report_wii_audit.py" --root "$wii_root" --ra-catalogue "$wii_catalogue" "${wii_args[@]}" --output "$wii_csv" ) || return 1
+    sudo chown "$(id -un):$(id -gn)" "$wii_csv" || return 1
+    chmod 0600 "$wii_csv" || return 1
+  else
+    echo '[WARNING] Wii directory unavailable; export will omit Wii inventory.'
+    rm -f "$wii_csv" "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv"
+  fi
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
@@ -230,6 +250,9 @@ export_csv() {
   printf ' OPL proposals CSV    : %s (rename-engine input)\n' "$rename_report"
   printf ' PS1 file audit CSV   : %s\n' "$ps1_csv"
   printf ' Raw audit CSV        : %s\n' "$EXPORT"
+  if [[ -f "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv" ]]; then
+    printf ' Wii inventory CSV    : %s\n' "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv"
+  fi
   echo '------------------------------------------------------------'
   local remote
   remote="$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/retroachievements-compatibility.csv"
