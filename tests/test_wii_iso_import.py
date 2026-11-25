@@ -49,11 +49,12 @@ def test_import_beside_wbfs_without_changing_existing_game(tmp_path):
     folder.mkdir()
     (folder / "RMCP01.wbfs").write_bytes(b"ORIGINAL WBFS")
     src = make_iso(tmp_path, "my-pal-game.iso")
+    original_iso = src.read_bytes()
     db = titles(tmp_path)
     rows = plan(tmp_path, db)
     assert apply(tmp_path, rows, tmp_path.parent / (tmp_path.name + "-beside.json"), db) == 1
     assert (folder / "RMCP01.wbfs").read_bytes() == b"ORIGINAL WBFS"
-    assert (folder / "RMCP01.iso").read_bytes() == src.read_bytes() if src.exists() else (folder / "RMCP01.iso").is_file()
+    assert (folder / "RMCP01.iso").read_bytes() == original_iso
     assert rename_plan(tmp_path, db)[0]["status"] == "VALID"
     assert len(wii_audit(tmp_path, None, db)) == 2
 
