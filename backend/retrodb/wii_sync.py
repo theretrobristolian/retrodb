@@ -26,6 +26,15 @@ STATES = {"IDENTIFIED", "TITLE_CANDIDATE", "AMBIGUOUS_TITLE", "REVIEW"}
 EXTENSIONS = {".wbfs", ".iso", ".rvz"}
 
 
+def image_size(path: Path) -> int:
+    size = path.stat().st_size
+    if path.suffix.lower() == ".wbfs":
+        pattern = re.compile(re.escape(path.stem) + r"\.wbf[1-9][0-9]*$", re.I)
+        size += sum(part.stat().st_size for part in path.parent.iterdir()
+                    if pattern.fullmatch(part.name) and not part.is_symlink() and part.is_file())
+    return size
+
+
 def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
     with audit_path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
@@ -59,11 +68,13 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
     if not os.path.ismount(mount_root) or not scan_root.is_dir():
         raise RuntimeError("RetroNAS collection mount is unavailable")
     stat_map = {}
+    size_map = {}
     for path_text in paths:
         path = scan_root / path_text
         if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(scan_root.resolve()):
             raise ValueError(f"Wii disc missing or unsafe: {path_text}")
         stat_map[path_text] = path.stat()
+        size_map[path_text] = image_size(path)
         if stat_map[path_text].st_size <= 0:
             # An empty entry may be listed for REVIEW, but should never index
             # as a playable disc.
@@ -99,6 +110,7 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
             db_path = (ROOT_RELATIVE / relative).as_posix()
             seen.add(db_path)
             stat = stat_map[relative]
+            size = size_map[relative]
             item = session.scalar(select(LibraryItem).where(
                 LibraryItem.source_id == source.id,
                 LibraryItem.relative_path == db_path))
@@ -108,7 +120,7 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
                     if old.id not in reused
                     and old.relative_path not in incoming
                     and old.filename.casefold() == row["filename"].casefold()
-                    and old.size_bytes == stat.st_size
+                    and old.size_bytes in (size, stat.st_size)
                     and abs(old.modified_at.timestamp() - stat.st_mtime) < 0.01
                     and old.relative_path.startswith(ROOT_RELATIVE.as_posix() + "/")
                     and not (mount_root / old.relative_path).exists()
@@ -121,14 +133,14 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
                 item = LibraryItem(source_id=source.id, platform_id=platform.id,
                                    relative_path=db_path, filename=row["filename"],
                                    extension=Path(relative).suffix.lstrip(".").lower(),
-                                   size_bytes=stat.st_size,
+                                   size_bytes=size,
                                    modified_at=datetime.fromtimestamp(stat.st_mtime, timezone.utc),
                                    last_seen_at=now, is_missing=False)
                 session.add(item)
             item.platform_id = platform.id
             item.filename = row["filename"]
             item.extension = Path(relative).suffix.lstrip(".").lower()
-            item.size_bytes = stat.st_size
+            item.size_bytes = size
             item.modified_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc)
             item.last_seen_at = now
             item.is_missing = False
