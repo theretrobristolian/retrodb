@@ -234,7 +234,13 @@ export_csv() {
     echo '[WARNING] Wii directory unavailable; export will omit Wii inventory.'
     rm -f "$wii_csv" "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv"
   fi
-  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" ) || return 1
+  local cd_csv="$HOME/retrodb-exports/RetroDB-Sega-Mega-CD.csv"
+  if sudo test -d "$MOUNT/roms/sega/megacd"; then
+    megacd_audit || return 1
+  else
+    cd_csv="-"
+  fi
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" "$cd_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
@@ -303,7 +309,7 @@ audit() {
   step "5/10" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
   step "6/10" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
   step "7/10" "Check cached patch packages (no ISO checksum verification)" patch_audit || return 1
-  step "8/10" "Export formatted Excel workbook and raw CSV" export_csv || return 1
+  step "8/10" "Audit Mega CD and export formatted Excel workbook and raw CSV" export_csv || return 1
   if sudo test -d "$MOUNT/roms/sega/32x"; then
     step "9/10" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
   else
@@ -1182,7 +1188,16 @@ megacd_audit() {
   ( umask 077; sudo python3 "$HERE/report_megacd_audit.py" --root "$root" \
     --hasher /opt/retrodb-tools/RAHasher --ra-catalogue "$catalogue" --output "$report" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$report" || return 1
-  chmod 0600 "$report"
+  chmod 0600 "$report" || return 1
+  local staged="/var/lib/retrodb/reports/megacd-portal-sync.csv"
+  local rc=0
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/lib/retrodb/reports || return 1
+  sudo install -m 0600 -o retrodb -g retrodb "$report" "$staged" || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.megacd_sync --audit "$staged" --mount-root "$MOUNT" || rc=$?
+  sudo rm -f "$staged"
+  (( rc == 0 )) || return "$rc"
+  echo '[READY] Sega Mega CD available at /library/megacd'
 }
 
 more_menu() {
@@ -1191,7 +1206,6 @@ more_menu() {
     header
     echo ' MORE OPTIONS'
     echo '----------------------------------------------------------------'
-    echo '  12) Audit Sega Mega CD - BIN/CUE folders and RA hashes'
     echo '  1) Export reports            - Rebuild Excel from last audit'
     echo '  2) Download official patches - Refresh local patch packages'
     echo '  3) Service status            - RetroDB, xeRAbora and RetroNAS'
@@ -1207,7 +1221,6 @@ more_menu() {
     echo '----------------------------------------------------------------'
     read -rp 'Choose an option: ' choice || return 0
     case "$choice" in
-      12) run megacd_audit; pause ;;
       1) run export_csv; pause ;;
       2) run patch_download; pause ;;
       3) run service_details; pause ;;
@@ -1385,7 +1398,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii'
+    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii / Mega CD'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  5) Permissions            - Manage website server-control access'
