@@ -70,12 +70,32 @@ def test_missing_catalogue_still_identifies_disc(tmp_path):
     assert image.exists()
 
 
-def test_skips_non_disc_files_and_split_wbfs_parts(tmp_path):
+def test_counts_split_wbfs_parts_without_extra_rows(tmp_path):
     root, _ = create(tmp_path)
     folder = next(root.iterdir())
     (folder / "S3AE5G.wbf1").write_bytes(b"part2")
     (folder / "readme.txt").write_text("description")
-    assert len(wii.audit(root)) == 1
+    (folder / "S3AE5G.WBF2").write_bytes(b"123456")
+    (folder / "S3AE5G.iso").write_bytes(b"iso")
+    rows = {r["filename"]: r for r in wii.audit(root)}
+    assert len(rows) == 2
+    assert rows["S3AE5G.wbfs"]["size_bytes"] == 68 + 5 + 6
+    assert rows["S3AE5G.iso"]["size_bytes"] == 3
+
+
+def test_orphaned_continuation_warns_without_extra_game(tmp_path):
+    root, image = create(tmp_path)
+    (image.parent / "OTHER1.wbf1").write_bytes(b"orphan")
+    with pytest.warns(UserWarning, match="Orphaned WBFS continuation"):
+        assert len(wii.audit(root)) == 1
+
+
+def test_gap_in_split_parts_requires_review(tmp_path):
+    root, image = create(tmp_path)
+    image.with_suffix(".wbf2").write_bytes(b"part")
+    row = wii.audit(root)[0]
+    assert row["status"] == "REVIEW"
+    assert row["size_bytes"] == 72
 
 
 def test_optional_gametdb_xml_matches_disc_id(tmp_path):
