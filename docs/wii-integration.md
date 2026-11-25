@@ -121,3 +121,47 @@ On success RetroDB re-audits Wii and refreshes database paths.
 Inspect interrupted rename journals and temporary folders before retrying.
 
 A folder name correction never establishes RA content-hash compatibility.
+
+## Loose Wii ISO intake (Rename games → Nintendo Wii)
+
+Drop a full Wii ISO **temporarily** into `roms/nintendo/wii/` (the Wii
+collection root), with any basename. The existing Wii rename preview reads
+the six-character disc ID from offset 0 and Wii disc magic at 0x18. This
+quick header check **does not** claim the ISO is a verified disc dump or
+a RetroAchievements hash match.
+
+An eligible ISO is moved, **without rewriting its bytes**, to
+`GameTDB Title [DISC_ID]/DISC_ID.iso`. If exactly one folder already ends
+in the same `[DISC_ID]`, that existing folder is reused regardless of its
+current title. When the folder doesn't exist, an exact GameTDB disc-ID title
+is mandatory; missing metadata requires manual review. An existing ISO,
+ambiguous folders, wrong magic/ID, unsafe path or changed preview blocks
+automatic import. Two incoming files aiming at one ISO target are refused.
+
+Example:
+
+```text
+roms/nintendo/wii/
+├── my_mario_kart.iso
+└── Mario Kart Wii [RMCP01]/
+    └── RMCP01.wbfs
+
+# After confirmed import:
+roms/nintendo/wii/
+└── Mario Kart Wii [RMCP01]/
+    ├── RMCP01.wbfs
+    └── RMCP01.iso
+```
+
+The menu previews both folder corrections and loose ISO imports and requires
+`RENAME WII` to proceed. The importer records its own write-ahead journal
+(`import-*.json`) under
+`~/retrodb-exports/wii-rename-journals/` and blocks subsequent imports
+when an import journal is incomplete. Import occurs first, then eligible
+folder title corrections, both on the temporary writable SMB mount. An
+interrupted move must be inspected/recovered before retrying.
+
+The read-only audit accepts several images for the same ID **only when each
+has a distinct extension** (e.g. one WBFS and one ISO), and publishes one
+file record per format. No RA badge is granted from header identification
+alone. Full disc hashing remains optional and separate.
