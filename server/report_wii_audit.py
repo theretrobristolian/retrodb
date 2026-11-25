@@ -10,6 +10,7 @@ import argparse
 import csv
 import json
 import re
+import warnings
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -88,6 +89,15 @@ def gametdb_titles(path: Path | None) -> dict[str, str]:
     return titles
 
 
+def split_parts(path: Path) -> list[Path]:
+    if path.suffix.lower() != ".wbfs":
+        return []
+    pattern = re.compile(re.escape(path.stem) + r"\.wbf([1-9][0-9]*)$", re.I)
+    return sorted((p for p in path.parent.iterdir()
+                   if pattern.fullmatch(p.name) and not p.is_symlink() and p.is_file()),
+                  key=lambda p: int(p.suffix[4:]))
+
+
 def audit(root: Path, ra_catalogue: Path | None = None,
           gametdb_cache: Path | None = None) -> list[dict[str, str | int]]:
     if not root.is_dir() or root.is_symlink():
@@ -96,7 +106,16 @@ def audit(root: Path, ra_catalogue: Path | None = None,
     titles = gametdb_titles(gametdb_cache)
     records: list[dict[str, str | int]] = []
     for path in sorted(root.rglob("*")):
-        if path.is_symlink() or not path.is_file() or path.suffix.lower() not in (".wbfs", ".iso", ".rvz"):
+        if path.is_symlink() or not path.is_file() or path.parent.is_symlink():
+            continue
+        if re.fullmatch(r"\.wbf[1-9][0-9]*", path.suffix, re.I):
+            if len(path.relative_to(root).parts) == 2 and not any(
+                p.stem.casefold() == path.stem.casefold() and p.suffix.lower() == ".wbfs"
+                and p.is_file() and not p.is_symlink() for p in path.parent.iterdir()
+            ):
+                warnings.warn(f"Orphaned WBFS continuation: {path.relative_to(root)}")
+            continue
+        if path.suffix.lower() not in (".wbfs", ".iso", ".rvz"):
             continue
         relative = path.relative_to(root)
         # The supported Wii layout is strictly one game directory deep.
@@ -108,6 +127,10 @@ def audit(root: Path, ra_catalogue: Path | None = None,
         disk_id = path.stem.upper()
         folder_id = match.group(2).upper() if match else ""
         folder_title = match.group(1).strip() if match else ""
+        parts = split_parts(path)
+        part_sizes = [p.stat().st_size for p in parts]
+        size_bytes = path.stat().st_size + sum(part_sizes)
+        numbers = [int(p.suffix[4:]) for p in parts]
         status = "REVIEW"
         reason = ""
         if not match:
@@ -118,6 +141,8 @@ def audit(root: Path, ra_catalogue: Path | None = None,
             reason = "Folder disc ID and image filename differ"
         elif path.stat().st_size == 0:
             reason = "Empty disc image"
+        elif numbers != list(range(1, len(numbers) + 1)) or any(size == 0 for size in part_sizes):
+            reason = "Missing, duplicate or empty WBFS continuation"
         else:
             status = "IDENTIFIED"
         title = titles.get(disk_id) if status == "IDENTIFIED" else None
@@ -143,7 +168,7 @@ def audit(root: Path, ra_catalogue: Path | None = None,
             "disc_id": disk_id if status != "REVIEW" else "",
             "title": title, "title_source": source,
             "region": REGIONS.get(disk_id[3], "Unknown") if len(disk_id) == 6 else "Unknown",
-            "size_bytes": path.stat().st_size,
+            "size_bytes": size_bytes,
             "ra_game_id": ra_id, "ra_title": ra_name,
             "ra_achievements": achievements, "reason": reason,
         })
