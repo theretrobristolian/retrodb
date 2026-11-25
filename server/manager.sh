@@ -874,7 +874,7 @@ sega32x_rename() {
     echo '[INFO] The 32X RA catalogue is missing; auditing first.'
     sega32x_audit || return 1
   }
-  echo '[PREVIEW] No-Intro-inspired concise ZIP filenames (title + region only).'
+  echo '[PREVIEW] Concise ZIP names with prototype, revision and hack qualifiers preserved.'
   echo '[INFO] Internal ZIP member filenames will remain unchanged.'
   sudo python3 "$HERE/sega32x_rename.py" preview \
     --root "$root" --ra-catalogue "$catalogue" \
@@ -1337,7 +1337,7 @@ menu() {
         echo '  1) PlayStation 1 - Rename all eligible BIN/CUE pairs'
         echo '  2) PlayStation 2 - Existing confirmed rename workflow'
         echo '  3) PlayStation 3 - Preview ISO and extracted folders, then rename'
-        echo '  4) Sega 32X - Rename ZIP files to title + region (preview first)'
+        echo '  4) Sega 32X - Tidy ZIP names and special-build qualifiers (preview first)'
         echo '  5) Nintendo Wii - Correct folder titles, preserving [DISC_ID]'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
