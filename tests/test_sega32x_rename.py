@@ -57,16 +57,27 @@ def test_concise_no_intro_inspired_names():
     assert not reason
 
 
-@pytest.mark.parametrize("filename", [
-    "Doom (Europe) (Rev 1).zip",
-    "Soul Star X (USA) (Proto).zip",
-    "Doom (USA) (Hack).zip",
-    "[32X] Doom (Europe) [Patch Ressurrection v3.1].zip",
-    "[32X] Soulstar X (USA) (Proto).zip",
-    "Doom.zip",
+@pytest.mark.parametrize("source,expected", [
+    ("Doom (Europe) (Rev 1).zip", "Doom (Europe) (Rev 1).zip"),
+    ("Soul Star X (USA) (Proto).zip", "Soul Star X (USA) (Proto).zip"),
+    ("Doom (USA) (Hack).zip", "Doom (USA) (Hack).zip"),
+    ("[32X] Doom (Europe) [Patch Ressurrection v3.1].zip",
+     "Doom 32X Resurrection (Europe) (Hack v3.1).zip"),
+    ("[32X] Soulstar X (USA) (Proto).zip", "Soulstar X (USA) (Proto).zip"),
+    ("[32X] Virtua Hamster (USA) (Proto).zip", "Virtua Hamster (USA) (Proto).zip"),
+    ("[32X] X-Men (USA) (Proto).zip", "X-Men (USA) (Proto).zip"),
+    ("Pinocchio (Europe) (Proto) (1995-06-12).zip",
+     "Pinocchio (Europe) (Proto) (1995-06-12).zip"),
+    ("Spot Goes to Hollywood (USA) (Proto).zip",
+     "Spot Goes to Hollywood (USA) (Proto).zip"),
 ])
-def test_special_variants_and_missing_region_not_renamed(filename):
-    assert naming.canonical_name(filename)[0] == ""
+def test_special_variants_preserve_their_identifying_details(source, expected):
+    target, reason = naming.canonical_name(source)
+    assert (target, reason) == (expected, "")
+
+
+def test_missing_region_still_needs_review():
+    assert naming.canonical_name("Doom.zip")[0] == ""
 
 
 def test_preview_does_not_modify_zip_and_apply_only_changes_outer_name(tmp_path):
@@ -156,3 +167,36 @@ def test_hash_region_conflict_requires_review():
     assert not name
     assert "conflicts" in reason
 
+
+def test_non_matching_proto_and_hack_filenames_are_not_claimed_ra_verified(tmp_path):
+    root = tmp_path / "32x"
+    root.mkdir()
+    samples = [
+        ("[32X] Soulstar X (USA) (Proto).zip", b"unknown-soulstar",
+         "Soulstar X (USA) (Proto).zip"),
+        ("[32X] Doom (Europe) [Patch Ressurrection v3.1].zip", b"unknown-doom",
+         "Doom 32X Resurrection (Europe) (Hack v3.1).zip"),
+        ("Pinocchio (Europe) (Proto) (1995-06-12).zip", b"unknown-pinocchio",
+         "Pinocchio (Europe) (Proto) (1995-06-12).zip"),
+    ]
+    for source, rom, _ in samples:
+        with zipfile.ZipFile(root / source, "w") as archive:
+            archive.writestr("game.32x", rom)
+    ra = tmp_path / "ra.json"
+    ra.write_text(json.dumps([{
+        "ID": 16800, "Title": "~Prototype~ Pinocchio",
+        "ConsoleID": 10, "NumAchievements": 20, "Hashes": ["0" * 32]
+    }, {
+        "ID": 18179, "Title": "~Hack~ Doom 32X Resurrection",
+        "ConsoleID": 10, "NumAchievements": 20, "Hashes": ["1" * 32]
+    }, {
+        "ID": 15989, "Title": "Soulstar X",
+        "ConsoleID": 10, "NumAchievements": 20, "Hashes": ["2" * 32]
+    }]), encoding="utf-8")
+    rows = naming.plan(root, ra)
+    by_source = {r["source"]: r for r in rows}
+    for source, _, target in samples:
+        row = by_source[source]
+        assert row["status"] == ("VALID" if source == target else "RENAME_CANDIDATE")
+        assert row["target"] == target
+        assert row["audit_status"] not in ("EXACT_RA", "EXACT_NO_SET")
