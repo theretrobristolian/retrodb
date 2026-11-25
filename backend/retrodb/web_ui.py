@@ -295,7 +295,7 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
         if prefix in ("ULJS", "ULJM", "UCJS", "UCJM", "NPJH", "NPJQ"):
             return ("🇯🇵", "Japan (disc prefix)")
         return ("🌐", "Region unknown")
-    if platform_slug == "sega-32x":
+    if platform_slug in ("sega-32x", "megacd"):
         # Region labels are filename claims, not proof of RA compatibility.
         regions = sega32x_regions(serial)
         if not regions:
@@ -376,6 +376,10 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
         if "|" in title:
             title = title.split("|")[-1].strip()
         title = re.sub(r"\s*\([^)]*\)\s*$", "", title) if not item.ra_game_title else title
+    if slug == "megacd":
+        match = re.match(r"^(.+?), (The|A|An)(.*)$", title, re.I)
+        if match:
+            title = match[2] + " " + match[1] + match[3]
     if slug == "playstation-portable":
         title = PSP_SERIAL_RE.sub("", title)
         title = re.sub(r"\s*\[\s*(?:[A-Z]{4}[-_. ]?\d{5}|(?:RA[-_. ]?)?\d{4,8})\s*\]", "", title, flags=re.I)
@@ -416,7 +420,7 @@ def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
     """Gold means a matched disc AND a confirmed nonempty achievement set."""
     if not item.ra_game_id or (item.ra_match_status or "").lower() != "matched":
         return False
-    if slug not in ("playstation", "playstation-2", "playstation-portable", "sega-32x"):
+    if slug not in ("playstation", "playstation-2", "playstation-portable", "sega-32x", "megacd"):
         return False
     path = RA_CACHE / f"{slug}.json"
     try:
@@ -620,8 +624,8 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item, item_slug(item))
-        region_flag, region_label = disc_region(item.filename if item_slug(item) == "sega-32x" else disc, item_slug(item))
-        badge = sega32x_ra_label(item, supported) if item_slug(item) == "sega-32x" else ('Verified RetroAchievements hash' if supported else ('No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown')))
+        region_flag, region_label = disc_region(item.filename if item_slug(item) in ("sega-32x", "megacd") else disc, item_slug(item))
+        badge = sega32x_ra_label(item, supported) if item_slug(item) == "sega-32x" else ('Verified RetroAchievements hash and achievement set' if supported else ('Registered hash; no achievement set' if item_slug(item) == 'megacd' and item.ra_game_id and item.ra_match_status == 'matched' else 'No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown')))
         disc_cell = ('<span class="pill serial" title="Release type inferred from filename and RA catalogue">' +
                      escape(sega32x_type(item.filename, item.ra_game_title or "")) + '</span>') if item_slug(item) == "sega-32x" else ('<span class="pill serial">' + escape(disc) + '</span>' if disc else '—')
         if item_slug(item) == "sega-32x" and sega32x_soft_pass(item):
@@ -933,7 +937,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
     meta_panel = ('<div class="info-pairs">' + release + '</div>') if release else '<p class="muted">No release metadata available yet.</p>'
     online_panel = online_details(online) if online else ""
     source_label = ("Wii disc ID / folder; optional GameTDB and RetroAchievements title catalogue (unverified hash)" if platform and platform.slug == "wii"
-                    else "RetroAchievements 32X ROM hash catalogue" if platform and platform.slug == "sega-32x" else "TheGamesDB cache and local GameDB" if tgdb else "Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
+                    else "RetroAchievements Sega CD disc hash catalogue" if platform and platform.slug == "megacd" else "RetroAchievements 32X ROM hash catalogue" if platform and platform.slug == "sega-32x" else "TheGamesDB cache and local GameDB" if tgdb else "Local ISO filename and GameDB catalogue" if platform and platform.slug == "playstation-3"
                     else "RetroAchievements")
     if extra:
         source_label += " + GameDB/IGDB"
@@ -966,7 +970,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                         f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug in ("playstation-3", "wii") else ""}'
                         f'{detail("RA result", sega32x_ra_label(item, ra_supported(item, "sega-32x"))) if platform and platform.slug == "sega-32x" else ""}'
                         f'{detail("RA result", "Wii disc identified; RA title candidate only — disc hash not verified") if platform and platform.slug == "wii" else ""}'
-                        f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug in ("sega-32x", "wii") else ""}'
+                        f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug in ("sega-32x", "wii", "megacd") else ""}'
                         f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
     online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
     ra_link = (f'<a href="https://retroachievements.org/game/{int(item.ra_game_id)}"'
