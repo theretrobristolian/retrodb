@@ -1143,6 +1143,32 @@ wii_audit() {
   echo '[INFO] Wii disc-ID matches are not RA hash verification.'
 }
 
+megacd_rename() {
+  local root="$MOUNT/roms/sega/megacd"
+  local rwroot="$PILOT_ROOT/roms/sega/megacd"
+  local journal_dir="$HOME/retrodb-exports/megacd-rename-journals"
+  local answer source journal rc=0
+  mount_ready || return 1
+  sudo python3 "$HERE/megacd_rename.py" preview --root "$root" || return 1
+  read -rp 'Type RENAME MEGACD to merge eligible discs and retain original OLD_ folders: ' answer
+  [[ "$answer" == "RENAME MEGACD" ]] || { echo 'Cancelled; no changes made.'; return 0; }
+  source="$(retronas_cifs_source)" || return 1
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo '[STOP] Temporary writable mount already active.'
+    return 1
+  fi
+  mkdir -p -m 0700 "$journal_dir" || return 1
+  journal="$journal_dir/merge-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.jsonl"
+  sudo mount -t cifs "$source" "$PILOT_ROOT" \
+    -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  ( umask 077; sudo python3 "$HERE/megacd_rename.py" apply --root "$rwroot" --journal "$journal" --confirm "RENAME MEGACD" ) || rc=$?
+  sudo umount "$PILOT_ROOT" || { echo '[STOP] Writable mount still active.'; return 1; }
+  echo "[INFO] Merge journal: $journal"
+  (( rc == 0 )) || { echo '[STOP] Inspect journal and staging folders before retrying.'; return "$rc"; }
+  megacd_audit
+}
+
 megacd_audit() {
   local root="$MOUNT/roms/sega/megacd"
   local catalogue="/var/cache/retrodb/providers/retroachievements/megacd.json"
@@ -1380,6 +1406,7 @@ menu() {
         echo '  3) PlayStation 3 - Preview ISO and extracted folders, then rename'
         echo '  4) Sega 32X - Tidy ZIP names and special-build qualifiers (preview first)'
         echo '  5) Nintendo Wii - Correct folder titles, preserving [DISC_ID]'
+        echo '  6) Sega Mega CD - Merge BIN tracks and tidy CUE names (retain originals)'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
@@ -1387,6 +1414,7 @@ menu() {
           3) run ps3_audit_rename ;;
           4) run sega32x_rename ;;
           5) run wii_rename ;;
+          6) run megacd_rename ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
