@@ -72,6 +72,8 @@ def main() -> int:
     sync32_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
     sync_wii_parser = subparsers.add_parser("ra-sync-wii", help="cache official Nintendo Wii RA catalogue")
     sync_wii_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
+    sync_cd_parser = subparsers.add_parser("ra-sync-megacd", help="cache official Sega CD hashes")
+    sync_cd_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
     scan_parser = subparsers.add_parser("library-scan", help="inventory a read-only collection mount")
     scan_parser.add_argument("--root", type=Path, required=True)
     match_parser = subparsers.add_parser("ra-match", help="hash and match local disc images")
@@ -217,6 +219,7 @@ def main() -> int:
         for slug, system_id, system_name in (
             (("sega-32x", 10, "Sega 32X"),) if args.command == "ra-sync-32x"
             else (("wii", 19, "Nintendo Wii"),) if args.command == "ra-sync-wii"
+            else (("megacd", 9, "Sega CD"),) if args.command == "ra-sync-megacd"
             else (
                 ("playstation", 12, "PlayStation"),
                 ("playstation-2", 21, "PlayStation 2"),
