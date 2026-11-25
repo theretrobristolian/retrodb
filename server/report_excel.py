@@ -565,7 +565,7 @@ def ps1_action_row(r):
             source]
 
 
-WII_COLUMNS = ['Game Title', 'Disc ID', 'Filename', 'RA Game ID', 'RA Supported (theoretical)']
+WII_COLUMNS = ['Game Title', 'Disc ID', 'Filename', 'RA Game ID', 'RA Supported (theoretical)'] + SIZE_COLUMNS[:2]
 
 
 def wii_export_rows(records):
@@ -580,8 +580,15 @@ def wii_export_rows(records):
                     support = 'Yes' if count > 0 else 'No'
             except (ValueError, TypeError):
                 pass
+        try:
+            size = int(record.get('size_bytes', ''))
+            if size < 0:
+                raise ValueError('Negative file size')
+            size_gib = round(size / GIB, 6)
+        except (ValueError, TypeError):
+            size = size_gib = ''
         rows.append([record.get('title', ''), record.get('disc_id', ''),
-                     record.get('filename', ''), game_id, support])
+                     record.get('filename', ''), game_id, support, size, size_gib])
     return sorted(rows, key=lambda row: (row[0].casefold(), row[1], row[2].casefold()))
 
 
