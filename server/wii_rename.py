@@ -93,11 +93,15 @@ def plan(root: Path, gametdb: Path | None = None) -> list[dict[str, str]]:
             reason = "Symbolic link inside game folder"
         else:
             images = [entry for entry in files if entry.is_file() and entry.suffix.lower() in IMAGE_EXT]
-            if len(images) != 1:
-                reason = "Expected exactly one primary Wii image"
-            elif images[0].stem.upper() != disc_id:
+            # ISO and WBFS may coexist for the same disc ID. Keep at most
+            # one image of each format and never infer identity from title.
+            if not images:
+                reason = "No primary Wii image"
+            elif len({entry.suffix.lower() for entry in images}) != len(images):
+                reason = "Duplicate Wii image format"
+            elif any(entry.stem.upper() != disc_id for entry in images):
                 reason = "Folder and image disc IDs disagree"
-            elif images[0].stat().st_size == 0:
+            elif any(entry.stat().st_size == 0 for entry in images):
                 reason = "Empty Wii disc image"
             else:
                 reason = ""
