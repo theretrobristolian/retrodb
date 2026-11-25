@@ -1001,10 +1001,11 @@ wii_rename() {
   else
     echo '[INFO] No GameTDB titles available; previewing conservative ALL-CAPS formatting only.'
   fi
-  echo '[PREVIEW] Renames move the game folder only; disc IDs and WBFS filenames are unchanged.'
+  echo '[PREVIEW] Existing folder title fixes and loose ISO imports. Files are not rewritten.'
   sudo python3 "$HERE/wii_rename.py" preview --root "$root" "${extra[@]}" || return 1
+  sudo python3 "$HERE/wii_iso_import.py" preview --root "$root" "${extra[@]}" || return 1
   echo
-  read -rp 'Type RENAME WII to apply all eligible folder renames (Enter cancels): ' answer
+  read -rp 'Type RENAME WII to apply eligible folder renames AND ISO imports (Enter cancels): ' answer
   [[ "$answer" == "RENAME WII" ]] || { echo 'Cancelled; nothing changed.'; return 0; }
 
   source="$(retronas_cifs_source)" || return 1
@@ -1014,11 +1015,39 @@ wii_rename() {
     return 1
   fi
   mkdir -p -m 0700 "$journal_dir" || return 1
+  # Refuse repeat imports after interrupted operations until the journal
+  # has been inspected and recovered. Never overwrite an incomplete move.
+  local prior
+  for prior in "$journal_dir"/import-*.json; do
+    [[ -f "$prior" ]] || continue
+    if ! sudo python3 - "$prior" <<'PYWIIJ'
+import json, sys
+try:
+    obj = json.load(open(sys.argv[1], encoding="utf-8"))
+    ok = obj.get("operation") == "wii-iso-import" and all(
+        op.get("state") == "done" for op in obj.get("operations", []))
+except (OSError, ValueError):
+    ok = False
+sys.exit(0 if ok else 1)
+PYWIIJ
+    then
+      echo "[STOP] Incomplete Wii ISO import journal: $prior"
+      echo '[INFO] Inspect source and destination before trying another import.'
+      return 1
+    fi
+  done
   journal="$journal_dir/rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
+  local import_journal="$journal_dir/import-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.json"
   sudo mount -t cifs "$source" "$PILOT_ROOT" \
     -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
-  sudo python3 "$HERE/wii_rename.py" apply \
-    --root "$rwroot" "${extra[@]}" --journal "$journal" --confirm "RENAME WII" || rc=$?
+  # Import first, then rename any existing folders by GameTDB title.
+  # A subsequent folder rename handles WBFS and ISO together.
+  sudo python3 "$HERE/wii_iso_import.py" apply \
+    --root "$rwroot" "${extra[@]}" --journal "$import_journal" --confirm "IMPORT WII" || rc=$?
+  if [[ "$rc" -eq 0 ]]; then
+    sudo python3 "$HERE/wii_rename.py" apply \
+      --root "$rwroot" "${extra[@]}" --journal "$journal" --confirm "RENAME WII" || rc=$?
+  fi
   sudo umount "$PILOT_ROOT" || {
     echo '[WARNING] Writable RetroNAS mount is still active; unmount it before retrying.'
     return 1
@@ -1027,14 +1056,24 @@ wii_rename() {
     echo "[STOP] Wii rename stopped; inspect journal (if created): $journal"
     return "$rc"
   fi
+  local changed=0
+  if sudo test -f "$import_journal"; then
+    sudo chown "$(id -un):$(id -gn)" "$import_journal" || return 1
+    chmod 0600 "$import_journal" || return 1
+    echo "[READY] Wii ISO import journal: $import_journal"
+    changed=1
+  fi
   if sudo test -f "$journal"; then
     sudo chown "$(id -un):$(id -gn)" "$journal" || return 1
     chmod 0600 "$journal" || return 1
     echo "[READY] Wii folder rename journal: $journal"
+    changed=1
+  fi
+  if [[ "$changed" -eq 1 ]]; then
     echo '[NEXT] Refreshing Wii audit and the web library...'
     wii_audit || return 1
   else
-    echo '[OK] No Wii folders needed renaming.'
+    echo '[OK] No Wii folders or loose ISOs needed changing.'
   fi
 }
  
