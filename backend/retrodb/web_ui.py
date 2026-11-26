@@ -298,7 +298,7 @@ def disc_region(serial: str, platform_slug: str | None) -> tuple[str, str]:
         if prefix in ("ULJS", "ULJM", "UCJS", "UCJM", "NPJH", "NPJQ"):
             return ("🇯🇵", "Japan (disc prefix)")
         return ("🌐", "Region unknown")
-    if platform_slug in ("sega-32x", "megacd"):
+    if platform_slug in ("sega-32x", "megacd", "dreamcast"):
         # Region labels are filename claims, not proof of RA compatibility.
         regions = sega32x_regions(serial)
         if not regions:
@@ -481,6 +481,11 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
             title += f" (Disc {disc})"
     if slug == "megacd":
         title = megacd_display_alias(title, filename)
+    if slug == "dreamcast":
+        title = re.sub(r"\\s*\\((?:USA|Europe|Japan|World|Asia|Australia|Brazil)(?:,\\s*(?:USA|Europe|Japan|World|Asia|Australia|Brazil))*\\)", "", title, flags=re.I)
+        for qualifier in re.findall(r"\\((?:Disc[^)]*|Rev[^)]*|v\\d[^)]*|Version[^)]*|Alt[^)]*)\\)", filename, re.I):
+            if qualifier.casefold() not in title.casefold():
+                title += " " + qualifier
     return title or filename
 
 RA_CACHE = Path("/var/cache/retrodb/providers/retroachievements")
@@ -500,7 +505,7 @@ def ra_supported(item: LibraryItem, slug: str | None = None) -> bool:
     """Gold means a matched disc AND a confirmed nonempty achievement set."""
     if not item.ra_game_id or (item.ra_match_status or "").lower() != "matched":
         return False
-    if slug not in ("playstation", "playstation-2", "playstation-portable", "sega-32x", "megacd"):
+    if slug not in ("playstation", "playstation-2", "playstation-portable", "sega-32x", "megacd", "dreamcast"):
         return False
     path = RA_CACHE / f"{slug}.json"
     try:
@@ -700,12 +705,13 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
     alphabet = ' '.join(f'<a class="pill" href="{escape(link(letter=c,page=1), quote=True)}">{c}</a>' for c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     ps3_only = slug == "playstation-3"
     sega32_only = slug == "sega-32x"
+    dreamcast_only = slug == "dreamcast"
     rows = []
     for item in items:
         disc = disc_id(item)
         supported = ra_supported(item, item_slug(item))
-        region_flag, region_label = disc_region(item.filename if item_slug(item) in ("sega-32x", "megacd") else disc, item_slug(item))
-        badge = sega32x_ra_label(item, supported) if item_slug(item) == "sega-32x" else ('Verified RetroAchievements hash and achievement set' if supported else ('Registered hash; no achievement set' if item_slug(item) == 'megacd' and item.ra_game_id and item.ra_match_status == 'matched' else 'No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown')))
+        region_flag, region_label = disc_region(item.filename if item_slug(item) in ("sega-32x", "megacd", "dreamcast") else disc, item_slug(item))
+        badge = sega32x_ra_label(item, supported) if item_slug(item) == "sega-32x" else ('Verified RetroAchievements hash and achievement set' if supported else ('Registered hash; no achievement set' if item_slug(item) in ('megacd', 'dreamcast') and item.ra_game_id and item.ra_match_status == 'matched' else 'No verified RetroAchievements match: ' + (item.ra_match_status or 'unknown')))
         disc_cell = ('<span class="pill serial" title="Release type inferred from filename and RA catalogue">' +
                      escape(sega32x_type(item.filename, item.ra_game_title or "")) + '</span>') if item_slug(item) == "sega-32x" else ('<span class="pill serial">' + escape(disc) + '</span>' if disc else '—')
         if item_slug(item) == "sega-32x" and sega32x_soft_pass(item):
@@ -725,11 +731,18 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
             if release_type == "Retail" and re.search(r"\(Unl\)|~Unlicensed~", item.filename + " " + (item.ra_game_title or ""), re.I):
                 release_type = "Unlicensed"
             disc_cell += ' <span class="pill">' + escape(release_type) + '</span>'
+        if item_slug(item) == "dreamcast":
+            details = item.ra_hash_error or ""
+            disc_cell = '<span class="pill">' + escape(item.extension.upper()) + '</span>'
+            if "Collection status: SOFT_PASS" in details:
+                label = "Local no-set alternative" if "Collection status: SOFT_PASS_NO_SET" in details else "Soft pass"
+                ra_cell = '<span class="ra-soft" title="' + escape(details, quote=True) + '">' + label + '</span>'
+        flycast_cell = '<td data-column="flycast"><span class="muted" title="Flycast online image eligibility has not been verified">Not tested</span></td>' if dreamcast_only else ''
         thumbnail = ""
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{disc_cell}</td>
 <td data-column="region"><span class="region-icon" role="img" aria-label="{escape(region_label,quote=True)}" title="{escape(region_label,quote=True)}">{region_flag}</span></td>
-{'' if ps3_only else '<td data-column="ra">' + ra_cell + '</td>'}
+{'' if ps3_only else '<td data-column="ra">' + ra_cell + '</td>'}{flycast_cell}
 </tr>""")
     prev_link = f'<a class="btn" href="{escape(link(page=page_number-1),quote=True)}">← Previous</a>' if page_number > 1 else ''
     next_link = f'<a class="btn" href="{escape(link(page=page_number+1),quote=True)}">Next →</a>' if count > page_number*100 else ''
@@ -760,15 +773,16 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <select name="order"><option value="asc">Ascending</option><option value="desc" {'selected' if order=='desc' else ''}>Descending</option></select>
 <button class="btn" type="submit">Apply</button><a class="btn" href="{base}">Reset</a></form>
 <div class="column-picker"><span class="label">Columns</span>
-<label><input type="checkbox" data-toggle="disc" checked> {'Type' if sega32_only else 'Disc ID'}</label>
+<label><input type="checkbox" data-toggle="disc" checked> {'Type' if sega32_only or dreamcast_only else 'Disc ID'}</label>
 <label><input type="checkbox" data-toggle="region" checked> Region</label>
 {'' if ps3_only else '<label><input type="checkbox" data-toggle="ra" checked> Achievements</label>'}
+{'<label><input type="checkbox" data-toggle="flycast" checked> Flycast online</label>' if dreamcast_only else ''}
 </div>
 <div class="toolbar"><a class="pill" href="{escape(link(letter='',page=1),quote=True)}">All</a>{alphabet}</div>
-<div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">{"Type" if sega32_only else "Disc ID"}</th>
-<th data-column="region">Region</th>{'' if ps3_only else '<th data-column="ra" title="RetroAchievements">RA</th>'}</tr></thead>
+<div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">{"Type" if sega32_only or dreamcast_only else "Disc ID"}</th>
+<th data-column="region">Region</th>{'' if ps3_only else '<th data-column="ra" title="RetroAchievements">RA</th>'}{'<th data-column="flycast">Flycast online</th>' if dreamcast_only else ''}</tr></thead>
 <tbody>{''.join(rows) or ('<tr><td colspan="3">No games match the current filters.</td></tr>' if ps3_only else '<tr><td colspan="4">No games match the current filters.</td></tr>')}</tbody></table></div>
-<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Mega CD regions are inferred from release filenames. Gold trophies require an exact hash and an achievement set; soft passes indicate a verified local alternative.' if slug == 'megacd' else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
+<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Mega CD regions are inferred from release filenames. Gold trophies require an exact hash and an achievement set; soft passes indicate a verified local alternative.' if slug == 'megacd' else 'Dreamcast CHD and GDI are separate images. Gold trophies require verified RA hashes and achievements; Flycast online is not yet tested.' if dreamcast_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
@@ -1059,7 +1073,7 @@ def game_details(item_id: int, request: Request, db: Session = Depends(get_sessi
                         f'{detail("Region", disc_region(disc_id(item), platform.slug)[0] + " " + disc_region(disc_id(item), platform.slug)[1]) if platform and platform.slug in ("playstation-3", "wii") else ""}'
                         f'{detail("RA result", sega32x_ra_label(item, ra_supported(item, "sega-32x"))) if platform and platform.slug == "sega-32x" else ""}'
                         f'{detail("RA result", "Wii disc identified; RA title candidate only — disc hash not verified") if platform and platform.slug == "wii" else ""}'
-                        f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug in ("sega-32x", "wii", "megacd") else ""}'
+                        f'{detail("Audit details", item.ra_hash_error) if platform and platform.slug in ("sega-32x", "wii", "megacd", "dreamcast") else ""}'
                         f'<details class="technical-details"><summary>File and collection details</summary>{technical}</details></section>')
     online_section = (f'<section class="card"><h2>Online compatibility</h2>{online_panel}</section>' if online else "")
     ra_link = (f'<a href="https://retroachievements.org/game/{int(item.ra_game_id)}"'
