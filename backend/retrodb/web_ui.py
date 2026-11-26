@@ -377,19 +377,64 @@ MEGACD_DISPLAY_ALIASES = {
     "sonicmegamix": "Sonic the Hedgehog - Megamix",
     "sonicthehedgehogmegamix": "Sonic the Hedgehog - Megamix",
     "battlecorps": "BattleCorps",
+    "flink": "The Misadventures of Flink",
+    "themisadventuresofflink": "The Misadventures of Flink",
+    "mickeymania": "Mickey Mania: The Timeless Adventures of Mickey Mouse",
+    "mickeymaniathetimelessadventuresofmickeymouse": "Mickey Mania: The Timeless Adventures of Mickey Mouse",
+    "championshipsoccer94": "Championship Soccer '94 / Sensible Soccer",
+    "sensiblesoccer": "Championship Soccer '94 / Sensible Soccer",
+    "eccothetidesoftime": "Ecco: The Tides of Time",
+    "earthwormjimspecialedition": "Earthworm Jim: Special Edition",
+    "wwfrageinthecage": "WWF: Rage in the Cage",
+    "theadventuresofbatmanandrobin": "The Adventures of Batman & Robin",
+    "theadventuresofbatmanrobin": "The Adventures of Batman & Robin",
 }
 
 
 def megacd_display_alias(title: str, filename: str) -> str:
-    # Exact normalized aliases, not fuzzy matches. Keep release qualifiers.
-    for value in (title, filename):
+    """Display-only canonical titles; filename is authoritative for edition details."""
+    def key(value):
         base = re.sub(r"\s*\([^()]*\)", "", value)
-        base = re.sub(r"^\s*~\s*(?:Hack|Unlicensed|Prototype|Homebrew)\s*~\s*", "", base, flags=re.I)
-        key = re.sub(r"[^a-z0-9]", "", base.casefold())
-        if key in MEGACD_DISPLAY_ALIASES:
-            qualifiers = re.findall(r"\((?:Rev[^)]*|Alt[^)]*|Version[^)]*|RE|Rerelease|Disc\s+\d+)\)", filename, re.I)
-            return " ".join([MEGACD_DISPLAY_ALIASES[key], *qualifiers])
-    return title
+        base = re.sub(r"^\s*~\s*(?:Hack|Unlicensed|Prototype|Homebrew|Demo)\s*~\s*", "", base, flags=re.I)
+        base = re.sub(r"^(.+?), (The|A|An)$", r"\2 \1", base.strip(), flags=re.I)
+        return re.sub(r"[^a-z0-9]", "", base.casefold())
+
+    # Use the filename before the RA title, which can describe multiple editions.
+    canonical = next((MEGACD_DISPLAY_ALIASES[k] for k in (key(filename), key(title))
+                      if k in MEGACD_DISPLAY_ALIASES), None)
+    result = canonical or title
+    result = re.sub(r"^\s*~\s*(?:Hack|Unlicensed|Prototype|Homebrew|Demo)\s*~\s*", "", result, flags=re.I)
+    regions = {"usa", "europe", "japan", "world", "brazil", "asia", "australia",
+               "korea", "canada", "france", "germany", "spain", "italy", "uk"}
+    def is_region(group):
+        tokens = [p.strip().casefold() for p in re.split(r"[,/]", group)]
+        return bool(tokens) and all(p in regions for p in tokens)
+
+    # Retain every non-region filename qualifier except release types shown in pills.
+    # This covers Disc 1/2, RE3, 32X CD, magazine demo names and language codes.
+    release_types = {"unl", "unlicensed", "hack", "prototype", "proto", "homebrew"}
+    qualifiers = []
+    for group in re.findall(r"\(([^()]*)\)", filename):
+        if not is_region(group) and group.strip().casefold() not in release_types:
+            qualifiers.append("(" + group + ")")
+
+    def clean_group(match):
+        group = match.group(1)
+        return "" if is_region(group) or group.strip().casefold() in release_types else match.group(0)
+
+    result = re.sub(r"\(([^()]*)\)", clean_group, result)
+    # Preserve explicit 32X CD and demo markers even when outside parentheses.
+    for marker in (r"\b(?:Sega\s+CD\s+32X|32X\s+CD|32X)\b", r"\bDemo\b"):
+        match = re.search(marker, filename, re.I)
+        if match and not re.search(marker, result, re.I):
+            # Parenthesized variants are appended below without duplication.
+            if not any(re.search(marker, q, re.I) for q in qualifiers):
+                qualifiers.append("(" + match.group(0) + ")")
+    for qualifier in qualifiers:
+        if qualifier.casefold() not in result.casefold():
+            result += " " + qualifier
+    return re.sub(r"\s{2,}", " ", result).strip()
+
 
 
 def name(item: LibraryItem, slug: str | None = None) -> str:
@@ -436,10 +481,6 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
             title += f" (Disc {disc})"
     if slug == "megacd":
         title = megacd_display_alias(title, filename)
-        qualifiers = re.findall(r"\((?:Rev[^)]*|Alt[^)]*|Version[^)]*|RE|Rerelease)\)", filename, re.I)
-        for qualifier in qualifiers:
-            if qualifier not in title:
-                title += " " + qualifier
     return title or filename
 
 RA_CACHE = Path("/var/cache/retrodb/providers/retroachievements")
