@@ -4,8 +4,57 @@ import argparse
 from collections import Counter
 import json
 import os
+import re
 from pathlib import Path
 from dreamcast_rename import canonical, regular
+
+REGIONS = {"E":"USA","J":"Japan","P":"Europe","D":"Germany","F":"France","I":"Italy","S":"Spain","K":"Korea","U":"Australia"}
+REGION_TAG = re.compile(r"\((?:USA|Japan|Europe|Germany|France|Italy|Spain|Korea|Australia|World|Asia)(?:,\s*[^()]*)?\)", re.I)
+
+def disc_header(path):
+    with path.open("rb") as f:
+        header=f.read(0x400)
+    if len(header)<0x400 or header[28:32]!=b"\xc2\x33\x9f\x3d":
+        raise ValueError("Invalid GameCube disc header")
+    ident=header[:6].decode("ascii", errors="replace")
+    if not re.fullmatch(r"[A-Z0-9]{6}",ident):
+        raise ValueError("Invalid GameCube disc ID")
+    return dict(disc_id=ident,region=REGIONS.get(ident[3],""),
+                disc=header[6]+1,revision=header[7],
+                internal_title=header[0x20:0x400].split(b"\0",1)[0].decode("shift_jis",errors="replace"))
+
+def proposed_name(path, info):
+    if not info["region"]:
+        raise ValueError("Unknown disc ID region code: "+info["disc_id"])
+    stem=path.stem.strip()
+    region=REGION_TAG.search(stem)
+    if region:
+        if region.group(0).casefold()!=("("+info["region"]+")").casefold():
+            raise ValueError("Existing region differs from disc ID; review")
+        stem=stem[:region.start()]+stem[region.end():]
+    disc=re.search(r"\(Disc\s+(\d+)\)",stem,re.I)
+    if disc and int(disc[1])!=info["disc"]:
+        raise ValueError("Existing disc number differs from header")
+    rev=re.search(r"\((?:Rev\s*(\d+)|v1\.(\d+))\)",stem,re.I)
+    if rev and int(rev[1] or rev[2])!=info["revision"]:
+        raise ValueError("Existing revision differs from header")
+    if disc:
+        stem=stem[:disc.start()]+stem[disc.end():]
+    if rev:
+        stem=re.sub(r"\((?:Rev\s*\d+|v1\.\d+)\)","",stem,flags=re.I)
+    tags=re.findall(r"\([^()]*\)",stem)
+    title=re.sub(r"\([^()]*\)","",stem).strip()
+    title=re.sub(r"^(.+?), (The|A|An)(?=\s*(?: - |$))",r"\2 \1",title,flags=re.I)
+    title=re.sub(r"\s{2,}"," ",title).strip()
+    if not title:
+        raise ValueError("Missing filename title")
+    parts=[title,"("+info["region"]+")"]
+    if disc or info["disc"]>1:
+        parts.append(f'(Disc {info["disc"]})')
+    if info["revision"]:
+        parts.append(f'(Rev {info["revision"]})')
+    parts.extend(tags)
+    return canonical(" ".join(parts))+".iso"
 
 def plan(root):
     if not root.is_dir() or root.is_symlink():
@@ -17,11 +66,8 @@ def plan(root):
         if not regular(p) or p.suffix.lower()!=".iso" or p.name.startswith((".", "OLD_", "NEW_")):
             continue
         try:
-            with p.open("rb") as f:
-                header=f.read(32)
-            if header[28:32]!=b"\xc2\x33\x9f\x3d":
-                raise ValueError("Invalid GameCube disc magic")
-            dest=canonical(p.stem)+".iso"
+            info=disc_header(p)
+            dest=proposed_name(p,info)
             if dest==p.name:
                 print("VALID",p.name)
                 continue
