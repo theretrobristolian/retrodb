@@ -14,7 +14,8 @@ TRACK = re.compile(r'^\s*TRACK\s+(\d+)\s+(MODE1/2352|AUDIO|MODE1/2048)\s*$', re.
 INDEX = re.compile(r'^(\s*INDEX\s+\d+\s+)(\d+):(\d{2}):(\d{2})\s*$', re.I)
 HASH = re.compile(r'(?<![0-9a-f])([0-9a-f]{32})(?![0-9a-f])', re.I)
 FIELDS = ("title", "folder", "filename", "tracks", "files", "size_bytes", "serial",
-          "status", "ra_hash", "ra_game_id", "ra_title", "ra_status", "reason")
+          "status", "ra_hash", "ra_game_id", "ra_title", "ra_status", "reason",
+          "collection_status", "candidate_ra_id", "local_alternative")
 
 def parse(cue):
     if cue.is_symlink():
@@ -158,6 +159,49 @@ def inventory(root, hasher=None, lookup=None):
                 row.update(status="REVIEW", reason=str(exc))
             yield row
 
+def title_key(title):
+    title = re.sub(r"\s*\([^()]*\)", "", title)
+    title = re.sub(r"^(.+?), (The|A|An)$", r"\2 \1", title, flags=re.I)
+    return re.sub(r"[^a-z0-9]", "", title.casefold())
+
+# Reviewed release aliases are suggestions, never verified hash matches.
+ALIASES = {"battlefrenzy": "bloodshot", "beastii": "shadowofthebeastii",
+           "blackholeassault": "blackholeassault"}
+
+def reconcile(rows, lookup):
+    def key(title):
+        k = title_key(title)
+        return ALIASES.get(k, k)
+    games = {}
+    for group in (lookup or {}).values():
+        for g in group:
+            for title in str(g.get("Title", "")).split("|"):
+                games.setdefault(key(title), {})[str(g["ID"])] = g
+    for row in rows:
+        row.update(collection_status=row["ra_status"], candidate_ra_id="", local_alternative="")
+        if row["ra_status"] != "UNMATCHED":
+            continue
+        k = key(row["title"])
+        local = [r for r in rows if r["ra_status"] in ("SUPPORTED", "NO_SET")
+                 and key(r["title"].split(" ~ ")[0]) == k]
+        ids = {str(r["ra_game_id"]) for r in local}
+        if len(ids) == 1:
+            alt = sorted(local, key=lambda r: (r["ra_status"] != "SUPPORTED", r["folder"]))[0]
+            row.update(collection_status="SOFT_PASS" if alt["ra_status"] == "SUPPORTED" else "SOFT_PASS_NO_SET",
+                       candidate_ra_id=alt["ra_game_id"], local_alternative=alt["folder"],
+                       reason="Another local release has an exact registered RA hash; this image remains unmatched")
+        else:
+            candidates = games.get(k, {})
+            if len(candidates) == 1:
+                ident, game = next(iter(candidates.items()))
+                row.update(collection_status="ALTERNATIVE_REQUIRED" if int(game.get("NumAchievements") or 0) else "TITLE_NO_SET",
+                           candidate_ra_id=ident,
+                           reason="Catalogue title candidate only; local hash not registered")
+            else:
+                row.update(collection_status="REVIEW",
+                           reason="No unique title candidate in cached registered-hash catalogue; check alternate titles or missing listing")
+    return rows
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--root", type=Path, required=True)
@@ -165,7 +209,8 @@ def main():
     p.add_argument("--hasher", type=Path)
     p.add_argument("--ra-catalogue", type=Path)
     a = p.parse_args()
-    rows = list(inventory(a.root, a.hasher, catalogue(a.ra_catalogue)))
+    lookup = catalogue(a.ra_catalogue)
+    rows = reconcile(list(inventory(a.root, a.hasher, lookup)), lookup)
     a.output.parent.mkdir(parents=True, exist_ok=True)
     with a.output.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, FIELDS)
@@ -173,7 +218,7 @@ def main():
         w.writerows(rows)
     from collections import Counter
     print(f"[OK] Mega CD: {len(rows)} disc inventory records; archives ignored")
-    for key in ("status", "ra_status"):
+    for key in ("status", "ra_status", "collection_status"):
         print("  " + ", ".join(f"{k}: {v}" for k,v in sorted(Counter(r[key] for r in rows).items())))
     print(f"[READY] {a.output}")
 
