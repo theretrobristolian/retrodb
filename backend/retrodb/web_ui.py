@@ -167,6 +167,9 @@ PS3_SERIAL_RE = re.compile(r"(?<![A-Z0-9])((?:BL|BC)[A-Z]{2})[-_ .]?(\d{5})(?![A
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
 def disc_id(item: LibraryItem) -> str:
+    if "/roms/sega/megacd/" in "/" + item.relative_path:
+        match = re.search(r"Sega CD serial: ([^;]+)", item.ra_hash_error or "")
+        return re.sub(r"\s*-\s*", "-", " ".join(match[1].split())) if match else ""
     if re.search(r"/roms/nintendo/wii/", "/" + item.relative_path, re.I):
         match = re.fullmatch(r"([A-Z0-9]{6})\.(?:wbfs|iso|rvz)", item.filename, re.I)
         return match.group(1).upper() if match else ""
@@ -377,6 +380,8 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
             title = title.split("|")[-1].strip()
         title = re.sub(r"\s*\([^)]*\)\s*$", "", title) if not item.ra_game_title else title
     if slug == "megacd":
+        title = re.sub(r"^~(?:Hack|Unlicensed|Prototype|Homebrew)~\s*", "", title, flags=re.I)
+        title = re.sub(r"\s*\((?:USA|Europe|Japan|World|Brazil|USA, Brazil|En,Fr,De,Es|Unl)\)", "", title, flags=re.I)
         match = re.match(r"^(.+?), (The|A|An)(.*)$", title, re.I)
         if match:
             title = match[2] + " " + match[1] + match[3]
@@ -401,6 +406,11 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
         if disc:
             title = DISC_MARKER.sub("", title).strip()
             title += f" (Disc {disc})"
+    if slug == "megacd":
+        qualifiers = re.findall(r"\((?:Rev[^)]*|Alt[^)]*|Version[^)]*|RE|Rerelease)\)", filename, re.I)
+        for qualifier in qualifiers:
+            if qualifier not in title:
+                title += " " + qualifier
     return title or filename
 
 RA_CACHE = Path("/var/cache/retrodb/providers/retroachievements")
@@ -636,6 +646,15 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
             ra_cell = ('<span class="ra-icon ' + ('yes' if supported else 'no') +
                        '" role="img" aria-label="' + escape(badge, quote=True) +
                        '" title="' + escape(badge, quote=True) + '">🏆</span>')
+        if item_slug(item) == "megacd":
+            detail = item.ra_hash_error or ""
+            if "Collection status: SOFT_PASS" in detail:
+                label = "Local no-set alternative" if "Collection status: SOFT_PASS_NO_SET" in detail else "Soft pass"
+                ra_cell = '<span class="ra-soft" title="' + escape(detail, quote=True) + '">' + label + '</span>'
+            release_type = sega32x_type(item.filename, item.ra_game_title or "")
+            if release_type == "Retail" and re.search(r"\(Unl\)|~Unlicensed~", item.filename + " " + (item.ra_game_title or ""), re.I):
+                release_type = "Unlicensed"
+            disc_cell += ' <span class="pill">' + escape(release_type) + '</span>'
         thumbnail = ""
         rows.append(f"""<tr><td data-column="title"><a href="/game/{item.id}">{thumbnail}{escape(name(item, item_slug(item)))}</a></td>
 <td data-column="disc">{disc_cell}</td>
@@ -679,7 +698,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">{"Type" if sega32_only else "Disc ID"}</th>
 <th data-column="region">Region</th>{'' if ps3_only else '<th data-column="ra" title="RetroAchievements">RA</th>'}</tr></thead>
 <tbody>{''.join(rows) or ('<tr><td colspan="3">No games match the current filters.</td></tr>' if ps3_only else '<tr><td colspan="4">No games match the current filters.</td></tr>')}</tbody></table></div>
-<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
+<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Mega CD regions are inferred from release filenames. Gold trophies require an exact hash and an achievement set; soft passes indicate a verified local alternative.' if slug == 'megacd' else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
