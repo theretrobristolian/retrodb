@@ -245,6 +245,9 @@ export_csv() {
     dreamcast_audit || return 1
     dc_csv="$HOME/retrodb-exports/RetroDB-Sega-Dreamcast.csv"
   fi
+  if sudo test -d "$MOUNT/roms/nintendo/gamecube/iso"; then
+    gamecube_audit || return 1
+  fi
   ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" "$cd_csv" "$dc_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
@@ -1208,6 +1211,56 @@ dreamcast_audit() {
   echo '[READY] Dreamcast available at /library/dreamcast'
 }
 
+gamecube_rename() {
+  local root="$MOUNT/roms/nintendo/gamecube/iso"
+  local rwroot="$PILOT_ROOT/roms/nintendo/gamecube/iso"
+  local journal_dir="$HOME/retrodb-exports/gamecube-rename-journals"
+  local answer source journal rc=0
+  mount_ready || return 1
+  sudo python3 "$HERE/gamecube_rename.py" preview --root "$root" || return 1
+  read -rp 'Type RENAME GAMECUBE to organise eligible ISO releases (no deletion or overwrite): ' answer
+  [[ "$answer" == "RENAME GAMECUBE" ]] || { echo 'Cancelled; no changes made.'; return 0; }
+  source="$(retronas_cifs_source)" || return 1
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo '[STOP] Temporary writable mount already active.'
+    return 1
+  fi
+  mkdir -p -m 0700 "$journal_dir" || return 1
+  journal="$journal_dir/rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.jsonl"
+  sudo mount -t cifs "$source" "$PILOT_ROOT" \
+    -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  ( umask 077; sudo python3 "$HERE/gamecube_rename.py" apply --root "$rwroot" --journal "$journal" --confirm "RENAME GAMECUBE" ) || rc=$?
+  sudo umount "$PILOT_ROOT" || { echo '[STOP] Writable mount still active.'; return 1; }
+  echo "[INFO] GameCube rename journal: $journal"
+  (( rc == 0 )) || { echo '[STOP] Inspect journal before retrying.'; return "$rc"; }
+  gamecube_audit
+}
+
+gamecube_audit() {
+  local root="$MOUNT/roms/nintendo/gamecube/iso"
+  local report="$HOME/retrodb-exports/RetroDB-Nintendo-GameCube.csv"
+  local catalogue="/var/cache/retrodb/providers/retroachievements/gamecube.json"
+  local staged="/var/lib/retrodb/reports/gamecube-portal-sync.csv"
+  local rc=0
+  mount_ready || return 1
+  sudo test -d "$root" || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-gamecube || return 1
+  install -d -m 0700 "$HOME/retrodb-exports" || return 1
+  ( umask 077; sudo python3 "$HERE/report_gamecube_audit.py" --root "$root" --hasher /opt/retrodb-tools/RAHasher --ra-catalogue "$catalogue" --output "$report" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$report" || return 1
+  chmod 0600 "$report" || return 1
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/lib/retrodb/reports || return 1
+  sudo install -m 0600 -o retrodb -g retrodb "$report" "$staged" || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.gamecube_sync --audit "$staged" --mount-root "$MOUNT" || rc=$?
+  sudo rm -f "$staged"
+  (( rc == 0 )) || return "$rc"
+  echo "[READY] $report"
+  echo '[READY] GameCube available at /library/gamecube'
+}
+
 megacd_rename() {
   local root="$MOUNT/roms/sega/megacd"
   local rwroot="$PILOT_ROOT/roms/sega/megacd"
@@ -1457,7 +1510,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii / Mega CD / Dreamcast'
+    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii / Mega CD / Dreamcast / GameCube'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  5) Permissions            - Manage website server-control access'
@@ -1480,6 +1533,7 @@ menu() {
         echo '  5) Nintendo Wii - Correct folder titles, preserving [DISC_ID]'
         echo '  6) Sega Mega CD - Merge BIN tracks and tidy CUE names (retain originals)'
         echo '  7) Sega Dreamcast - Organise CHD/GDI releases (preview first)'
+        echo '  8) Nintendo GameCube - Tidy ISO filenames (preview first)'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
@@ -1489,6 +1543,7 @@ menu() {
           5) run wii_rename ;;
           6) run megacd_rename ;;
           7) run dreamcast_rename ;;
+          8) run gamecube_rename ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
