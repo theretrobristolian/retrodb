@@ -167,6 +167,9 @@ PS3_SERIAL_RE = re.compile(r"(?<![A-Z0-9])((?:BL|BC)[A-Z]{2})[-_ .]?(\d{5})(?![A
 SERIAL_RE = re.compile(r"(SLUS|SLES|SCES|SCUS|SLPS|SLPM|SCAJ|SCPS|SLKA|SCKA|SCED|SCZS)[_. -]*([0-9]{3})[. -]*([0-9]{2})", re.I)
 
 def disc_id(item: LibraryItem) -> str:
+    if "/roms/nintendo/gamecube/" in "/" + item.relative_path:
+        match = re.search(r"GameCube ID: ([A-Z0-9]{6})(?:;|$)", item.ra_hash_error or "")
+        return match[1] if match else ""
     if "/roms/sega/megacd/" in "/" + item.relative_path:
         match = re.search(r"Sega CD serial: ([^;]+)", item.ra_hash_error or "")
         return re.sub(r"\s*-\s*", "-", " ".join(match[1].split())) if match else ""
@@ -647,7 +650,8 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
                     "japan": ("SLPS", "SLPM", "SCPS", "BLJS", "BLJM", "BCJS", "BCJM")}.get(region, ())
         if prefixes:
             stmt = stmt.where(or_(*(LibraryItem.filename.ilike(f"%{prefix}%")
-                                    for prefix in prefixes)))
+                                    for prefix in prefixes),
+                                    LibraryItem.filename.op("~*")(r"\((?:[^()]*,\s*)?" + {"usa":"USA","europe":"Europe","japan":"Japan"}[region] + r"(?:\s*,[^()]*)?\)")))
     # Sort on the same basic cleanup used to display filename fallbacks.
     # This avoids sorting missing-RA titles under their disc serial rather than title.
     filename_stem = func.regexp_replace(LibraryItem.filename, r"\.[^.]+$", "", "g")
@@ -735,6 +739,17 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         if item_slug(item) in ("dreamcast", "gamecube"):
             details = item.ra_hash_error or ""
             disc_cell = '<span class="pill">' + escape(item.extension.upper()) + '</span>'
+            if item_slug(item) == "gamecube" and disc:
+                disc_cell += ' <span class="pill serial">' + escape(disc) + '</span>'
+            if item_slug(item) == "gamecube":
+                if supported:
+                    ra_cell += ' <span>Supported</span>'
+                else:
+                    states = {"NO_SET":"No set", "ALTERNATIVE_REQUIRED":"Alternative required", "TITLE_NO_SET":"Title only · no set", "REVIEW":"Review", "HASH_ERROR":"Hash error", "NOT_CHECKED":"Not checked", "AMBIGUOUS":"Ambiguous", "UNMATCHED":"Unmatched", "SUPPORTED":"Catalogue unavailable"}
+                    match = re.search(r"Collection status: ([A-Z_]+)", details)
+                    state = match[1] if match else ""
+                    label = states.get(state, "Registered · set unconfirmed" if item.ra_game_id else "Not verified")
+                    ra_cell = '<span class="muted" title="' + escape(details or badge, quote=True) + '">' + escape(label) + '</span>'
             if "Collection status: SOFT_PASS" in details:
                 label = "Local no-set alternative" if "Collection status: SOFT_PASS_NO_SET" in details else "Soft pass"
                 ra_cell = '<span class="ra-soft" title="' + escape(details, quote=True) + '">' + label + '</span>'
@@ -783,7 +798,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 <div class="panel library-scroll"><table><thead><tr><th data-column="title">Game</th><th data-column="disc">{"Type" if sega32_only or dreamcast_only or gamecube_only else "Disc ID"}</th>
 <th data-column="region">Region</th>{'' if ps3_only else '<th data-column="ra" title="RetroAchievements">RA</th>'}{'<th data-column="flycast">Flycast online</th>' if dreamcast_only else ''}</tr></thead>
 <tbody>{''.join(rows) or ('<tr><td colspan="3">No games match the current filters.</td></tr>' if ps3_only else '<tr><td colspan="4">No games match the current filters.</td></tr>')}</tbody></table></div>
-<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Mega CD regions are inferred from release filenames. Gold trophies require an exact hash and an achievement set; soft passes indicate a verified local alternative.' if slug == 'megacd' else 'Dreamcast CHD and GDI are separate images. Gold trophies require verified RA hashes and achievements; Flycast online is not yet tested.' if dreamcast_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
+<p class="muted">{'PS3 regions are estimated from disc prefixes; no RetroAchievements data is shown for PS3.' if ps3_only else '32X regions and release types are inferred from filenames; gold 🏆 requires a verified ROM hash and an achievement set. Other statuses explain themselves on hover.' if sega32_only else 'Mega CD regions are inferred from release filenames. Gold trophies require an exact hash and an achievement set; soft passes indicate a verified local alternative.' if slug == 'megacd' else 'Dreamcast CHD and GDI are separate images. Gold trophies require verified RA hashes and achievements; Flycast online is not yet tested.' if dreamcast_only else 'GameCube disc IDs come from ISO headers. Gold trophies require an exact RA hash and an available achievement set. No set is a registered hash, not an incompatible dump.' if gamecube_only else 'Region flags are inferred from recognised disc prefixes; unknown prefixes show 🌐. Gold 🏆 indicates a verified RA disc hash and RA game ID.'}</p>
 <div class="toolbar">{prev_link}{next_link}</div>
 <script>
 (function() {{
@@ -813,7 +828,7 @@ def console_profile(slug: str, request: Request, db: Session = Depends(get_sessi
         LibraryItem.platform_id==platform.id, LibraryItem.is_missing.is_(False))) or 0
     release=profile.get(region) or (str(platform.release_date) if platform.release_date else "Not documented")
     def field(label,value):
-        return f'<div class="card"><div class="eyebrow">{escape(label)}</div><p>{escape(str(value or "Not yet documented"))}</p></div>'
+        return f'<div class="card"><div class="eyebrow">{escape(label)}</div><p>{escape(str(value if value is not None and value != "" else "Not yet documented"))}</p></div>'
     def console_link(other):
         if not other:
             return '<span class="muted">Not applicable / not documented</span>'
@@ -833,6 +848,11 @@ def console_profile(slug: str, request: Request, db: Session = Depends(get_sessi
 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:20px 0">{tabs}</div>"""
     if tab=="games":
         body=f'<div class="card"><h2>Your game collection</h2><p>{count:,} files currently catalogued for this system.</p><a class="btn" href="/library/{quote(slug)}">Browse {escape(platform.name)} games →</a></div>'
+        if slug == "gamecube":
+            active = db.scalars(select(LibraryItem).where(LibraryItem.platform_id == platform.id, LibraryItem.is_missing.is_(False))).all()
+            verified = sum(ra_supported(i, slug) for i in active)
+            registered = sum(bool(i.ra_game_id and i.ra_match_status == "matched") for i in active)
+            body += '<div class="grid">' + field("Verified achievements", verified) + field("Registered RA hashes", registered) + field("No exact RA match", len(active)-registered) + '</div>'
     elif tab=="guides":
         guides=profile.get("guides",[])
         body='<h2>Console guides</h2><div class="grid">'+''.join(
