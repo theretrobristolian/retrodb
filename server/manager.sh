@@ -256,6 +256,10 @@ export_csv() {
   printf ' OPL proposals CSV    : %s (rename-engine input)\n' "$rename_report"
   printf ' PS1 file audit CSV   : %s\n' "$ps1_csv"
   printf ' Raw audit CSV        : %s\n' "$EXPORT"
+  if [[ "$cd_csv" != "-" && -f "$cd_csv" ]]; then
+    printf ' Mega CD inventory CSV: %s\n' "$cd_csv"
+    printf '   Download (Mac/Linux): scp "%s" ~/Downloads/\n' "$(id -un)@$(hostname -f 2>/dev/null || hostname):retrodb-exports/RetroDB-Sega-Mega-CD.csv"
+  fi
   if [[ -f "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv" ]]; then
     printf ' Wii inventory CSV    : %s\n' "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv"
   fi
