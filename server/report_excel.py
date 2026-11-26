@@ -846,7 +846,7 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                 action = 'Obtain supported region / edition / revision' if state=='ALTERNATIVE_REQUIRED' else 'Fix disc hash error' if state=='HASH_ERROR' else 'Investigate RA identity or listing'
                 all_actions.append(['Sega Dreamcast',r['title'],r['filename'],'',state,action,'','',
                                     r['candidate_ra_id'],'',r['reason'],'',r['ra_hash'],'','roms/sega/dreamcast/'+r['source']])
-        sheets.append(('Sega Dreamcast',[cols]+sorted(rows,key=lambda r:(r[0].casefold(),r[1])))
+        sheets.append(('Sega Dreamcast',[cols]+sorted(rows,key=lambda r:(r[0].casefold(),r[1]))))
         # Deduplicate exact registered hashes across formats, not entire RA game IDs
         # (different discs may have the same RA ID). Never delete either format.
         seen = set()
