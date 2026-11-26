@@ -799,15 +799,36 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
             cd_records = list(csv.DictReader(handle))
         columns = ['Game Title', 'Folder', 'Filename', 'Disc ID', 'Tracks',
                    'BIN files', 'RA Game ID', 'RA Status', 'RA hash', 'Audit status',
-                   'Reason', 'File size (bytes)', 'File size (GiB)']
+                   'Reason', 'Collection status', 'Candidate RA ID', 'Local alternative', 'File size (bytes)', 'File size (GiB)']
         cd_rows = []
         for r in cd_records:
             size = int(r.get('size_bytes') or 0)
             cd_rows.append([r['title'], r['folder'], r['filename'], r['serial'],
                             r['tracks'], r['files'], r['ra_game_id'], r['ra_status'],
-                            r['ra_hash'], r['status'], r['reason'], size, round(size / GIB, 6)])
+                            r['ra_hash'], r['status'], r['reason'], r.get('collection_status', r['ra_status']),
+                            r.get('candidate_ra_id', ''), r.get('local_alternative', ''), size, round(size / GIB, 6)])
+            state = r.get('collection_status', r['ra_status'])
+            if state not in ('SUPPORTED', 'NO_SET', 'SOFT_PASS', 'SOFT_PASS_NO_SET'):
+                action = 'Obtain supported region / edition / revision' if state == 'ALTERNATIVE_REQUIRED' else 'Fix disc hash error' if state == 'HASH_ERROR' else 'Investigate RA identity or listing'
+                all_actions.append(['Sega Mega CD', r['title'], r['filename'], r['serial'], state, action,
+                                    '', '', r.get('candidate_ra_id', ''), '', r['reason'], '', r['ra_hash'], '',
+                                    'roms/sega/megacd/' + r['folder'] + '/' + r['filename']])
         sheets.append(('Sega Mega CD', [columns] + sorted(cd_rows, key=lambda r: r[0].casefold())))
-        print(f'[INFO] Mega CD: {len(cd_rows)} inventory records integrated.')
+        counts = Counter(r.get('collection_status', r['ra_status']) for r in cd_records)
+        total = len(cd_records)
+        redundant = counts['SOFT_PASS'] + counts['SOFT_PASS_NO_SET']
+        effective = total - redundant
+        supported = counts['SUPPORTED']
+        no_set = counts['NO_SET']
+        unresolved = effective - supported - no_set
+        eligible = effective - no_set
+        pct = lambda n, d: f'{100*n/d:.2f}%' if d else 'N/A'
+        summary.append(['Sega Mega CD', total, effective, redundant, pct(supported,effective),
+                        pct(supported,eligible), eligible, supported, 0, 0, no_set, unresolved,
+                        0, counts['ALTERNATIVE_REQUIRED'] + counts['TITLE_NO_SET'], counts['HASH_ERROR'],
+                        pct(0,effective), pct(no_set,effective), pct(unresolved,effective),
+                        pct(supported+no_set,effective)])
+        print(f'[INFO] Mega CD: {total} discs; {redundant} local soft passes; {unresolved} unresolved.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
