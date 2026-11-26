@@ -76,6 +76,8 @@ def main() -> int:
     sync_cd_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
     sync_dc_parser = subparsers.add_parser("ra-sync-dreamcast", help="cache official Dreamcast hashes")
     sync_dc_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
+    sync_gc_parser = subparsers.add_parser("ra-sync-gamecube", help="cache official GameCube hashes")
+    sync_gc_parser.add_argument("--force", action="store_true", help="ignore fresh cache")
     scan_parser = subparsers.add_parser("library-scan", help="inventory a read-only collection mount")
     scan_parser.add_argument("--root", type=Path, required=True)
     match_parser = subparsers.add_parser("ra-match", help="hash and match local disc images")
@@ -223,6 +225,7 @@ def main() -> int:
             else (("wii", 19, "Nintendo Wii"),) if args.command == "ra-sync-wii"
             else (("megacd", 9, "Sega CD"),) if args.command == "ra-sync-megacd"
             else (("dreamcast", 40, "Dreamcast"),) if args.command == "ra-sync-dreamcast"
+            else (("gamecube", 16, "GameCube"),) if args.command == "ra-sync-gamecube"
             else (
                 ("playstation", 12, "PlayStation"),
                 ("playstation-2", 21, "PlayStation 2"),
