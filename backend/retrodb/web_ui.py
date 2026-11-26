@@ -364,6 +364,34 @@ DISC_MARKER = re.compile(r"\\((?:Disc|Disk|CD)\\s*(\\d+)(?:\\s*(?:of|/)\\s*\\d+)
 REV_MARKER = re.compile(r"\\s*\\((?:Rev(?:ision)?\\s*\\d+(?:\\.\\d+)?|v\\d+(?:\\.\\d+)?)\\)", re.I)
 
 
+# Display aliases only: never rename ROMs or change verified RA identities.
+MEGACD_DISPLAY_ALIASES = {
+    "beastii": "Shadow of the Beast II",
+    "shadowofthebeastii": "Shadow of the Beast II",
+    "battlefrenzy": "Bloodshot / Battle Frenzy",
+    "bloodshot": "Bloodshot / Battle Frenzy",
+    "bloodshotbattlefrenzy": "Bloodshot / Battle Frenzy",
+    "battlefrenzybloodshot": "Bloodshot / Battle Frenzy",
+    "blackholeassault": "Black Hole Assault",
+    "ah3thunderstrike": "AH-3 ThunderStrike",
+    "sonicmegamix": "Sonic the Hedgehog - Megamix",
+    "sonicthehedgehogmegamix": "Sonic the Hedgehog - Megamix",
+    "battlecorps": "BattleCorps",
+}
+
+
+def megacd_display_alias(title: str, filename: str) -> str:
+    # Exact normalized aliases, not fuzzy matches. Keep release qualifiers.
+    for value in (title, filename):
+        base = re.sub(r"\s*\([^()]*\)", "", value)
+        base = re.sub(r"^\s*~\s*(?:Hack|Unlicensed|Prototype|Homebrew)\s*~\s*", "", base, flags=re.I)
+        key = re.sub(r"[^a-z0-9]", "", base.casefold())
+        if key in MEGACD_DISPLAY_ALIASES:
+            qualifiers = re.findall(r"\((?:Rev[^)]*|Alt[^)]*|Version[^)]*|RE|Rerelease|Disc\s+\d+)\)", filename, re.I)
+            return " ".join([MEGACD_DISPLAY_ALIASES[key], *qualifiers])
+    return title
+
+
 def name(item: LibraryItem, slug: str | None = None) -> str:
     filename = PurePosixPath(item.filename).stem
     title = (filename if slug == "playstation-3" else
@@ -407,6 +435,7 @@ def name(item: LibraryItem, slug: str | None = None) -> str:
             title = DISC_MARKER.sub("", title).strip()
             title += f" (Disc {disc})"
     if slug == "megacd":
+        title = megacd_display_alias(title, filename)
         qualifiers = re.findall(r"\((?:Rev[^)]*|Alt[^)]*|Version[^)]*|RE|Rerelease)\)", filename, re.I)
         for qualifier in qualifiers:
             if qualifier not in title:
