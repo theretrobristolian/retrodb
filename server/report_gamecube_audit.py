@@ -7,13 +7,14 @@ import re
 import subprocess
 from collections import Counter
 from pathlib import Path
-from dreamcast_rename import regular, canonical
+from dreamcast_rename import regular
+from gamecube_rename import disc_header, proposed_name
 from report_dreamcast_audit import reconcile
 from report_megacd_audit import HASH
 
 FIELDS = ("source","format","destination","status","reason","size_bytes","title",
           "filename","ra_hash","ra_game_id","ra_title","ra_status","collection_status",
-          "candidate_ra_id","local_alternative")
+          "candidate_ra_id","local_alternative","disc_id","region","disc_number","revision","internal_title")
 
 def audit(root, hasher, games):
     lookup={}
@@ -32,14 +33,13 @@ def audit(root, hasher, games):
         try:
             if not regular(p) or p.stat().st_size==0:
                 raise ValueError("Missing or empty image")
-            with p.open("rb") as f:
-                header=f.read(0x20)
-            if len(header)!=0x20 or header[0x1c:0x20]!=b"\xc2\x33\x9f\x3d":
-                raise ValueError("Invalid GameCube disc magic")
-            r.update(status="VALID",size_bytes=p.stat().st_size)
+            info=disc_header(p)
+            r.update(status="VALID",size_bytes=p.stat().st_size,disc_id=info["disc_id"],
+                     region=info["region"],disc_number=info["disc"],revision=info["revision"],
+                     internal_title=info["internal_title"])
             try:
-                title=canonical(p.stem)
-                r["destination"]=title+".iso"
+                r["destination"]=proposed_name(p,info)
+                r["title"]=Path(r["destination"]).stem
                 if r["source"]!=r["destination"]:
                     r["status"]="TIDY_CANDIDATE"
             except ValueError as e:
