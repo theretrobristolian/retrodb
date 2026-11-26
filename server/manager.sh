@@ -240,7 +240,12 @@ export_csv() {
   else
     cd_csv="-"
   fi
-  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" "$cd_csv" ) || return 1
+  local dc_csv="-"
+  if sudo test -d "$MOUNT/roms/sega/dreamcast"; then
+    dreamcast_audit || return 1
+    dc_csv="$HOME/retrodb-exports/RetroDB-Sega-Dreamcast.csv"
+  fi
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" "$cd_csv" "$dc_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
@@ -325,9 +330,6 @@ audit() {
   else
     stage "10/10" "Nintendo Wii collection"
     echo '[INFO] Wii directory not present; skipping this optional platform.'
-  fi
-  if sudo test -d "$MOUNT/roms/sega/dreamcast"; then
-    dreamcast_audit || return 1
   fi
   printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
   echo 'NOTE: No original RetroNAS game images were changed.'
@@ -1185,13 +1187,25 @@ dreamcast_rename() {
 dreamcast_audit() {
   local root="$MOUNT/roms/sega/dreamcast"
   local report="$HOME/retrodb-exports/RetroDB-Sega-Dreamcast.csv"
+  local catalogue="/var/cache/retrodb/providers/retroachievements/dreamcast.json"
+  local staged="/var/lib/retrodb/reports/dreamcast-portal-sync.csv"
+  local rc=0
   mount_ready || return 1
   sudo test -d "$root" || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-dreamcast || return 1
   install -d -m 0700 "$HOME/retrodb-exports" || return 1
-  ( umask 077; sudo python3 "$HERE/dreamcast_rename.py" audit --root "$root" --output "$report" ) || return 1
+  ( umask 077; sudo python3 "$HERE/report_dreamcast_audit.py" --root "$root" --hasher /opt/retrodb-tools/RAHasher --ra-catalogue "$catalogue" --output "$report" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$report" || return 1
   chmod 0600 "$report" || return 1
+  sudo install -d -o retrodb -g retrodb -m 0750 /var/lib/retrodb/reports || return 1
+  sudo install -m 0600 -o retrodb -g retrodb "$report" "$staged" || return 1
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.dreamcast_sync --audit "$staged" --mount-root "$MOUNT" || rc=$?
+  sudo rm -f "$staged"
+  (( rc == 0 )) || return "$rc"
   echo "[READY] $report"
+  echo '[READY] Dreamcast available at /library/dreamcast'
 }
 
 megacd_rename() {
