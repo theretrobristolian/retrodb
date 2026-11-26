@@ -103,7 +103,7 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
             item.ra_game_title = (row["ra_title"] if item.ra_game_id else row["title"])[:500]
             item.ra_match_status = ("matched" if item.ra_game_id else
                                     "review" if status in ("AMBIGUOUS", "HASH_ERROR", "NOT_CHECKED") else "unmatched")
-            detail = row.get("reason") or ""
+            detail = f'GameCube ID: {row.get("disc_id", "")}; Region: {row.get("region", "")}; Disc: {row.get("disc_number", "")}; Revision: {row.get("revision", "")}; ' + (row.get("reason") or "")
             if row.get("collection_status"):
                 detail += "; Collection status: " + row["collection_status"]
             if row.get("candidate_ra_id"):
