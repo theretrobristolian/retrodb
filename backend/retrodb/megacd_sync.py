@@ -101,9 +101,13 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
             item.ra_game_title = (row["ra_title"] if item.ra_game_id else row["title"])[:500]
             item.ra_match_status = ("matched" if item.ra_game_id else
                                     "review" if status in ("AMBIGUOUS", "HASH_ERROR", "NOT_CHECKED") else "unmatched")
-            detail = row.get("reason") or ""
-            if row.get("serial"):
-                detail += "; Sega CD serial: " + row["serial"]
+            detail = ("Sega CD serial: " + row["serial"] + "; " if row.get("serial") else "") + (row.get("reason") or "")
+            if row.get("collection_status"):
+                detail += "; Collection status: " + row["collection_status"]
+            if row.get("candidate_ra_id"):
+                detail += "; Suggested RA ID: " + row["candidate_ra_id"]
+            if row.get("local_alternative"):
+                detail += "; Local alternative: " + row["local_alternative"]
             item.ra_hash_error = detail.strip("; ")[:500] or None
             item.ra_hashed_at = now if item.ra_hash else None
             count += 1
