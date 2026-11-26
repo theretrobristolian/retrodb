@@ -86,6 +86,7 @@ def descriptors(folder):
 def plan(root):
     candidates = list(discover(root))
     parent_counts = collections.Counter(p.parent for p in candidates)
+    gdi_counts = collections.Counter(p.parent for p in candidates if p.suffix.lower() == ".gdi")
     claimed = collections.Counter()
     rows = []
     for p in candidates:
@@ -100,6 +101,8 @@ def plan(root):
             target = root / fmt / title
             dest = target / (title+"."+fmt)
             row["destination"] = dest.relative_to(root).as_posix()
+            if fmt == "gdi" and gdi_counts[p.parent] > 1:
+                raise ValueError("Multiple GDI descriptors share a directory; isolate releases first")
             names = tracks(p) if fmt == "gdi" else []
             sources = [p, *(p.parent/n for n in names)]
             if fmt == "chd":
@@ -110,6 +113,8 @@ def plan(root):
             row["files"] = [(x.relative_to(root).as_posix(),
                               (target/(dest.name if x == p else x.name)).relative_to(root).as_posix(),
                               x.stat().st_size, x.stat().st_mtime_ns) for x in sources]
+            if any(q.is_symlink() for q in (target, target.parent)):
+                raise ValueError("Symlink destination")
             if p == dest:
                 row["status"] = "VALID"
                 continue
