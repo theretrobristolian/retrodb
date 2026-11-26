@@ -592,7 +592,7 @@ def wii_export_rows(records):
     return sorted(rows, key=lambda row: (row[0].casefold(), row[1], row[2].casefold()))
 
 
-def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None,megacd_audit=None):
+def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None,megacd_audit=None,dreamcast_audit=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
     entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
@@ -829,6 +829,48 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                         pct(0,effective), pct(no_set,effective), pct(unresolved,effective),
                         pct(supported+no_set,effective)])
         print(f'[INFO] Mega CD: {total} discs; {redundant} local soft passes; {unresolved} unresolved.')
+    if dreamcast_audit and Path(dreamcast_audit).is_file():
+        with open(dreamcast_audit, newline='', encoding='utf-8-sig') as handle:
+            dc = list(csv.DictReader(handle))
+        cols = ['Game Title','Format','Source','Proposed destination','Audit status','RA hash','RA Game ID',
+                'RA Title','RA Status','Collection status','Candidate RA ID','Local alternative','Flycast online',
+                'Reason','File size (bytes)','File size (GiB)']
+        rows = []
+        for r in dc:
+            size = int(r['size_bytes'] or 0)
+            rows.append([r[k] for k in ('title','format','source','destination','status','ra_hash','ra_game_id',
+                         'ra_title','ra_status','collection_status','candidate_ra_id','local_alternative','flycast_online','reason')]
+                         + [size,round(size/GIB,6)])
+            state = r['collection_status']
+            if state not in ('SUPPORTED','NO_SET','SOFT_PASS','SOFT_PASS_NO_SET') or r['status']=='REVIEW':
+                action = 'Obtain supported region / edition / revision' if state=='ALTERNATIVE_REQUIRED' else 'Fix disc hash error' if state=='HASH_ERROR' else 'Investigate RA identity or listing'
+                all_actions.append(['Sega Dreamcast',r['title'],r['filename'],'',state,action,'','',
+                                    r['candidate_ra_id'],'',r['reason'],'',r['ra_hash'],'','roms/sega/dreamcast/'+r['source']])
+        sheets.append(('Sega Dreamcast',[cols]+sorted(rows,key=lambda r:(r[0].casefold(),r[1])))
+        # Deduplicate exact registered hashes across formats, not entire RA game IDs
+        # (different discs may have the same RA ID). Never delete either format.
+        seen = set()
+        effective = []
+        for r in dc:
+            if r['collection_status'] in ('SOFT_PASS','SOFT_PASS_NO_SET'):
+                continue
+            key = r['ra_hash'] if r['ra_status'] in ('SUPPORTED','NO_SET') else ''
+            if key and key in seen:
+                continue
+            if key:
+                seen.add(key)
+            effective.append(r)
+        total = len(dc)
+        n = len(effective)
+        c = Counter(r['collection_status'] for r in effective)
+        ok = c['SUPPORTED']
+        no_set = c['NO_SET']
+        unknown = n-ok-no_set
+        pct = lambda x,y: f'{100*x/y:.2f}%' if y else 'N/A'
+        summary.append(['Sega Dreamcast',total,n,total-n,pct(ok,n),pct(ok,n-no_set),n-no_set,ok,0,
+                        c['ALTERNATIVE_REQUIRED'],no_set,unknown,0,c['ALTERNATIVE_REQUIRED']+c['TITLE_NO_SET'],
+                        c['HASH_ERROR'],pct(0,n),pct(no_set,n),pct(unknown,n),pct(ok+no_set,n)])
+        print(f'[INFO] Dreamcast: {total} physical images, {n} effective entries, {unknown} unresolved; Flycast online not tested.')
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
@@ -867,5 +909,5 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
     print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4,5,6,7,8,9): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv] [megacd-audit.csv]')
-    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None, sys.argv[8] if len(sys.argv)>=9 and sys.argv[8] != '-' else None)
+    if len(sys.argv) not in (3,4,5,6,7,8,9,10): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv] [megacd-audit.csv] [dreamcast-audit.csv]')
+    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None, sys.argv[8] if len(sys.argv)>=9 and sys.argv[8] != '-' else None, sys.argv[9] if len(sys.argv)>=10 and sys.argv[9] != '-' else None)
