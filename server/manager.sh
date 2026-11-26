@@ -326,6 +326,9 @@ audit() {
     stage "10/10" "Nintendo Wii collection"
     echo '[INFO] Wii directory not present; skipping this optional platform.'
   fi
+  if sudo test -d "$MOUNT/roms/sega/dreamcast"; then
+    dreamcast_audit || return 1
+  fi
   printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
   echo 'NOTE: No original RetroNAS game images were changed.'
 }
@@ -1153,6 +1156,44 @@ wii_audit() {
   echo '[INFO] Wii disc-ID matches are not RA hash verification.'
 }
 
+dreamcast_rename() {
+  local root="$MOUNT/roms/sega/dreamcast"
+  local rwroot="$PILOT_ROOT/roms/sega/dreamcast"
+  local journal_dir="$HOME/retrodb-exports/dreamcast-rename-journals"
+  local answer source journal rc=0
+  mount_ready || return 1
+  sudo python3 "$HERE/dreamcast_rename.py" preview --root "$root" || return 1
+  read -rp 'Type RENAME DREAMCAST to organise eligible CHD/GDI releases (no deletion or overwrite): ' answer
+  [[ "$answer" == "RENAME DREAMCAST" ]] || { echo 'Cancelled; no changes made.'; return 0; }
+  source="$(retronas_cifs_source)" || return 1
+  sudo install -d -m 0700 "$PILOT_ROOT" || return 1
+  if mountpoint -q "$PILOT_ROOT"; then
+    echo '[STOP] Temporary writable mount already active.'
+    return 1
+  fi
+  mkdir -p -m 0700 "$journal_dir" || return 1
+  journal="$journal_dir/rename-$(date -u +%Y%m%dT%H%M%SZ)-$BASHPID.jsonl"
+  sudo mount -t cifs "$source" "$PILOT_ROOT" \
+    -o "rw,credentials=/etc/retrodb/retronas.credentials,vers=3.1.1,iocharset=utf8,uid=$(id -u),gid=$(id -g),file_mode=0600,dir_mode=0700,actimeo=0,cache=none,nosuid,nodev,noexec" || return 1
+  ( umask 077; sudo python3 "$HERE/dreamcast_rename.py" apply --root "$rwroot" --journal "$journal" --confirm "RENAME DREAMCAST" ) || rc=$?
+  sudo umount "$PILOT_ROOT" || { echo '[STOP] Writable mount still active.'; return 1; }
+  echo "[INFO] Dreamcast rename journal: $journal"
+  (( rc == 0 )) || { echo '[STOP] Inspect journal before retrying.'; return "$rc"; }
+  dreamcast_audit
+}
+
+dreamcast_audit() {
+  local root="$MOUNT/roms/sega/dreamcast"
+  local report="$HOME/retrodb-exports/RetroDB-Sega-Dreamcast.csv"
+  mount_ready || return 1
+  sudo test -d "$root" || return 1
+  install -d -m 0700 "$HOME/retrodb-exports" || return 1
+  ( umask 077; sudo python3 "$HERE/dreamcast_rename.py" audit --root "$root" --output "$report" ) || return 1
+  sudo chown "$(id -un):$(id -gn)" "$report" || return 1
+  chmod 0600 "$report" || return 1
+  echo "[READY] $report"
+}
+
 megacd_rename() {
   local root="$MOUNT/roms/sega/megacd"
   local rwroot="$PILOT_ROOT/roms/sega/megacd"
@@ -1402,7 +1443,7 @@ menu() {
     echo
     echo '  1) Audit games       - Check RA support and export reports'
     echo '  2) Patch PS1 / PS2   - Patch one game; deploy PS1 with OLD_ backup'
-    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii / Mega CD'
+    echo '  3) Rename games      - PS1 / PS2 / PS3 / Sega 32X / Wii / Mega CD / Dreamcast'
     echo
     echo '  4) More options           - Exports, downloads and diagnostics'
     echo '  5) Permissions            - Manage website server-control access'
@@ -1424,6 +1465,7 @@ menu() {
         echo '  4) Sega 32X - Tidy ZIP names and special-build qualifiers (preview first)'
         echo '  5) Nintendo Wii - Correct folder titles, preserving [DISC_ID]'
         echo '  6) Sega Mega CD - Merge BIN tracks and tidy CUE names (retain originals)'
+        echo '  7) Sega Dreamcast - Organise CHD/GDI releases (preview first)'
         read -rp 'Platform: ' platform_choice
         case "$platform_choice" in
           1) run ps1_rename_all ;;
@@ -1432,6 +1474,7 @@ menu() {
           4) run sega32x_rename ;;
           5) run wii_rename ;;
           6) run megacd_rename ;;
+          7) run dreamcast_rename ;;
           *) echo 'Cancelled' ;;
         esac
         pause ;;
