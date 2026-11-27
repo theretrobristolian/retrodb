@@ -897,12 +897,12 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                       else 'Fix disc hash error' if state == 'HASH_ERROR'
                       else 'Investigate RA identity or listing')
             filename = r.get('filename') or r.get('zip_name') or r.get('source','')
-            title = r.get('title') or r.get('ra_title') or filename
+            title = r.get('title') or r.get('display_title') or r.get('ra_title') or filename
             all_actions.append([label,title,filename,r.get('disc_id',''),state,action,
-                                r.get('suggested_release',''),'',r.get('candidate_ra_id',''),
-                                r.get('local_alternative',''),r.get('reason',''),'',
-                                r.get('ra_hash',''),r.get('suggested_ra_hash',''),
-                                root+str(r.get('source') or filename)])
+                                r.get('suggested_release',''),r.get('suggested_region',''),r.get('candidate_ra_id') or r.get('suggested_ra_game_id',''),
+                                r.get('local_alternative') or r.get('local_verified_variant',''),r.get('reason',''),'',
+                                r.get('ra_hash') or r.get('ra_md5',''),r.get('suggested_ra_hash') or r.get('ra_supported_md5',''),
+                                r.get('relative_path') or root+str(r.get('source') or filename)])
         total = len(records)
         redundant = counts['SOFT_PASS'] + counts['SOFT_PASS_NO_SET']
         n = total-redundant
