@@ -15,7 +15,7 @@ def alternatives(entries, region):
         digest=str(entry.get("MD5") or entry.get("Hash") or "").strip().lower()
         if not name or not re.fullmatch(r"[0-9a-f]{32}",digest):
             continue
-        if re.search(r"\b(subset|hack|patched|patch|prototype|demo|beta|translation)\b",name,re.I):
+        if re.search(r"\b(subset|hack|patched|patch|prototype|demo|beta|translation|maeson|dreamsyntax|widescreen|unknown|[56]0\s*hz|v\d+\.\d+)\b",name,re.I):
             continue
         choices[(name,digest)] = (name,digest)
     return sorted(choices.values(), key=lambda x:(
