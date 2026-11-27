@@ -665,7 +665,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
         return platform.slug if platform else platform_names.get(item.platform_id)
     # GameDB cache lookup is local and deterministic. Resolve before paging so
     # alphabet filtering and sorting use exactly the title displayed to users.
-    if sort_by == "title" or letter or q or ra_filter in ("yes", "other"):
+    if sort_by == "title" or letter or q or ra_filter in ("yes", "other", "unmatched", "review"):
         candidate_items = db.scalars(stmt.order_by(LibraryItem.id.asc())).all()
         if q:
             term = q.casefold()
@@ -678,6 +678,10 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
             candidate_items = [i for i in candidate_items if matched_filter(i)]
         elif ra_filter == "other":
             candidate_items = [i for i in candidate_items if not matched_filter(i)]
+        elif ra_filter == "unmatched":
+            candidate_items = [i for i in candidate_items if i.ra_match_status == "unmatched"]
+        elif ra_filter == "review":
+            candidate_items = [i for i in candidate_items if "Collection status: REVIEW" in (i.ra_hash_error or "") or i.ra_match_status == "review"]
         if sort_by == "title":
             candidate_items.sort(key=lambda i: (name(i, item_slug(i)).casefold(), i.id), reverse=(order == "desc"))
         elif sort_by == "disc":
@@ -742,14 +746,10 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
             if item_slug(item) == "gamecube" and disc:
                 disc_cell += ' <span class="pill serial">' + escape(disc) + '</span>'
             if item_slug(item) == "gamecube":
-                if supported:
-                    ra_cell += ' <span>Supported</span>'
-                else:
-                    states = {"NO_SET":"No set", "ALTERNATIVE_REQUIRED":"Alternative required", "TITLE_NO_SET":"Title only · no set", "REVIEW":"Review", "HASH_ERROR":"Hash error", "NOT_CHECKED":"Not checked", "AMBIGUOUS":"Ambiguous", "UNMATCHED":"Unmatched", "SUPPORTED":"Catalogue unavailable"}
-                    match = re.search(r"Collection status: ([A-Z_]+)", details)
-                    state = match[1] if match else ""
-                    label = states.get(state, "Registered · set unconfirmed" if item.ra_game_id else "Not verified")
-                    ra_cell = '<span class="muted" title="' + escape(details or badge, quote=True) + '">' + escape(label) + '</span>'
+                tooltip = escape(badge + ("; " + details if details else ""), quote=True)
+                ra_cell = ('<span class="ra-icon ' + ('yes' if supported else 'no') +
+                           '" role="img" aria-label="' + tooltip +
+                           '" title="' + tooltip + '">🏆</span>')
             if "Collection status: SOFT_PASS" in details:
                 label = "Local no-set alternative" if "Collection status: SOFT_PASS_NO_SET" in details else "Soft pass"
                 ra_cell = '<span class="ra-soft" title="' + escape(details, quote=True) + '">' + label + '</span>'
@@ -781,7 +781,7 @@ def browse(request: Request, db: Session, slug: str | None, q: str, letter: str,
 {f'<label class="label">Console <select name="console">{console_options}</select></label>' if not slug else ''}
 <label class="label">Generation <select name="generation">{generation_options}</select></label>
 <label class="label">Region <select name="region">{region_options}</select></label>
-{'' if ps3_only else '<label class="label">RA <select name="ra"><option value="all">All</option><option value="yes">Verified</option><option value="other">Other / unknown</option></select></label>'}
+{'' if ps3_only else '<label class="label">RA <select name="ra">' + ''.join('<option value="' + k + '"' + (' selected' if ra_filter == k else '') + '>' + v + '</option>' for k,v in (("all","All"),("yes","Verified"),("other","Other / unknown"),("unmatched","Unmatched hashes"),("review","Needs review"))) + '</select></label>'}
 <label class="label">Sort <select name="sort">
 <option value="title" {'selected' if sort_by=='title' else ''}>Game name</option>
 <option value="disc" {'selected' if sort_by=='disc' else ''}>Filename</option>
@@ -885,7 +885,7 @@ def console_profile(slug: str, request: Request, db: Session = Depends(get_sessi
 def all_games(request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
               letter: str = Query("", pattern="^[A-Za-z]?$"),
               page_number: int = Query(1, alias="page", ge=1, le=10000),
-              ra: str = Query("all", pattern="^(all|yes|other)$"),
+              ra: str = Query("all", pattern="^(all|yes|other|unmatched|review)$"),
               sort: str = Query("title", pattern="^(title|disc|id|ra)$"),
               order: str = Query("asc", pattern="^(asc|desc)$"),
               console: str = Query("", max_length=80),
@@ -898,7 +898,7 @@ def all_games(request: Request, db: Session = Depends(get_session), q: str = Que
 def console_games(slug: str, request: Request, db: Session = Depends(get_session), q: str = Query("", max_length=100),
                   letter: str = Query("", pattern="^[A-Za-z]?$"),
                   page_number: int = Query(1, alias="page", ge=1, le=10000),
-                  ra: str = Query("all", pattern="^(all|yes|other)$"),
+                  ra: str = Query("all", pattern="^(all|yes|other|unmatched|review)$"),
                   sort: str = Query("title", pattern="^(title|disc|id|ra)$"),
                   order: str = Query("asc", pattern="^(asc|desc)$"),
                   generation: str = Query("", pattern=r"^([0-9]{1,2})?$"),
