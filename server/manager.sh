@@ -1167,7 +1167,12 @@ dreamcast_rename() {
   local journal_dir="$HOME/retrodb-exports/dreamcast-rename-journals"
   local answer source journal rc=0
   mount_ready || return 1
-  sudo python3 "$HERE/dreamcast_rename.py" preview --root "$root" || return 1
+  sudo python3 "$HERE/dreamcast_rename.py" preview --root "$root" --exit-if-no-changes || rc=$?
+  if (( rc == 3 )); then
+    echo '[INFO] No eligible renames; no writable mount or confirmation required.'
+    return 0
+  fi
+  (( rc == 0 )) || return "$rc"
   read -rp 'Type RENAME DREAMCAST to organise eligible CHD/GDI releases (no deletion or overwrite): ' answer
   [[ "$answer" == "RENAME DREAMCAST" ]] || { echo 'Cancelled; no changes made.'; return 0; }
   source="$(retronas_cifs_source)" || return 1
@@ -1217,7 +1222,12 @@ gamecube_rename() {
   local journal_dir="$HOME/retrodb-exports/gamecube-rename-journals"
   local answer source journal rc=0
   mount_ready || return 1
-  sudo python3 "$HERE/gamecube_rename.py" preview --root "$root" || return 1
+  sudo python3 "$HERE/gamecube_rename.py" preview --root "$root" --exit-if-no-changes || rc=$?
+  if (( rc == 3 )); then
+    echo '[INFO] No eligible renames; no writable mount or confirmation required.'
+    return 0
+  fi
+  (( rc == 0 )) || return "$rc"
   read -rp 'Type RENAME GAMECUBE to organise eligible ISO releases (no deletion or overwrite): ' answer
   [[ "$answer" == "RENAME GAMECUBE" ]] || { echo 'Cancelled; no changes made.'; return 0; }
   source="$(retronas_cifs_source)" || return 1
