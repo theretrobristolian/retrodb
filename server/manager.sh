@@ -138,6 +138,7 @@ export_csv() {
   install -d -m 0700 "$HOME/retrodb-exports"
   sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$REPORT" "$EXPORT"
   local excel="$HOME/retrodb-exports/RetroDB-Compatibility.xlsx"
+  printf "\\n--- Sony PlayStation ---\\n"
   local ps1_csv="$HOME/retrodb-exports/RetroDB-PS1-Audit.csv"
   local ps1_root="$MOUNT/roms/sony/playstation1"
   if sudo test -d "$ps1_root"; then
@@ -148,6 +149,7 @@ export_csv() {
     echo '[WARNING] PS1 folder unavailable; export will omit the PS1 file audit.'
     rm -f "$ps1_csv"
   fi
+  printf "\\n--- Sony PlayStation 3 ---\\n"
   local ps3_csv="$HOME/retrodb-exports/RetroDB-PS3-Audit.csv"
   local ps3_iso="$MOUNT/roms/sony/playstation3/iso"
   local ps3_games="$MOUNT/roms/sony/playstation3/games"
@@ -162,6 +164,7 @@ export_csv() {
     echo '[WARNING] PS3 ISO directory unavailable; export will omit PS3 inventory.'
     rm -f "$ps3_csv"
   fi
+  printf "\\n--- Sony PlayStation Portable ---\\n"
   local psp_csv="$HOME/retrodb-exports/RetroDB-PSP-Audit.csv"
   local psp_root="$MOUNT/roms/sony/playstationportable/iso"
   local psp_cache="/var/cache/retrodb/providers/gamedb/playstation-portable.json"
@@ -214,41 +217,29 @@ export_csv() {
   sudo chown "$(id -un):$(id -gn)" "$EXPORT" || return 1
   [[ -f "$ps3_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$ps3_csv"
   [[ -f "$psp_csv" ]] && sudo chown "$(id -un):$(id -gn)" "$psp_csv"
-  local wii_csv="$HOME/retrodb-exports/RetroDB-Nintendo-Wii-Audit.csv"
-  local wii_root="$MOUNT/roms/nintendo/wii"
-  local wii_catalogue="/var/cache/retrodb/providers/retroachievements/wii.json"
-  local wii_args=()
-  if sudo test -d "$wii_root"; then
-    sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
-      -m retrodb.cli --env-file /etc/retrodb/retrodb.env ra-sync-wii || echo '[WARNING] Wii RA refresh failed; using cached catalogue if available.'
-    wii_titles_refresh || true
-    if sudo test -r /var/cache/retrodb/providers/gametdb/wii-titles.txt; then
-      wii_args+=(--gametdb-cache /var/cache/retrodb/providers/gametdb/wii-titles.txt)
-    elif sudo test -r /var/cache/retrodb/providers/gametdb/wii.xml; then
-      wii_args+=(--gametdb-cache /var/cache/retrodb/providers/gametdb/wii.xml)
+  local wii_csv="-" cd_csv="-" dc_csv="-" gc_csv="-" x32_csv="-"
+  local spec name root routine report target
+  # One ordered registry for the standalone platform audit handlers.
+  # Future settings can supply enabled slugs here without changing handlers.
+  local platforms=(
+    'Nintendo GameCube|roms/nintendo/gamecube/iso|gamecube_audit|RetroDB-Nintendo-GameCube.csv|gc_csv'
+    'Nintendo Wii|roms/nintendo/wii|wii_audit|RetroDB-Nintendo-Wii-Audit.csv|wii_csv'
+    'Sega 32X|roms/sega/32x|sega32x_audit|RetroDB-Sega-32X-Audit.csv|x32_csv'
+    'Sega Mega CD|roms/sega/megacd|megacd_audit|RetroDB-Sega-Mega-CD.csv|cd_csv'
+    'Sega Dreamcast|roms/sega/dreamcast|dreamcast_audit|RetroDB-Sega-Dreamcast.csv|dc_csv'
+  )
+  for spec in "${platforms[@]}"; do
+    IFS='|' read -r name root routine report target <<< "$spec"
+    printf '\n--- %s ---\n' "$name"
+    if sudo test -d "$MOUNT/$root"; then
+      "$routine" || return 1
+      printf -v "$target" '%s' "$HOME/retrodb-exports/$report"
+    else
+      echo "[SKIPPED] Collection directory not present: $root"
     fi
-    ( umask 077; sudo python3 "$HERE/report_wii_audit.py" --root "$wii_root" --ra-catalogue "$wii_catalogue" "${wii_args[@]}" --output "$wii_csv" ) || return 1
-    sudo chown "$(id -un):$(id -gn)" "$wii_csv" || return 1
-    chmod 0600 "$wii_csv" || return 1
-  else
-    echo '[WARNING] Wii directory unavailable; export will omit Wii inventory.'
-    rm -f "$wii_csv" "$HOME/retrodb-exports/RetroDB-Nintendo-Wii.csv"
-  fi
-  local cd_csv="$HOME/retrodb-exports/RetroDB-Sega-Mega-CD.csv"
-  if sudo test -d "$MOUNT/roms/sega/megacd"; then
-    megacd_audit || return 1
-  else
-    cd_csv="-"
-  fi
-  local dc_csv="-"
-  if sudo test -d "$MOUNT/roms/sega/dreamcast"; then
-    dreamcast_audit || return 1
-    dc_csv="$HOME/retrodb-exports/RetroDB-Sega-Dreamcast.csv"
-  fi
-  if sudo test -d "$MOUNT/roms/nintendo/gamecube/iso"; then
-    gamecube_audit || return 1
-  fi
-  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" "$cd_csv" "$dc_csv" ) || return 1
+  done
+  printf '\n--- Consolidated exports ---\n'
+  ( umask 077; python3 "$HERE/report_excel.py" "$EXPORT" "$excel" "$prep_arg" "$ps1_arg" "$ps3_arg" "$psp_csv" "$wii_csv" "$cd_csv" "$dc_csv" "$gc_csv" "$x32_csv" ) || return 1
   local rename_report="$HOME/retrodb-exports/RetroDB-OPL-Rename-Proposals.csv"
   ( umask 077; sudo python3 "$HERE/report_opl_rename.py" "$EXPORT" "$rename_report" --verify-root "$MOUNT" ) || return 1
   sudo chown "$(id -un):$(id -gn)" "$rename_report" || return 1
@@ -311,31 +302,19 @@ sync_gamedb() {
 }
 
 audit() {
-  stage "1/10" "Prerequisites and read-only RetroNAS connection"
+  stage "1/4" "Prerequisites and read-only RetroNAS connection"
   mount_ready || { echo 'Audit cancelled: RetroNAS unavailable.' >&2; return 1; }
   sudo test -x /opt/retrodb-tools/RAHasher || { echo '[ERROR] RAHasher unavailable.' >&2; return 1; }
-  printf '[OK] RetroNAS mounted; RAHasher available.\n'
-  step "2/10" "Synchronise RetroAchievements catalogue (cache-aware)" sudo bash "$HERE/retroachievements.sh" sync || return 1
-  step "3/10" "Synchronise PS1 / PS2 GameDB catalogues (cache-aware)" sync_gamedb || return 1
-  step "4/10" "Inventory PS1 / PS2 / PS3 collection (read-only)" sudo bash "$HERE/retronas.sh" scan || return 1
-  step "5/10" "Hash and match disc images against RetroAchievements" sudo bash "$HERE/retronas.sh" match || return 1
-  step "6/10" "Prepare official patch manifest" sudo bash "$HERE/retronas.sh" patch-plan || return 1
-  step "7/10" "Check cached patch packages (no ISO checksum verification)" patch_audit || return 1
-  step "8/10" "Audit Mega CD and export formatted Excel workbook and raw CSV" export_csv || return 1
-  if sudo test -d "$MOUNT/roms/sega/32x"; then
-    step "9/10" "Audit Sega 32X ZIP collection and update web library" sega32x_audit || return 1
-  else
-    stage "9/10" "Sega 32X collection"
-    echo '[INFO] 32X directory not found; skipping this optional platform.'
-  fi
-  if sudo test -d "$MOUNT/roms/nintendo/wii"; then
-    step "10/10" "Audit Nintendo Wii games and refresh web library" wii_audit || return 1
-  else
-    stage "10/10" "Nintendo Wii collection"
-    echo '[INFO] Wii directory not present; skipping this optional platform.'
-  fi
-  printf '\n[COMPLETE] Full collection audit and downloadable workbook ready.\n'
-  echo 'NOTE: No original RetroNAS game images were changed.'
+  stage "2/4" "Sony catalogues (cache-aware)"
+  sudo bash "$HERE/retroachievements.sh" sync || return 1
+  sync_gamedb || return 1
+  stage "3/4" "Shared collection inventory and Sony PS1 / PS2 hash audit"
+  sudo bash "$HERE/retronas.sh" scan || return 1
+  sudo bash "$HERE/retronas.sh" match || return 1
+  stage "4/4" "Platform-specific audits and consolidated exports"
+  export_csv || return 1
+  printf '\n[COMPLETE] Collection audit and workbook ready. ROMs remained read-only.\n'
+
 }
 patch_audit() {
   # The full audit MUST NOT run patch-prepare: it reads whole ISO/BIN
