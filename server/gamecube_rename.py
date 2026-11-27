@@ -62,6 +62,8 @@ def plan(root):
     entries=list(root.iterdir())
     occupied={p.name.casefold() for p in entries}
     rows=[]
+    valid=0
+    review=0
     for p in sorted(entries):
         if not regular(p) or p.suffix.lower()!=".iso" or p.name.startswith((".", "OLD_", "NEW_")):
             continue
@@ -69,22 +71,25 @@ def plan(root):
             info=disc_header(p)
             dest=proposed_name(p,info)
             if dest==p.name:
-                print("VALID",p.name)
+                valid+=1
                 continue
             if dest.casefold() in occupied:
                 raise ValueError("Destination already exists (including case-only changes)")
             st=p.stat()
             rows.append((p.name,dest,st.st_size,st.st_mtime_ns))
         except (OSError,ValueError) as e:
+            review+=1
             print("REVIEW",p.name,str(e))
     counts=Counter(row[1].casefold() for row in rows)
     safe=[]
     for row in rows:
         if counts[row[1].casefold()]>1:
+            review+=1
             print("REVIEW",row[0],"conflicting proposals")
         else:
             print("PROPOSED",row[0],"->",row[1])
             safe.append(row)
+    print(f'[SUMMARY] Already correct: {valid} | Proposed: {len(safe)} | Review: {review}')
     return safe
 
 def main():
@@ -93,10 +98,13 @@ def main():
     p.add_argument("--root",type=Path,required=True)
     p.add_argument("--journal",type=Path)
     p.add_argument("--confirm")
+    p.add_argument("--exit-if-no-changes", action="store_true", help="Return 3 for an empty preview")
     a=p.parse_args()
     rows=plan(a.root)
     print(f"{len(rows)} safe proposals")
     if a.operation=="preview":
+        if a.exit_if_no_changes and not rows:
+            raise SystemExit(3)
         return
     if a.confirm!="RENAME GAMECUBE" or not a.journal:
         p.error("Explicit confirmation and journal required")
