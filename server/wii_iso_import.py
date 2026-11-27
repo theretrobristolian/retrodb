@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Preview and safely import loose Wii ISO files into disc-ID folders.
+"""Preview and safely import loose Wii ISO and WBFS files into disc-ID folders.
 
 Only the six-byte disc ID and Wii magic at offset 0x18 are read. The ISO
 contents are never rewritten or copied; the move must remain on one mount.
@@ -22,12 +22,30 @@ WII_MAGIC = bytes.fromhex("5d1c9ea3")
 
 
 def disc_id(path: Path) -> str:
-    if path.is_symlink() or not path.is_file() or path.suffix.lower() != ".iso":
-        raise ValueError("Not a regular ISO")
-    if path.stat().st_size < 0x20:
-        raise ValueError("ISO too small for a Wii header")
+    if path.is_symlink() or not path.is_file() or path.suffix.lower() not in (".iso", ".wbfs"):
+        raise ValueError("Not a regular ISO or WBFS")
+    size = path.stat().st_size
+    if size < 0x20:
+        raise ValueError("Image too small for a Wii header")
     with path.open("rb") as handle:
         header = handle.read(0x20)
+        if path.suffix.lower() == ".wbfs":
+            if header[:4] != b"WBFS" or not 9 <= header[8] <= 16 or not header[8] <= header[9] <= 31:
+                raise ValueError("Invalid WBFS header")
+            sector = 1 << header[8]
+            # Standard single-game WBFS: exactly one occupied disc-table entry.
+            handle.seek(12)
+            table = handle.read(sector - 12)
+            occupied = [i for i, value in enumerate(table) if value]
+            if len(occupied) != 1:
+                raise ValueError("WBFS must contain exactly one disc")
+            if occupied[0] != 0:
+                raise ValueError("Nonstandard WBFS disc slot; manual review required")
+            offset = sector
+            if offset + 0x20 > size:
+                raise ValueError("WBFS disc header outside file")
+            handle.seek(offset)
+            header = handle.read(0x20)
     try:
         name = header[:6].decode("ascii")
     except UnicodeDecodeError:
@@ -50,7 +68,7 @@ def plan(root: Path, gametdb: Path | None = None) -> list[dict]:
             folders.setdefault(match.group(2).upper(), []).append(child)
     rows = []
     for src in sorted(root.iterdir()):
-        if src.is_symlink() or not src.is_file() or src.suffix.lower() != ".iso":
+        if src.is_symlink() or not src.is_file() or src.suffix.lower() not in (".iso", ".wbfs"):
             continue
         row = dict(source=src.name, target="", disc_id="", status="REVIEW", reason="")
         try:
@@ -73,12 +91,14 @@ def plan(root: Path, gametdb: Path | None = None) -> list[dict]:
                 folder = root / f"{title} [{ident}]"
                 if folder.name.casefold() in {x.name.casefold() for x in root.iterdir()}:
                     raise ValueError("Destination folder occupied by another entry")
-            target = folder / (ident + ".iso")
+            if src.suffix.lower() == ".wbfs" and any(p.name.casefold().startswith(src.stem.casefold() + ".wbf") and p.suffix.lower() != ".wbfs" for p in root.iterdir()):
+                raise ValueError("Split WBFS requires manual review; no files moved")
+            target = folder / (ident + src.suffix.lower())
             if folder.exists():
                 if not folder.is_dir() or folder.is_symlink():
                     raise ValueError("Destination isn't a regular directory")
                 if any(f.name.casefold() == target.name.casefold() for f in folder.iterdir()):
-                    raise ValueError("Destination ISO already exists")
+                    raise ValueError("Destination image already exists")
             row.update(status="IMPORT_CANDIDATE", target=target.relative_to(root).as_posix(),
                        reason="Existing disc-ID folder" if existing else "Create GameTDB disc-ID folder",
                        size=src.stat().st_size, mtime_ns=src.stat().st_mtime_ns)
@@ -99,11 +119,11 @@ def apply(root: Path, rows: list[dict], journal: Path, gametdb: Path | None = No
         live = current.get(row["source"])
         if not live or any(live.get(k) != row.get(k) for k in
                            ("status", "disc_id", "target", "size", "mtime_ns")):
-            raise ValueError("Incoming ISO changed since preview: " + row["source"])
+            raise ValueError("Incoming image changed since preview: " + row["source"])
     # Never silently overwrite a target, including case-insensitive CIFS aliases.
     target_keys = [r["target"].casefold() for r in candidates]
     if len(target_keys) != len(set(target_keys)):
-        raise ValueError("Several incoming ISO files target the same destination")
+        raise ValueError("Several incoming image files target the same destination")
     journal.parent.mkdir(parents=True, exist_ok=True)
     data = {"schema": 1, "operation": "wii-iso-import", "operations": [
         {"source": r["source"], "target": r["target"], "disc_id": r["disc_id"],
@@ -138,7 +158,7 @@ def apply(root: Path, rows: list[dict], journal: Path, gametdb: Path | None = No
         except (OSError, ValueError) as exc:
             op["state"] = "failed"
             save()
-            raise RuntimeError(f"ISO import stopped after {completed}; inspect {journal}: {exc}") from exc
+            raise RuntimeError(f"Wii image import stopped after {completed}; inspect {journal}: {exc}") from exc
     return completed
 
 
@@ -153,7 +173,7 @@ def main(argv=None):
     if args.action == "apply" and (not args.journal or args.confirm != "IMPORT WII"):
         parser.error("Apply requires --journal and --confirm 'IMPORT WII'")
     rows = plan(args.root, args.gametdb_cache)
-    print(f"[WII ISO] {len(rows)} loose ISO(s) scanned")
+    print(f"[WII IMPORT] {len(rows)} loose ISO/WBFS image(s) scanned")
     for status, n in sorted(Counter(r["status"] for r in rows).items()):
         print(f"  {status}: {n}")
     for row in rows:
@@ -162,10 +182,10 @@ def main(argv=None):
         else:
             print(f"  REVIEW {row['source']}: {row['reason']}")
     if args.action == "preview":
-        print("[INFO] Preview only. No Wii ISO was moved or modified.")
+        print("[INFO] Preview only. No Wii image was moved or modified.")
         return 0
     count = apply(args.root, rows, args.journal, args.gametdb_cache)
-    print(f"[OK] Imported {count} Wii ISO(s) without modifying their contents.")
+    print(f"[OK] Imported {count} Wii image(s) without modifying their contents.")
     return 0
 
 
