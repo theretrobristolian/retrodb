@@ -592,7 +592,7 @@ def wii_export_rows(records):
     return sorted(rows, key=lambda row: (row[0].casefold(), row[1], row[2].casefold()))
 
 
-def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None,megacd_audit=None,dreamcast_audit=None):
+def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_audit=None,wii_audit=None,megacd_audit=None,dreamcast_audit=None,gamecube_audit=None,sega32x_audit=None):
     with open(source,newline='',encoding='utf-8-sig') as handle: entries=list(csv.DictReader(handle))
     backups = [r for r in entries if Path(r.get('path', '')).name.casefold().startswith('old_')]
     entries = [r for r in entries if not Path(r.get('path', '')).name.casefold().startswith('old_')]
@@ -871,10 +871,64 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
                         c['ALTERNATIVE_REQUIRED'],no_set,unknown,0,c['ALTERNATIVE_REQUIRED']+c['TITLE_NO_SET'],
                         c['HASH_ERROR'],pct(0,n),pct(no_set,n),pct(unknown,n),pct(ok+no_set,n)])
         print(f'[INFO] Dreamcast: {total} physical images, {n} effective entries, {unknown} unresolved; Flycast online not tested.')
+    # Use each platform's native evidence and keep unsupported audit modes distinct.
+    for label, source_path, root, is32x in (
+        ('Nintendo GameCube', gamecube_audit, 'roms/nintendo/gamecube/iso/', False),
+        ('Sega 32X', sega32x_audit, 'roms/sega/32x/', True),
+    ):
+        if not source_path or not Path(source_path).is_file():
+            continue
+        with open(source_path, newline='', encoding='utf-8-sig') as handle:
+            reader = csv.DictReader(handle)
+            fields = list(reader.fieldnames or [])
+            records = list(reader)
+        sheets.append((label, [fields] + [[r.get(k, '') for k in fields] for r in records]))
+        mapping = {'EXACT_RA':'SUPPORTED','EXACT_NO_SET':'NO_SET',
+                   'SOFT_PASS_VARIANT':'SOFT_PASS','ALTERNATIVE_REVIEW':'ALTERNATIVE_REQUIRED',
+                   'NO_SET_CANDIDATE':'TITLE_NO_SET'}
+        counts = Counter()
+        for r in records:
+            raw = r.get('status','') if is32x else r.get('collection_status','')
+            state = mapping.get(raw,raw) if is32x else raw
+            counts[state] += 1
+            if state in ('SUPPORTED','NO_SET','SOFT_PASS','SOFT_PASS_NO_SET'):
+                continue
+            action = ('Obtain supported region / edition / revision' if state == 'ALTERNATIVE_REQUIRED'
+                      else 'Fix disc hash error' if state == 'HASH_ERROR'
+                      else 'Investigate RA identity or listing')
+            filename = r.get('filename') or r.get('zip_name') or r.get('source','')
+            title = r.get('title') or r.get('ra_title') or filename
+            all_actions.append([label,title,filename,r.get('disc_id',''),state,action,
+                                r.get('suggested_release',''),'',r.get('candidate_ra_id',''),
+                                r.get('local_alternative',''),r.get('reason',''),'',
+                                r.get('ra_hash',''),r.get('suggested_ra_hash',''),
+                                root+str(r.get('source') or filename)])
+        total = len(records)
+        redundant = counts['SOFT_PASS'] + counts['SOFT_PASS_NO_SET']
+        n = total-redundant
+        ok = counts['SUPPORTED']
+        no_set = counts['NO_SET']
+        unresolved = n-ok-no_set
+        pct = lambda x,y: f'{100*x/y:.2f}%' if y else 'N/A'
+        summary.append([label,total,n,redundant,pct(ok,n),pct(ok,n-no_set),n-no_set,ok,0,
+                        counts['ALTERNATIVE_REQUIRED'],no_set,unresolved,0,
+                        counts['ALTERNATIVE_REQUIRED']+counts['TITLE_NO_SET'],counts['HASH_ERROR'],
+                        pct(0,n),pct(no_set,n),pct(unresolved,n),pct(ok+no_set,n)])
+    # Inventory-only systems must not look like failed RA hash checks.
+    for label, count in (
+        ('Nintendo Wii', len(wii_rows) if wii_audit and Path(wii_audit).is_file() else None),
+        ('PlayStation 3', len(ps3_rows) if ps3_audit and Path(ps3_audit).is_file() else None),
+    ):
+        if count is not None:
+            summary.append([label,count,count,0,'Not checked','N/A','N/A','N/A','N/A','N/A',
+                            'N/A','N/A','N/A','N/A','N/A','N/A','N/A','N/A','N/A'])
+    def manufacturer_order(name):
+        return (0 if name.startswith('Nintendo') else 1 if name.startswith('Sega') else 2, name.casefold())
+    summary[1:] = sorted(summary[1:],key=lambda row: manufacturer_order(row[0]))
     priority = {'Fix disc hash error': 0, 'Apply verified patch; check new RA hash': 1,
                 'Obtain supported region / edition / revision': 2, 'Investigate RA identity or listing': 3}
     all_actions.sort(key=lambda row: (priority.get(row[5], 9), row[0], row[1].casefold()))
-    print(f'[INFO] Action Required (all platforms): {len(all_actions)} games need attention.')
+    print(f'[INFO] Action Required (reported issues): {len(all_actions)} games need attention.')
     sheets.insert(0, ('Action Required', [ACTION_COLS] + all_actions))
     sheets.append(('PS2 Online', [ONLINE_COLUMNS] + ps2_online))
     known = [row for row in ps2_online if row[4] == 'YES']
@@ -906,8 +960,8 @@ def main(source,destination,preparation=None,ps1_audit=None,ps3_audit=None,psp_a
         z.writestr('xl/styles.xml','<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/></font><font><b/><color rgb="FFFFFFFF"/></font></fonts><fills count="7"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>'+''.join('<fill><patternFill patternType="solid"><fgColor rgb="%s"/></patternFill></fill>'%c for c in ('FF17365D','FFF1F5F9','FFDDF4E4','FFFFE5CC','FFFDF1C8'))+'</fills><borders count="1"><border/></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="8">'+''.join('<xf numFmtId="0" fontId="%d" fillId="%d" borderId="0" xfId="0"/>'%(1 if i==1 else 0, {0:0,1:2,2:3,3:4,4:5,5:6,6:6}[i]) for i in range(7))+'<xf numFmtId="4" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs></styleSheet>')
         for i,(_,rows) in enumerate(sheets,1): z.writestr('xl/worksheets/sheet%d.xml'%i,xml_sheet(rows))
     print('[OK] Excel audit exported:',destination)
-    print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries across all platforms.')
+    print(f'[INFO] Action Required: {len(all_actions)} unresolved, unverified or hash-error entries in the action report.')
     for row in summary[1:]: print('    %s: %s/%s RA-compatible (%s); %s redundant copies excluded from reporting, %s patchable, %s alternative ISOs, %s unknown' % (row[0],row[7],row[2],row[4],row[3],row[8],row[9],row[11]))
 if __name__=='__main__':
-    if len(sys.argv) not in (3,4,5,6,7,8,9,10): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv] [megacd-audit.csv] [dreamcast-audit.csv]')
-    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None, sys.argv[8] if len(sys.argv)>=9 and sys.argv[8] != '-' else None, sys.argv[9] if len(sys.argv)>=10 and sys.argv[9] != '-' else None)
+    if len(sys.argv) not in range(3,13): sys.exit('Usage: python3 server/report_excel.py input.csv output.xlsx [patch-prepare.json] [ps1-audit.csv] [ps3-audit.csv] [psp-audit.csv] [wii-audit.csv] [megacd-audit.csv] [dreamcast-audit.csv] [gamecube-audit.csv] [32x-audit.csv]')
+    main(sys.argv[1],sys.argv[2],sys.argv[3] if len(sys.argv)>=4 and sys.argv[3] != '-' else None, sys.argv[4] if len(sys.argv)>=5 and sys.argv[4] != '-' else None, sys.argv[5] if len(sys.argv)>=6 and sys.argv[5] != '-' else None, sys.argv[6] if len(sys.argv)>=7 and sys.argv[6] != '-' else None, sys.argv[7] if len(sys.argv)>=8 and sys.argv[7] != '-' else None, sys.argv[8] if len(sys.argv)>=9 and sys.argv[8] != '-' else None, sys.argv[9] if len(sys.argv)>=10 and sys.argv[9] != '-' else None, sys.argv[10] if len(sys.argv)>=11 and sys.argv[10] != '-' else None, sys.argv[11] if len(sys.argv)>=12 and sys.argv[11] != '-' else None)
