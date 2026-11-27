@@ -110,6 +110,8 @@ def sync(audit_path: Path, mount_root: Path) -> tuple[int, int]:
                 detail += "; Suggested RA ID: " + row["candidate_ra_id"]
             if row.get("local_alternative"):
                 detail += "; Local alternative: " + row["local_alternative"]
+            if row.get("suggested_release"):
+                detail += "; Suggested release: " + row["suggested_release"] + "; Suggested RA hash: " + row.get("suggested_ra_hash", "")
             item.ra_hash_error = detail.strip("; ")[:500] or None
             item.ra_hashed_at = now if item.ra_hash else None
             count += 1
