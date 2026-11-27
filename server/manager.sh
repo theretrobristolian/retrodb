@@ -1264,6 +1264,9 @@ gamecube_audit() {
   sudo install -d -o retrodb -g retrodb -m 0750 /var/lib/retrodb/reports || return 1
   sudo install -m 0600 -o retrodb -g retrodb "$report" "$staged" || return 1
   sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
+    -m retrodb.gamecube_release_enrich --audit "$staged" || { sudo rm -f "$staged"; return 1; }
+  sudo install -m 0600 -o "$(id -un)" -g "$(id -gn)" "$staged" "$report" || { sudo rm -f "$staged"; return 1; }
+  sudo -u retrodb env PYTHONPATH=/opt/retrodb/backend /opt/retrodb/.venv/bin/python \
     -m retrodb.gamecube_sync --audit "$staged" --mount-root "$MOUNT" || rc=$?
   sudo rm -f "$staged"
   (( rc == 0 )) || return "$rc"
@@ -1571,5 +1574,6 @@ case "${1:-menu}" in
   patches) patch_download ;;
   patch-apply) patch_apply ;;
   status) header ;;
+  gamecube-audit) gamecube_audit ;;
   *) echo 'Usage: bash server/manager.sh [menu|audit|export|patches|patch-apply|status]' >&2; exit 2 ;;
 esac
