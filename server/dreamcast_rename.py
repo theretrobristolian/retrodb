@@ -196,19 +196,24 @@ def main():
     parser.add_argument("--journal",type=Path)
     parser.add_argument("--confirm")
     parser.add_argument("--output",type=Path)
+    parser.add_argument("--exit-if-no-changes", action="store_true", help="Return 3 for an empty preview")
     args=parser.parse_args()
     if not args.root.is_dir() or args.root.is_symlink():
         parser.error("Dreamcast root unavailable")
     rows=plan(args.root)
     for row in rows:
-        print(row["status"],row["source"],"->",row["destination"],row["reason"])
-    print(dict(collections.Counter(r["status"] for r in rows)))
+        if args.operation == "audit" or row["status"] != "VALID":
+            print(row["status"],row["source"],"->",row["destination"],row["reason"])
+    counts = collections.Counter(r["status"] for r in rows)
+    print(f'[SUMMARY] Already correct: {counts["VALID"]} | Proposed: {counts["PROPOSED"]} | Review: {counts["REVIEW"]}')
     if args.output:
         with args.output.open("w",newline="",encoding="utf-8") as f:
             cols=["source","format","destination","status","reason","size_bytes"]
             writer=csv.DictWriter(f,fieldnames=cols,extrasaction="ignore")
             writer.writeheader()
             writer.writerows(rows)
+    if args.operation=="preview" and args.exit_if_no_changes and not counts["PROPOSED"]:
+        raise SystemExit(3)
     if args.operation=="apply":
         if args.confirm!="RENAME DREAMCAST" or not args.journal:
             parser.error("Explicit confirmation and journal required")
